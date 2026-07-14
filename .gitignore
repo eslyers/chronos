@@ -1,0 +1,55 @@
+# ─────────────────────────────────────────────────────────────
+# CHRONOS — .gitignore (Next.js + Supabase)
+# ─────────────────────────────────────────────────────────────
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Testing
+coverage/
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Production
+build/
+dist/
+
+# Misc
+.DS_Store
+*.pem
+.idea/
+.vscode/
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Local env files
+.env
+.env.local
+.env*.local
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+
+# Supabase
+supabase/.branches
+supabase/.temp
+
+# Logs
+logs/
+*.log
+
+# Editor
+.history/
