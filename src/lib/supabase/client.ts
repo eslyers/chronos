@@ -1,4 +1,4 @@
-import { createBrowserClient } from "@supabase/ssr";
+import { createBrowserClient, createServerClient } from "@supabase/ssr";
 import { Database } from "@/lib/types";
 
 export function createSPAClient() {
@@ -7,3 +7,5 @@ export function createSPAClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 }
+
+export { createServerClient };
