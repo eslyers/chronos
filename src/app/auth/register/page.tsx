@@ -1,6 +1,8 @@
 "use client";
 
 import { createSPAClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/mode";
+import { demoSignUp } from "@/lib/auth/demo-auth";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -33,6 +35,15 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
+      // Modo DEMO (sem Supabase) → cadastro local
+      if (!isSupabaseConfigured()) {
+        demoSignUp(email, password);
+        setSuccess(true);
+        setTimeout(() => router.push("/app"), 1500);
+        return;
+      }
+
+      // Modo PRODUÇÃO (com Supabase)
       const supabase = createSPAClient();
       const { error } = await supabase.auth.signUp({
         email,
@@ -53,6 +64,10 @@ export default function RegisterPage() {
   }
 
   async function handleGoogleRegister() {
+    if (!isSupabaseConfigured()) {
+      setError("Login com Google requer Supabase configurado. Use email/senha no modo demo.");
+      return;
+    }
     const supabase = createSPAClient();
     await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -83,7 +98,9 @@ export default function RegisterPage() {
           <span>CHRONOS</span>
         </Link>
         <p className="text-sm text-muted-foreground">
-          Crie sua conta gratuita
+          {isSupabaseConfigured()
+            ? "Crie sua conta gratuita"
+            : "🧪 Modo demo — crie uma conta local para testar"}
         </p>
       </div>
 
@@ -163,6 +180,7 @@ export default function RegisterPage() {
         variant="outline"
         className="w-full"
         onClick={handleGoogleRegister}
+        disabled={!isSupabaseConfigured()}
       >
         <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
           <path

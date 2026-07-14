@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { createSPAClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/mode";
+import { demoGetSession, demoSignOut } from "@/lib/auth/demo-auth";
 
 type AppUser = {
   email: string;
@@ -17,25 +19,26 @@ interface GlobalContextType {
 
 const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
 
-// Mock user para modo demo (sem Supabase configurado)
-const DEMO_USER: AppUser = {
-  email: "esly@chronos.local",
-  id: "demo-user-esly",
-  registered_at: new Date(),
-};
-
 export function GlobalProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<AppUser | null>(null);
 
   useEffect(() => {
-    // Sem env vars configuradas → modo demo com user mock
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-      setUser(DEMO_USER);
+    // Modo DEMO: usa sessão do localStorage
+    if (!isSupabaseConfigured()) {
+      const session = demoGetSession();
+      if (session) {
+        setUser({
+          email: session.user.email,
+          id: session.user.id,
+          registered_at: new Date(session.user.created_at),
+        });
+      }
       setLoading(false);
       return;
     }
 
+    // Modo PRODUÇÃO: usa Supabase
     const supabase = createSPAClient();
 
     async function loadUser() {
@@ -80,9 +83,10 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function signOut() {
-    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-      // Demo mode — apenas limpa user
+    if (!isSupabaseConfigured()) {
+      demoSignOut();
       setUser(null);
+      window.location.href = "/";
       return;
     }
     const supabase = createSPAClient();

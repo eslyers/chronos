@@ -1,5 +1,7 @@
 "use client";
 import { createSPAClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/mode";
+import { demoSignIn } from "@/lib/auth/demo-auth";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -21,6 +23,15 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // Modo DEMO (sem Supabase)
+      if (!isSupabaseConfigured()) {
+        demoSignIn(email, password);
+        router.push("/app");
+        router.refresh();
+        return;
+      }
+
+      // Modo PRODUÇÃO
       const supabase = createSPAClient();
       const { error: signInError } =
         await supabase.auth.signInWithPassword({
@@ -40,6 +51,10 @@ export default function LoginPage() {
   }
 
   async function handleGoogleLogin() {
+    if (!isSupabaseConfigured()) {
+      setError("Login com Google requer Supabase configurado. Use email/senha no modo demo.");
+      return;
+    }
     const supabase = createSPAClient();
     await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -58,7 +73,9 @@ export default function LoginPage() {
           <span>CHRONOS</span>
         </Link>
         <p className="text-sm text-muted-foreground">
-          Entre para gerenciar seus cronogramas
+          {isSupabaseConfigured()
+            ? "Entre para gerenciar seus cronogramas"
+            : "🧪 Modo demo — qualquer email/senha funciona"}
         </p>
       </div>
 
@@ -132,6 +149,7 @@ export default function LoginPage() {
         variant="outline"
         className="w-full"
         onClick={handleGoogleLogin}
+        disabled={!isSupabaseConfigured()}
       >
         <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
           <path
