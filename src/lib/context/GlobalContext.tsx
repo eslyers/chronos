@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { createSPAClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/mode";
+import { getSession as supabaseGetSession, signOut as supabaseSignOut } from "@/lib/auth/supabase-auth";
 import { demoGetSession, demoSignOut } from "@/lib/auth/demo-auth";
 
 type AppUser = {
@@ -38,19 +39,17 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Modo PRODUÇÃO: usa Supabase
+    // Modo PRODUÇÃO: usa Supabase Auth
     const supabase = createSPAClient();
 
     async function loadUser() {
       try {
-        const {
-          data: { user: authUser },
-        } = await supabase.auth.getUser();
+        const { user: authUser } = await supabaseGetSession();
         if (authUser) {
           setUser({
-            email: authUser.email!,
+            email: authUser.email,
             id: authUser.id,
-            registered_at: new Date(authUser.created_at),
+            registered_at: new Date(),
           });
         }
       } catch (error) {
@@ -62,6 +61,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
 
     loadUser();
 
+    // Listener para mudança de auth state
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -89,8 +89,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       window.location.href = "/";
       return;
     }
-    const supabase = createSPAClient();
-    await supabase.auth.signOut();
+    await supabaseSignOut();
     setUser(null);
     window.location.href = "/";
   }

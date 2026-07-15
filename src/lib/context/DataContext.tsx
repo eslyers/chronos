@@ -7,10 +7,16 @@ import React, {
   useState,
   useCallback,
 } from "react";
+import {
+  dataProvider,
+  loadWorkspaceContext,
+  getDataLayer,
+} from "@/lib/data/data-provider";
 
 // ─────────────────────────────────────────────────────────────
-// CHRONOS — DataContext (mock data com localStorage)
-// Sprint 2: tudo roda em localStorage. Sprint 3 migra pra Supabase real.
+// CHRONOS — DataContext
+// Dual mode: usa Supabase real se configurado, senão cai pro localStorage
+// Sprint 3.C: persistência real no Postgres via Supabase
 // ─────────────────────────────────────────────────────────────
 
 export type Stage = {
@@ -250,36 +256,98 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     dependencies: [],
     loading: true,
   });
+  const [userId, setUserId] = useState<string>(USER_ID);
+  const [workspaceId, setWorkspaceId] = useState<string>("ws-local");
 
-  // Load inicial
+  // Load inicial — escolhe automaticamente entre Supabase e localStorage
   useEffect(() => {
-    const stored = loadFromStorage();
-    if (stored) {
-      setState({ ...stored, loading: false });
-    } else {
-      const seeded = seedMockData();
-      saveToStorage(seeded);
-      setState({ ...seeded, loading: false });
+    let cancelled = false;
+    async function init() {
+      // Modo PRODUÇÃO: Supabase real
+      if (getDataLayer() === "supabase") {
+        const ctx = await loadWorkspaceContext();
+        if (cancelled) return;
+        setUserId(ctx.userId);
+        setWorkspaceId(ctx.workspaceId ?? "ws-local");
+        const data = await dataProvider.load();
+        if (cancelled) return;
+        if (data) {
+          setState({
+            projects: data.projects,
+            stages: data.stages,
+            tasks: data.tasks,
+            dependencies: data.dependencies,
+            loading: false,
+          });
+        } else {
+          setState((s) => ({ ...s, loading: false }));
+        }
+        return;
+      }
+
+      // Modo DEMO: localStorage
+      const stored = loadFromStorage();
+      if (stored) {
+        setState({ ...stored, loading: false });
+      } else {
+        const seeded = seedMockData();
+        saveToStorage(seeded);
+        setState({ ...seeded, loading: false });
+      }
     }
+    init();
+    return () => { cancelled = true; };
   }, []);
 
-  // Persist
+  // Persist (só em modo demo)
   useEffect(() => {
-    if (!state.loading) saveToStorage(state);
+    if (!state.loading && getDataLayer() === "local") saveToStorage(state);
   }, [state]);
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback(async () => {
+    if (getDataLayer() === "supabase") {
+      const data = await dataProvider.load();
+      if (data) {
+        setState({
+          projects: data.projects,
+          stages: data.stages,
+          tasks: data.tasks,
+          dependencies: data.dependencies,
+          loading: false,
+        });
+      }
+      return;
+    }
     const stored = loadFromStorage();
     if (stored) setState({ ...stored, loading: false });
   }, []);
 
   // ── Projects ────────────────────────────────────────────────
   const createProject = useCallback(async (data: Partial<Project>): Promise<Project> => {
+    // Modo PRODUÇÃO: Supabase real
+    if (getDataLayer() === "supabase") {
+      const result = await dataProvider.createProject({
+        name: data.name ?? "Novo Projeto",
+        description: data.description ?? undefined,
+        color: data.color,
+      });
+      if (result) {
+        const { project, stages } = result;
+        setState((prev) => ({
+          ...prev,
+          projects: [project, ...prev.projects],
+          stages: [...prev.stages, ...stages],
+        }));
+        return project;
+      }
+    }
+
+    // Modo DEMO ou fallback
     const now = new Date().toISOString();
     const project: Project = {
       id: generateId("project"),
-      workspace_id: "ws-local",
-      owner_id: USER_ID,
+      workspace_id: workspaceId,
+      owner_id: userId,
       name: data.name ?? "Novo Projeto",
       description: data.description ?? null,
       color: data.color ?? "#f97316",
@@ -300,9 +368,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }));
 
     return project;
-  }, []);
+  }, [userId, workspaceId]);
 
   const updateProject = useCallback(async (id: string, data: Partial<Project>) => {
+    if (getDataLayer() === "supabase") {
+      await dataProvider.updateProject(id, data);
+    }
     setState((prev) => ({
       ...prev,
       projects: prev.projects.map((p) =>
@@ -312,6 +383,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteProject = useCallback(async (id: string) => {
+    if (getDataLayer() === "supabase") {
+      await dataProvider.deleteProject(id);
+    }
     setState((prev) => ({
       ...prev,
       projects: prev.projects.filter((p) => p.id !== id),
@@ -322,6 +396,27 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // ── Stages ──────────────────────────────────────────────────
   const createStage = useCallback(async (data: Partial<Stage>): Promise<Stage> => {
+    if (getDataLayer() === "supabase" && data.project_id) {
+      const stage = await dataProvider.createStage({
+        project_id: data.project_id,
+        name: data.name ?? "Nova Etapa",
+        color: data.color,
+        sort_order: data.position ?? 0,
+        wip_limit: null,
+      });
+      if (stage) {
+        const result: Stage = {
+          id: stage.id,
+          project_id: stage.project_id,
+          name: stage.name,
+          color: stage.color,
+          position: stage.position,
+          is_done: stage.is_done,
+        };
+        setState((prev) => ({ ...prev, stages: [...prev.stages, result] }));
+        return result;
+      }
+    }
     const stage: Stage = {
       id: generateId("stage"),
       project_id: data.project_id ?? "",
@@ -335,6 +430,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateStage = useCallback(async (id: string, data: Partial<Stage>) => {
+    if (getDataLayer() === "supabase") {
+      await dataProvider.updateStage(id, data);
+    }
     setState((prev) => ({
       ...prev,
       stages: prev.stages.map((s) => (s.id === id ? { ...s, ...data } : s)),
@@ -342,6 +440,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteStage = useCallback(async (id: string) => {
+    if (getDataLayer() === "supabase") {
+      await dataProvider.deleteStage(id);
+    }
     setState((prev) => ({
       ...prev,
       stages: prev.stages.filter((s) => s.id !== id),
@@ -351,6 +452,23 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // ── Tasks ───────────────────────────────────────────────────
   const createTask = useCallback(async (data: Partial<Task>): Promise<Task> => {
+    if (getDataLayer() === "supabase" && data.project_id && data.stage_id) {
+      const task = await dataProvider.createTask({
+        project_id: data.project_id,
+        stage_id: data.stage_id,
+        title: data.title ?? "Nova Tarefa",
+        description: data.description ?? undefined,
+        status: data.status ?? "todo",
+        priority: data.priority ?? "medium",
+        due_date: data.due_date ?? undefined,
+        start_date: data.start_date ?? undefined,
+        created_by: userId,
+      });
+      if (task) {
+        setState((prev) => ({ ...prev, tasks: [...prev.tasks, task] }));
+        return task;
+      }
+    }
     const now = new Date().toISOString();
     const task: Task = {
       id: generateId("task"),
@@ -363,16 +481,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       progress: data.progress ?? 0,
       start_date: data.start_date ?? null,
       due_date: data.due_date ?? null,
-      assignee_id: data.assignee_id ?? USER_ID,
+      assignee_id: data.assignee_id ?? userId,
       position: data.position ?? 0,
       created_at: now,
       updated_at: now,
     };
     setState((prev) => ({ ...prev, tasks: [...prev.tasks, task] }));
     return task;
-  }, []);
+  }, [userId]);
 
   const updateTask = useCallback(async (id: string, data: Partial<Task>) => {
+    if (getDataLayer() === "supabase") {
+      await dataProvider.updateTask(id, data);
+    }
     setState((prev) => ({
       ...prev,
       tasks: prev.tasks.map((t) =>
@@ -382,6 +503,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteTask = useCallback(async (id: string) => {
+    if (getDataLayer() === "supabase") {
+      await dataProvider.deleteTask(id);
+    }
     setState((prev) => ({
       ...prev,
       tasks: prev.tasks.filter((t) => t.id !== id),
@@ -389,6 +513,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const moveTask = useCallback(async (id: string, stageId: string, position: number) => {
+    if (getDataLayer() === "supabase") {
+      await dataProvider.moveTask(id, stageId);
+    }
     setState((prev) => ({
       ...prev,
       tasks: prev.tasks.map((t) =>

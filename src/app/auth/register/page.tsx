@@ -1,7 +1,7 @@
 "use client";
 
-import { createSPAClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/mode";
+import { signUpWithPassword, signInWithGoogle } from "@/lib/auth/supabase-auth";
 import { demoSignUp } from "@/lib/auth/demo-auth";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -43,16 +43,9 @@ export default function RegisterPage() {
         return;
       }
 
-      // Modo PRODUÇÃO (com Supabase)
-      const supabase = createSPAClient();
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      if (error) throw error;
+      // Modo PRODUÇÃO (com Supabase) via helper
+      const result = await signUpWithPassword(email, password);
+      if (!result.ok) throw new Error(result.error);
 
       setSuccess(true);
       setTimeout(() => router.push("/app"), 1500);
@@ -68,11 +61,10 @@ export default function RegisterPage() {
       setError("Login com Google requer Supabase configurado. Use email/senha no modo demo.");
       return;
     }
-    const supabase = createSPAClient();
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
-    });
+    const result = await signInWithGoogle();
+    if (!result.ok) {
+      setError(result.error || "Erro ao iniciar login com Google");
+    }
   }
 
   if (success) {
