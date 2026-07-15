@@ -2,7 +2,17 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, CheckCircle2, Clock, AlertCircle, Settings, Loader2 } from "lucide-react";
+import {
+  Bell,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  Settings,
+  Loader2,
+  ExternalLink,
+  Filter,
+  X,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,9 +27,14 @@ type Notification = {
   created_at: string;
   sent_at: string | null;
   read_at: string | null;
+  task_id: string | null;
+  project_id: string | null;
 };
 
-const TYPE_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+const TYPE_LABELS: Record<
+  string,
+  { label: string; icon: React.ReactNode; color: string }
+> = {
   due_soon: { label: "Prazo próximo", icon: <Clock className="h-3 w-3" />, color: "bg-amber-500/10 text-amber-700" },
   overdue: { label: "Tarefa atrasada", icon: <AlertCircle className="h-3 w-3" />, color: "bg-red-500/10 text-red-700" },
   stage_change: { label: "Mudou de etapa", icon: <CheckCircle2 className="h-3 w-3" />, color: "bg-blue-500/10 text-blue-700" },
@@ -35,6 +50,12 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   read: { label: "Lido", color: "bg-slate-500/10 text-slate-700" },
 };
 
+const CHANNEL_ICONS: Record<string, string> = {
+  telegram: "📱",
+  email: "📧",
+  push: "🔔",
+};
+
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const minutes = Math.floor(diff / 60000);
@@ -47,10 +68,47 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString("pt-BR");
 }
 
+function formatPayload(n: Notification): { title: string; subtitle: string } {
+  const p = n.payload as Record<string, string | number>;
+  const baseTitle =
+    (p.title as string) ||
+    (p.task_title as string) ||
+    "Notificação";
+
+  const project = (p.project as string) || (p.project_name as string);
+  const subtitleParts: string[] = [];
+  if (project) subtitleParts.push(`📁 ${project}`);
+
+  if (n.type === "stage_change" && p.old_stage && p.new_stage) {
+    subtitleParts.push(`🎯 ${p.old_stage} → ${p.new_stage}`);
+  } else if (n.type === "due_soon" && p.hours_until_due !== undefined) {
+    const h = Number(p.hours_until_due);
+    if (h === 0) subtitleParts.push("🔴 VENCE HOJE");
+    else if (h === 24) subtitleParts.push("🟠 Vence amanhã");
+    else subtitleParts.push(`🟡 Vence em ${h}h`);
+  } else if (n.type === "assigned" && p.priority) {
+    subtitleParts.push(`⚡ ${p.priority}`);
+  } else if (n.type === "overdue") {
+    subtitleParts.push("🔴 Atrasada");
+  }
+
+  if (p.due_date) {
+    const d = new Date(p.due_date as string);
+    subtitleParts.push(`📅 ${d.toLocaleDateString("pt-BR")}`);
+  }
+
+  return {
+    title: baseTitle,
+    subtitle: subtitleParts.join(" • ") || "—",
+  };
+}
+
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -58,9 +116,9 @@ export default function NotificationsPage() {
         const supabase = createSPAClient();
         const { data, error: e } = await supabase
           .from("notifications")
-          .select("id, type, status, channels, payload, created_at, sent_at, read_at")
+          .select("id, type, status, channels, payload, created_at, sent_at, read_at, task_id, project_id")
           .order("created_at", { ascending: false })
-          .limit(50);
+          .limit(100);
         if (e) throw e;
         setNotifications((data ?? []) as Notification[]);
       } catch (err) {
@@ -72,6 +130,13 @@ export default function NotificationsPage() {
     load();
   }, []);
 
+  // Filtrar
+  const filtered = notifications.filter((n) => {
+    if (filterType && n.type !== filterType) return false;
+    if (filterStatus && n.status !== filterStatus) return false;
+    return true;
+  });
+
   // Agrupar por status pra ter resumo no topo
   const counts = notifications.reduce(
     (acc, n) => {
@@ -80,6 +145,8 @@ export default function NotificationsPage() {
     },
     {} as Record<string, number>
   );
+
+  const hasFilters = filterType || filterStatus;
 
   return (
     <div className="space-y-6">
@@ -101,7 +168,11 @@ export default function NotificationsPage() {
       {/* Resumo */}
       <div className="grid gap-3 md:grid-cols-4">
         {Object.entries(STATUS_LABELS).map(([key, info]) => (
-          <Card key={key}>
+          <Card
+            key={key}
+            className={filterStatus === key ? "ring-2 ring-primary" : "cursor-pointer hover:bg-muted/30 transition-colors"}
+            onClick={() => setFilterStatus(filterStatus === key ? null : key)}
+          >
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -115,6 +186,29 @@ export default function NotificationsPage() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* Filtros por tipo */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Filter className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm text-muted-foreground">Filtrar por tipo:</span>
+        {Object.entries(TYPE_LABELS).map(([key, info]) => (
+          <Badge
+            key={key}
+            variant={filterType === key ? "default" : "outline"}
+            className={`cursor-pointer ${filterType === key ? "" : info.color}`}
+            onClick={() => setFilterType(filterType === key ? null : key)}
+          >
+            {info.icon}
+            <span className="ml-1">{info.label}</span>
+          </Badge>
+        ))}
+        {hasFilters && (
+          <Button variant="ghost" size="sm" onClick={() => { setFilterType(null); setFilterStatus(null); }}>
+            <X className="h-3 w-3 mr-1" />
+            Limpar
+          </Button>
+        )}
       </div>
 
       {/* Lista de notificações */}
@@ -141,10 +235,11 @@ export default function NotificationsPage() {
               O backend de envio automático (Telegram + Email via Edge Functions)
               será ativado quando você tiver tarefas com prazos definidos.
             </p>
-            <div className="mt-6 text-xs text-muted-foreground max-w-md text-left space-y-2">
-              <p><strong>Como funciona:</strong></p>
+            <div className="mt-6 text-xs text-muted-foreground max-w-md text-left space-y-2 bg-muted/30 rounded-lg p-4">
+              <p className="font-semibold">Como funciona:</p>
               <p>• Tarefas com prazo recebem alertas em <strong>3, 1, 0 dias</strong> antes</p>
               <p>• Tarefas atrasadas recebem alerta <strong>diário às 09:00</strong></p>
+              <p>• Movimentação entre stages gera notificação em tempo real</p>
               <p>• Configurável por projeto (opt-out individual)</p>
               <p>• Canais: <strong>Telegram</strong> (bot + chat_id) e <strong>Email</strong> (Resend)</p>
             </div>
@@ -155,42 +250,82 @@ export default function NotificationsPage() {
             </Button>
           </CardContent>
         </Card>
+      ) : filtered.length === 0 ? (
+        <Card className="border-dashed border-2">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <Filter className="h-8 w-8 text-muted-foreground mb-3" />
+            <p className="text-sm text-muted-foreground">
+              Nenhuma notificação corresponde aos filtros
+            </p>
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => { setFilterType(null); setFilterStatus(null); }}>
+              Limpar filtros
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Histórico recente</CardTitle>
+            <CardTitle>Histórico</CardTitle>
             <CardDescription>
-              {notifications.length} notificações nos últimos 50 registros
+              {filtered.length} de {notifications.length} notificações
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {notifications.map((n) => {
-              const typeInfo = TYPE_LABELS[n.type] ?? { label: n.type, icon: <Bell className="h-3 w-3" />, color: "bg-slate-500/10 text-slate-700" };
-              const statusInfo = STATUS_LABELS[n.status] ?? { label: n.status, color: "bg-slate-500/10 text-slate-700" };
-              return (
-                <div
-                  key={n.id}
-                  className="flex items-start gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
-                >
+            {filtered.map((n) => {
+              const typeInfo = TYPE_LABELS[n.type] ?? {
+                label: n.type,
+                icon: <Bell className="h-3 w-3" />,
+                color: "bg-slate-500/10 text-slate-700",
+              };
+              const statusInfo = STATUS_LABELS[n.status] ?? {
+                label: n.status,
+                color: "bg-slate-500/10 text-slate-700",
+              };
+              const { title, subtitle } = formatPayload(n);
+              const isClickable = !!n.task_id && !!n.project_id;
+
+              const Content = (
+                <>
                   <div className={`p-2 rounded-full ${typeInfo.color} flex-shrink-0`}>
                     {typeInfo.icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-sm">{typeInfo.label}</span>
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="font-medium text-sm truncate">{title}</span>
                       <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${statusInfo.color}`}>
                         {statusInfo.label}
                       </Badge>
-                      {n.channels.length > 0 && (
-                        <span className="text-[10px] text-muted-foreground">
-                          via {n.channels.join(", ")}
+                      {n.channels.map((ch) => (
+                        <span key={ch} className="text-xs" title={ch}>
+                          {CHANNEL_ICONS[ch] || ch}
                         </span>
-                      )}
+                      ))}
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">{subtitle}</p>
+                    <p className="text-[10px] text-muted-foreground/70 mt-0.5">
                       {timeAgo(n.created_at)}
                     </p>
                   </div>
+                  {isClickable && (
+                    <ExternalLink className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  )}
+                </>
+              );
+
+              if (isClickable) {
+                return (
+                  <Link
+                    key={n.id}
+                    href={`/app/projects/${n.project_id}`}
+                    className="flex items-start gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                  >
+                    {Content}
+                  </Link>
+                );
+              }
+              return (
+                <div key={n.id} className="flex items-start gap-3 p-3 border rounded-lg">
+                  {Content}
                 </div>
               );
             })}
