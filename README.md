@@ -166,3 +166,4 @@ MIT — Veja [LICENSE](LICENSE)
 ---
 
 **Built with ❤️ by Esly & Sarah** — Powered by Next.js + Supabase
+
