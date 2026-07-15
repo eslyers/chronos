@@ -14,6 +14,7 @@ import {
   KeyRound,
   Clock,
   KanbanSquare,
+  CalendarDays,
 } from "lucide-react";
 import { useGlobal } from "@/lib/context/GlobalContext";
 
@@ -42,6 +43,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "Projetos", href: "/app/projects", icon: FolderKanban },
     { name: "Cronograma", href: "/app/timeline", icon: Clock },
     { name: "Kanban", href: "/app/kanban", icon: KanbanSquare },
+    { name: "Calendário", href: "/app/calendar", icon: CalendarDays },
     { name: "Templates", href: "/app/templates", icon: Library },
     { name: "Notificações", href: "/app/notifications", icon: Bell },
     { name: "Configurações", href: "/app/settings", icon: Settings },
