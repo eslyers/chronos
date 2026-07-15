@@ -20,7 +20,7 @@ port = 54323
 [auth]
 enabled = true
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["https://localhost:3000"]
+additional_redirect_urls = ["https://localhost:3000", "https://chronos-temp.vercel.app", "https://chronos.app"]
 jwt_expiry = 3600
 enable_signup = true
 
@@ -33,4 +33,10 @@ enable_confirmations = true
 enabled = true
 
 [functions.due-soon-alert]
+verify_jwt = false
+
+[functions.stage-change-notify]
+verify_jwt = false
+
+[functions.task-assigned-notify]
 verify_jwt = false

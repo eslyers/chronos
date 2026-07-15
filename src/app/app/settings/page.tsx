@@ -6,22 +6,77 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useGlobal } from "@/lib/context/GlobalContext";
 import { createSPAClient } from "@/lib/supabase/client";
-import { User, Key, CheckCircle, Bell, Send } from "lucide-react";
+import { User, Key, CheckCircle, Bell, Send, Loader2, Clock, Mail } from "lucide-react";
+
+interface Profile {
+  id: string;
+  email: string;
+  full_name: string | null;
+  telegram_chat_id: string | null;
+  telegram_username: string | null;
+  timezone: string;
+  notify_by_email: boolean;
+  notify_by_telegram: boolean;
+}
+
+interface Subscriber {
+  project_id: string;
+  telegram_enabled: boolean;
+  email_enabled: boolean;
+  notify_on_stage_change: boolean;
+  notify_on_due_soon: boolean;
+  notify_on_overdue: boolean;
+  notify_on_assigned: boolean;
+  due_soon_hours: number;
+  quiet_hours_start: string | null;
+  quiet_hours_end: string | null;
+}
 
 export default function SettingsPage() {
   const { user } = useGlobal();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [telegramChatId, setTelegramChatId] = useState("");
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(false);
   const [testingTelegram, setTestingTelegram] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [subscribers, setSubscribers] = useState<Record<string, Subscriber>>({});
 
+  // Carregar profile + projects + subscribers
   useEffect(() => {
     if (!user) return;
-    const stored = window.localStorage.getItem(`chronos:telegram:${user.id}`);
-    if (stored) setTelegramChatId(stored);
+    (async () => {
+      const supabase = createSPAClient();
+
+      // 1. Profile
+      const { data: p } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (p) setProfile(p);
+
+      // 2. Projects do user
+      const { data: projs } = await supabase
+        .from("projects")
+        .select("id, name")
+        .order("name");
+      setProjects(projs || []);
+
+      // 3. Subscriber prefs por projeto
+      const { data: subs } = await supabase
+        .from("notification_subscribers")
+        .select("*")
+        .eq("user_id", user.id);
+
+      const map: Record<string, Subscriber> = {};
+      ((subs || []) as unknown as Subscriber[]).forEach((s) => {
+        map[s.project_id] = s;
+      });
+      setSubscribers(map);
+    })();
   }, [user]);
 
   async function handlePasswordChange(e: React.FormEvent) {
@@ -34,16 +89,12 @@ export default function SettingsPage() {
       setError("A senha deve ter pelo menos 8 caracteres");
       return;
     }
-
     setLoading(true);
     setError("");
     setSuccess("");
-
     try {
       const supabase = createSPAClient();
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
       setSuccess("Senha atualizada com sucesso!");
       setNewPassword("");
@@ -56,18 +107,18 @@ export default function SettingsPage() {
   }
 
   async function handleSaveTelegram() {
-    if (!user) return;
+    if (!user || !profile) return;
     setLoading(true);
     setError("");
     setSuccess("");
     try {
-      window.localStorage.setItem(
-        `chronos:telegram:${user.id}`,
-        telegramChatId
-      );
-      // TODO: quando a tabela profiles for criada em Sprint 5,
-      // salvar no Supabase ao invés de localStorage
-      setSuccess("Telegram Chat ID salvo!");
+      const supabase = createSPAClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.from("profiles") as any)
+        .update({ telegram_chat_id: profile.telegram_chat_id })
+        .eq("id", user.id);
+      if (error) throw error;
+      setSuccess("Telegram Chat ID salvo no perfil!");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro ao salvar");
     } finally {
@@ -76,6 +127,10 @@ export default function SettingsPage() {
   }
 
   async function handleTestTelegram() {
+    if (!profile?.telegram_chat_id) {
+      setError("Preencha o Chat ID primeiro");
+      return;
+    }
     setTestingTelegram(true);
     setError("");
     setSuccess("");
@@ -83,7 +138,7 @@ export default function SettingsPage() {
       const response = await fetch("/api/telegram/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatId: telegramChatId }),
+        body: JSON.stringify({ chatId: profile.telegram_chat_id }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Erro");
@@ -95,8 +150,61 @@ export default function SettingsPage() {
     }
   }
 
+  async function toggleSubscriberPref(
+    projectId: string,
+    field: keyof Subscriber,
+    value: boolean | number | string
+  ) {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const supabase = createSPAClient();
+      const existing = subscribers[projectId];
+
+      const payload = {
+        user_id: user.id,
+        project_id: projectId,
+        telegram_enabled: existing?.telegram_enabled ?? true,
+        email_enabled: existing?.email_enabled ?? true,
+        notify_on_stage_change: existing?.notify_on_stage_change ?? true,
+        notify_on_due_soon: existing?.notify_on_due_soon ?? true,
+        notify_on_overdue: existing?.notify_on_overdue ?? true,
+        notify_on_assigned: existing?.notify_on_assigned ?? true,
+        due_soon_hours: existing?.due_soon_hours ?? 24,
+        quiet_hours_start: existing?.quiet_hours_start ?? null,
+        quiet_hours_end: existing?.quiet_hours_end ?? null,
+        telegram_chat_id: profile?.telegram_chat_id ?? null,
+        [field]: value,
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.from("notification_subscribers") as any)
+        .upsert(payload, { onConflict: "project_id,user_id" });
+
+      if (error) throw error;
+
+      setSubscribers((prev) => ({
+        ...prev,
+        [projectId]: { ...(prev[projectId] || ({} as Subscriber)), [field]: value },
+      }));
+      setSuccess(`Preferência salva!`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Erro");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!profile) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
         <p className="text-muted-foreground">Conta, notificações e integrações</p>
@@ -121,26 +229,26 @@ export default function SettingsPage() {
             <User className="h-5 w-5" />
             Perfil
           </CardTitle>
-          <CardDescription>Informações da sua conta</CardDescription>
+          <CardDescription>Informações da sua conta (salvas no Supabase)</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">User ID</label>
-            <p className="mt-1 text-sm font-mono">{user?.id}</p>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">Email</label>
-            <p className="mt-1 text-sm">{user?.email}</p>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-muted-foreground">
-              Membro desde
-            </label>
-            <p className="mt-1 text-sm">
-              {user?.registered_at
-                ? new Date(user.registered_at).toLocaleDateString("pt-BR")
-                : "—"}
-            </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Email</label>
+              <p className="mt-1 text-sm">{profile.email}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Nome</label>
+              <p className="mt-1 text-sm">{profile.full_name || "—"}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">Timezone</label>
+              <p className="mt-1 text-sm">{profile.timezone}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground">User ID</label>
+              <p className="mt-1 text-xs font-mono truncate">{profile.id}</p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -206,28 +314,162 @@ export default function SettingsPage() {
             </label>
             <Input
               id="chat-id"
-              value={telegramChatId}
-              onChange={(e) => setTelegramChatId(e.target.value)}
+              value={profile.telegram_chat_id || ""}
+              onChange={(e) =>
+                setProfile({ ...profile, telegram_chat_id: e.target.value })
+              }
               placeholder="Ex: 123456789"
             />
             <p className="text-xs text-muted-foreground mt-1.5">
-              Para descobrir seu chat ID: abra o Telegram, procure por{" "}
-              <span className="font-mono">@userinfobot</span> e mande /start.
+              Pra descobrir: abra o Telegram → procure <span className="font-mono">@userinfobot</span> → mande /start.
             </p>
           </div>
           <div className="flex gap-2">
             <Button onClick={handleSaveTelegram} disabled={loading}>
-              Salvar
+              {loading ? "Salvando..." : "Salvar"}
             </Button>
             <Button
               variant="outline"
               onClick={handleTestTelegram}
-              disabled={testingTelegram || !telegramChatId}
+              disabled={testingTelegram || !profile.telegram_chat_id}
             >
               <Send className="mr-2 h-4 w-4" />
               {testingTelegram ? "Enviando..." : "Enviar teste"}
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Notification Preferences por Projeto */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5" />
+            Preferências de notificação por projeto
+          </CardTitle>
+          <CardDescription>
+            Configure quando você quer receber alertas em cada projeto
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {projects.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Você ainda não tem projetos. Crie um em /app/projects pra configurar notificações.
+            </p>
+          ) : (
+            <div className="space-y-6">
+              {projects.map((proj) => {
+                const sub = subscribers[proj.id];
+                return (
+                  <div key={proj.id} className="border rounded-lg p-4 space-y-3">
+                    <div className="font-semibold text-base">{proj.name}</div>
+
+                    {/* Canais */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={sub?.telegram_enabled ?? true}
+                          onChange={(e) =>
+                            toggleSubscriberPref(proj.id, "telegram_enabled", e.target.checked)
+                          }
+                          className="h-4 w-4 rounded border-gray-300"
+                          disabled={loading}
+                        />
+                        <span className="text-sm">📱 Telegram</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={sub?.email_enabled ?? true}
+                          onChange={(e) =>
+                            toggleSubscriberPref(proj.id, "email_enabled", e.target.checked)
+                          }
+                          className="h-4 w-4 rounded border-gray-300"
+                          disabled={loading}
+                        />
+                        <span className="text-sm">📧 Email</span>
+                      </label>
+                    </div>
+
+                    {/* Tipos de evento */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={sub?.notify_on_assigned ?? true}
+                          onChange={(e) =>
+                            toggleSubscriberPref(proj.id, "notify_on_assigned", e.target.checked)
+                          }
+                          className="h-4 w-4 rounded border-gray-300"
+                          disabled={loading}
+                        />
+                        <span className="text-sm">📥 Quando me atribuírem tarefa</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={sub?.notify_on_stage_change ?? true}
+                          onChange={(e) =>
+                            toggleSubscriberPref(proj.id, "notify_on_stage_change", e.target.checked)
+                          }
+                          className="h-4 w-4 rounded border-gray-300"
+                          disabled={loading}
+                        />
+                        <span className="text-sm">🔄 Quando tarefa muda de etapa</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={sub?.notify_on_due_soon ?? true}
+                          onChange={(e) =>
+                            toggleSubscriberPref(proj.id, "notify_on_due_soon", e.target.checked)
+                          }
+                          className="h-4 w-4 rounded border-gray-300"
+                          disabled={loading}
+                        />
+                        <span className="text-sm">⏰ Tarefa perto de vencer</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={sub?.notify_on_overdue ?? true}
+                          onChange={(e) =>
+                            toggleSubscriberPref(proj.id, "notify_on_overdue", e.target.checked)
+                          }
+                          className="h-4 w-4 rounded border-gray-300"
+                          disabled={loading}
+                        />
+                        <span className="text-sm">🔴 Tarefa atrasada</span>
+                      </label>
+                    </div>
+
+                    {/* Due soon hours */}
+                    <div className="flex items-center gap-2 pt-2 border-t">
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                      <label className="text-sm">Alertar tarefas vencendo em</label>
+                      <select
+                        value={sub?.due_soon_hours ?? 24}
+                        onChange={(e) =>
+                          toggleSubscriberPref(proj.id, "due_soon_hours", parseInt(e.target.value))
+                        }
+                        className="border rounded px-2 py-1 text-sm bg-background"
+                        disabled={loading}
+                      >
+                        <option value={1}>1 hora</option>
+                        <option value={3}>3 horas</option>
+                        <option value={6}>6 horas</option>
+                        <option value={12}>12 horas</option>
+                        <option value={24}>24 horas (1 dia)</option>
+                        <option value={48}>48 horas (2 dias)</option>
+                        <option value={72}>72 horas (3 dias)</option>
+                      </select>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
