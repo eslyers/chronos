@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
+// Força render dinâmico (SSR) pra evitar cache de prerender
+// que prende o "Modo demo" antigo
+export const dynamic = "force-dynamic";
+
 export default function AuthLayout({
   children,
 }: {
