@@ -1,10 +1,12 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
-import { Library, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Library, Plus, Loader2, CheckCircle2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { createSPAClient } from "@/lib/supabase/client";
+import { dataProvider } from "@/lib/data/data-provider";
+import { isSupabaseConfigured } from "@/lib/supabase/mode";
 
 type Template = {
   id: string;
@@ -24,8 +26,12 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export default function TemplatesPage() {
+  const router = useRouter();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cloningId, setCloningId] = useState<string | null>(null);
+  const [successId, setSuccessId] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -41,6 +47,44 @@ export default function TemplatesPage() {
     load();
   }, []);
 
+  async function handleUseTemplate(tpl: Template) {
+    setErrorMsg(null);
+    setCloningId(tpl.id);
+    setSuccessId(null);
+
+    try {
+      if (!isSupabaseConfigured()) {
+        // Modo demo: cria projeto localStorage via DataContext
+        // Redireciona pra /app/projects com sinal de clone
+        router.push(`/app/projects?cloneFrom=${tpl.id}&name=${encodeURIComponent(tpl.name)}`);
+        return;
+      }
+
+      // Modo produção: clona no Supabase real
+      const result = await dataProvider.createProject({
+        name: tpl.name,
+        description: tpl.description ?? undefined,
+        templateId: tpl.id,
+      });
+
+      if (!result) {
+        throw new Error("Falha ao criar projeto a partir do template");
+      }
+
+      // Mostra sucesso por 800ms antes de redirecionar
+      setSuccessId(tpl.id);
+      await new Promise((r) => setTimeout(r, 800));
+
+      router.push(`/app/projects/${result.project.id}`);
+      router.refresh();
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : "Erro ao usar template"
+      );
+      setCloningId(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -51,6 +95,14 @@ export default function TemplatesPage() {
           </p>
         </div>
       </div>
+
+      {errorMsg && (
+        <Card className="border-red-500/50 bg-red-500/5">
+          <CardContent className="py-4 text-sm text-red-600">
+            ⚠️ {errorMsg}
+          </CardContent>
+        </Card>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -99,11 +151,28 @@ export default function TemplatesPage() {
                 <div className="text-xs text-muted-foreground mb-3">
                   {tpl.stages?.length || 0} etapas pré-configuradas
                 </div>
-                <Button asChild variant="outline" className="w-full">
-                  <Link href={`/app/projects?from=${tpl.id}`}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Usar template
-                  </Link>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => handleUseTemplate(tpl)}
+                  disabled={cloningId !== null}
+                >
+                  {cloningId === tpl.id ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Criando projeto…
+                    </>
+                  ) : successId === tpl.id ? (
+                    <>
+                      <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-600" />
+                      Pronto!
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Usar template
+                    </>
+                  )}
                 </Button>
               </CardContent>
             </Card>

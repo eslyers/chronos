@@ -73,7 +73,12 @@ export const dataProvider = {
     return { projects, stages, tasks, dependencies };
   },
 
-  createProject: async (input: { name: string; description?: string; color?: string }) => {
+  createProject: async (input: {
+    name: string;
+    description?: string;
+    color?: string;
+    templateId?: string;
+  }) => {
     if (getDataLayer() !== "supabase") return null;
     const { workspaceId, userId } = await loadWorkspaceContext();
     if (!workspaceId) return null;
@@ -84,11 +89,50 @@ export const dataProvider = {
       workspace_id: workspaceId,
       created_by: userId,
     });
-    if (project) {
-      const stages = await createDefaultStages(project.id);
-      return { project, stages };
+    if (!project) return null;
+
+    // Se tem templateId, clona as stages do template
+    if (input.templateId) {
+      const { createSPAClient } = await import("@/lib/supabase/client");
+      const supabase = createSPAClient();
+      const { data: tpl } = await supabase
+        .from("templates")
+        .select("stages")
+        .eq("id", input.templateId)
+        .single();
+      const templateStages = ((tpl as { stages?: unknown } | null)?.stages as Array<{
+        name: string;
+        color: string;
+        sort_order: number;
+        wip_limit?: number | null;
+        is_done?: boolean;
+      }>) ?? [];
+      const createdStages: import("@/lib/context/DataContext").Stage[] = [];
+      for (const s of templateStages) {
+        const stage = await supabaseCreateStage({
+          project_id: project.id,
+          name: s.name,
+          color: s.color,
+          sort_order: s.sort_order,
+          wip_limit: s.wip_limit ?? null,
+        });
+        if (stage) {
+          createdStages.push({
+            id: stage.id,
+            project_id: stage.project_id,
+            name: stage.name,
+            color: stage.color,
+            position: stage.position,
+            is_done: stage.is_done,
+          });
+        }
+      }
+      return { project, stages: createdStages };
     }
-    return null;
+
+    // Sem template, usa as 5 stages default
+    const stages = await createDefaultStages(project.id);
+    return { project, stages };
   },
 
   updateProject: supabaseUpdateProject,
