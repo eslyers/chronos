@@ -119,6 +119,35 @@
   color: hsl(210 40% 98%) !important;
 }
 
+/* Force TODOS os rows da task-list-table (incluindo :nth-of-type(even)) */
+.gantt-wrapper [class*="_34SS0"],
+.gantt-wrapper [class*="_3ZbQT"] [class*="_34SS0"] {
+  background-color: hsl(222 47% 11%) !important;
+  color: hsl(210 40% 98%) !important;
+}
+.gantt-wrapper [class*="_34SS0"]:nth-of-type(even),
+.gantt-wrapper [class*="_3ZbQT"] [class*="_34SS0"]:nth-of-type(even) {
+  background-color: hsl(217 33% 17%) !important; /* zebra slate-700 */
+}
+.gantt-wrapper [class*="_34SS0"]:nth-of-type(odd),
+.gantt-wrapper [class*="_3ZbQT"] [class*="_34SS0"]:nth-of-type(odd) {
+  background-color: hsl(222 47% 11%) !important; /* base slate-900 */
+}
+
+/* Tab cells transparentes — texto vem por heranca */
+.gantt-wrapper [class*="_3lLk3"],
+.gantt-wrapper [class*="_nI1Xw"] {
+  background-color: transparent !important;
+  color: hsl(210 40% 98%) !important;
+}
+
+/* Cabeçalho (row-lines) - primeira linha da task-list-table */
+.gantt-wrapper [class*="_3ZbQT"] > [class*="rowLines_"],
+.gantt-wrapper [class*="rowLines_"] {
+  background-color: hsl(222 47% 11%) !important;
+  color: hsl(210 40% 98%) !important;
+}
+
 /* Tooltip */
 ._3T42e, [class*="_3T42e"] {
   background: hsl(222 47% 11%) !important;
