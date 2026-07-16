@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useTheme } from "next-themes";
 import { Gantt, ViewMode, type Task as GanttTask } from "gantt-task-react";
 import "gantt-task-react/dist/index.css";
 import { Calendar, FolderKanban, Layers } from "lucide-react";
@@ -25,10 +26,50 @@ const PRIORITY_COLORS: Record<string, string> = {
   critical: "#ef4444",
 };
 
+// Paleta adaptativa por tema (claro/escuro)
+function paletteFor(isDark: boolean) {
+  return isDark
+    ? {
+        barBackground: "#475569",         // slate-600
+        barBackgroundSelected: "#fbbf24",
+        projectBackground: "#64748b",     // slate-500
+        projectBackgroundSelected: "#94a3b8",
+        projectProgress: "#fbbf24",
+        projectProgressSelected: "#fde047",
+        arrowColor: "#cbd5e1",             // setas claras
+        milestoneBackground: "#f87171",
+        milestoneSelected: "#ef4444",
+        todayColor: "rgba(239, 68, 68, 0.7)",
+      }
+    : {
+        barBackground: "#64748b",
+        barBackgroundSelected: "#fbbf24",
+        projectBackground: "#cbd5e1",     // slate-300
+        projectBackgroundSelected: "#94a3b8",
+        projectProgress: "#fbbf24",
+        projectProgressSelected: "#fb923c",
+        arrowColor: "#475569",
+        milestoneBackground: "#ef4444",
+        milestoneSelected: "#dc2626",
+        todayColor: "rgba(239, 68, 68, 0.5)",
+      };
+}
+
 export default function TimelinePage() {
   const { projects, getTasksByProject, dependencies, loading } = useData();
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.Week);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
+  // Estado: projetos colapsados (sem drill-down)
+  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(
+    new Set()
+  );
+  const { theme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  const isDark = mounted && theme === "dark";
+  const palette = paletteFor(isDark);
 
   // projectTasks: lista plana de tasks dos projetos visíveis
   const projectTasks = useMemo(() => {
@@ -78,11 +119,13 @@ export default function TimelinePage() {
         ? new Date(project.target_date)
         : new Date(Date.now() + 30 * 86400000);
 
+      const isCollapsed = collapsedProjects.has(project.id);
+
       // Nível 1: Projeto (parent)
       result.push({
         start: projectStart,
         end: projectEnd,
-        name: project.name,
+        name: `${isCollapsed ? "▶" : "▼"} ${project.name}`,
         id: `project-${project.id}`,
         type: "project",
         progress: project.progress,
@@ -95,37 +138,41 @@ export default function TimelinePage() {
         isDisabled: true,
       });
 
-      // Nível 2: Tarefas
-      const tasks = getTasksByProject(project.id);
-      tasks.forEach((task: Task) => {
-        const start = task.start_date
-          ? new Date(task.start_date)
-          : projectStart;
-        const end = task.due_date
-          ? new Date(task.due_date)
-          : new Date(start.getTime() + 7 * 86400000);
+      // Nível 2: Tarefas (escondidas se projeto colapsado)
+      if (!isCollapsed) {
+        const tasks = getTasksByProject(project.id);
+        tasks.forEach((task: Task) => {
+          const start = task.start_date
+            ? new Date(task.start_date)
+            : projectStart;
+          const end = task.due_date
+            ? new Date(task.due_date)
+            : new Date(start.getTime() + 7 * 86400000);
 
-        result.push({
-          start,
-          end,
-          name: task.title,
-          id: `task-${task.id}`,
-          type: "task",
-          progress: task.progress,
-          project: `project-${project.id}`,
-          dependencies: dependenciesByTask.get(task.id),
-          styles: {
-            backgroundColor: PRIORITY_COLORS[task.priority] || "#64748b",
-            backgroundSelectedColor: PRIORITY_COLORS[task.priority] || "#64748b",
-            progressColor: "#ffffff",
-            progressSelectedColor: "#ffffff",
-          },
+          result.push({
+            start,
+            end,
+            name: task.title,
+            id: `task-${task.id}`,
+            type: "task",
+            progress: task.progress,
+            project: `project-${project.id}`,
+            dependencies: dependenciesByTask.get(task.id),
+            hideChildren: false,
+            styles: {
+              backgroundColor: PRIORITY_COLORS[task.priority] || "#64748b",
+              backgroundSelectedColor:
+                PRIORITY_COLORS[task.priority] || "#64748b",
+              progressColor: "#ffffff",
+              progressSelectedColor: "#ffffff",
+            },
+          });
         });
-      });
+      }
     });
 
     return result;
-  }, [projects, selectedProjectId, getTasksByProject, dependenciesByTask]);
+  }, [projects, selectedProjectId, getTasksByProject, dependenciesByTask, collapsedProjects]);
 
   // Estatísticas
   const stats = useMemo(() => {
@@ -292,17 +339,17 @@ export default function TimelinePage() {
                       ? 200
                       : 300
                   }
-                  listCellWidth="200px"
-                  barBackgroundColor="#64748b"
-                  barBackgroundSelectedColor="#fbbf24"
-                  todayColor="rgba(239, 68, 68, 0.5)"
-                  projectProgressColor="#fbbf24"
-                  projectProgressSelectedColor="#fb923c"
-                  projectBackgroundColor="#cbd5e1"
-                  projectBackgroundSelectedColor="#94a3b8"
-                  milestoneBackgroundColor="#ef4444"
-                  milestoneBackgroundSelectedColor="#dc2626"
-                  arrowColor="#64748b"
+                  listCellWidth="220px"
+                  barBackgroundColor={palette.barBackground}
+                  barBackgroundSelectedColor={palette.barBackgroundSelected}
+                  todayColor={palette.todayColor}
+                  projectProgressColor={palette.projectProgress}
+                  projectProgressSelectedColor={palette.projectProgressSelected}
+                  projectBackgroundColor={palette.projectBackground}
+                  projectBackgroundSelectedColor={palette.projectBackgroundSelected}
+                  milestoneBackgroundColor={palette.milestoneBackground}
+                  milestoneBackgroundSelectedColor={palette.milestoneSelected}
+                  arrowColor={palette.arrowColor}
                   arrowIndent={20}
                   rowHeight={40}
                   headerHeight={50}
@@ -311,6 +358,18 @@ export default function TimelinePage() {
                   rtl={false}
                   handleWidth={8}
                   timeStep={300000}
+                  onClick={(task) => {
+                    // Drill-down: clicar no projeto expande/colapsa tasks
+                    if (task.type === "project") {
+                      const projectId = String(task.id).replace(/^project-/, "");
+                      setCollapsedProjects((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(projectId)) next.delete(projectId);
+                        else next.add(projectId);
+                        return next;
+                      });
+                    }
+                  }}
                 />
               </div>
             </div>
