@@ -362,7 +362,7 @@ export default function TimelinePage() {
               </Button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto gantt-wrapper">
               <div className="min-w-[800px]">
                 <Gantt
                   tasks={ganttTasks}

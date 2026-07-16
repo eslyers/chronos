@@ -64,9 +64,66 @@
   }
 }
 
-/* Gantt Task React overrides */
-.gantt-task-react {
-  /* Customiza cores do gantt */
+/* Gantt Task React overrides — adapta ao tema escuro */
+/* As classes sao hasheadas pelo Emotion do gantt-task-react, entao usamos
+   seletores pela estrutura do DOM (task list area, grid rows, etc) */
+.gantt-wrapper {
+  background-color: transparent !important;
+}
+
+/* Cabeçalho do calendario (.calendarHeader = _35nLX) */
+.gantt-wrapper svg rect[fill="#ffffff"] {
+  fill: hsl(217 33% 17%) !important;
+  stroke: hsl(217 33% 25%) !important;
+}
+
+/* Linhas verticais do grid (.gridTick = _RuwuK) */
+.gantt-wrapper svg line[stroke="#e6e4e4"],
+.gantt-wrapper svg line[stroke="#ebeff2"] {
+  stroke: hsl(217 33% 22%) !important;
+}
+
+/* Rows de fundo do grid (.gridRow = _2dZTy, fill="#fff" e fill="#f5f5f5") */
+.gantt-wrapper svg rect[fill="#fff"] {
+  fill: hsl(222 47% 11%) !important;
+}
+.gantt-wrapper svg rect[fill="#f5f5f5"] {
+  fill: hsl(217 33% 14%) !important;
+}
+
+/* Tabela da lista de tarefas (lado esquerdo) */
+.gantt-wrapper > div > div > div {
+  background-color: transparent !important;
+}
+
+/* Area de SVG do Gantt (lado direito) */
+.gantt-wrapper svg {
+  background-color: hsl(222 47% 11%) !important;
+}
+
+/* Dark mode - areas claras no DOM (caso hajam rows de tabela com fundo branco) */
+.dark .gantt-wrapper [style*="background-color: rgb(255, 255, 255)"],
+.dark .gantt-wrapper [style*="background-color: #fff"],
+.dark .gantt-wrapper [style*="background-color: #ffffff"],
+.dark .gantt-wrapper [style*="background-color: white"] {
+  background-color: hsl(222 47% 11%) !important;
+}
+
+/* Task list rows com bordas e fundo em dark */
+.dark .gantt-wrapper table,
+.dark .gantt-wrapper tbody,
+.dark .gantt-wrapper tr,
+.dark .gantt-wrapper td {
+  background-color: transparent !important;
+  border-color: hsl(217 33% 17%) !important;
+  color: hsl(210 40% 98%) !important;
+}
+
+/* Tooltip */
+._3T42e, [class*="_3T42e"] {
+  background: hsl(222 47% 11%) !important;
+  color: hsl(210 40% 98%) !important;
+  border: 1px solid hsl(217 33% 25%);
 }
 
 
