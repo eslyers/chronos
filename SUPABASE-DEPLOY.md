@@ -41,9 +41,12 @@ npx supabase functions deploy task-assigned-notify
 # Telegram Bot Token (pegar via @BotFather)
 npx supabase secrets set TELEGRAM_BOT_TOKEN="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
 
-# Resend API Key (criar conta em https://resend.com/api-keys)
-npx supabase secrets set RESEND_API_KEY="re_xxxxxxxxxxxxx"
-npx supabase secrets set FROM_EMAIL="CHRONOS <noreply@resend.dev>"
+# Brevo API Key (criar conta em https://app.brevo.com/settings/keys/api)
+# Plano free: 300 emails/dia, sem precisar verificar domínio (só 1 email remetente)
+npx supabase secrets set BREVO_API_KEY="xkeysib-xxxxxxxxxxxxx..."
+npx supabase secrets set BREVO_SENDER_EMAIL="eslyers@gmail.com"
+npx supabase secrets set BREVO_SENDER_NAME="CHRONOS"
+npx supabase secrets set APP_URL="https://chronos-temp.vercel.app"
 ```
 
 ## ⏰ Cron Schedule (rodar due-soon-alert 1x por dia às 9h)
@@ -99,7 +102,7 @@ curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getMe"
 |------|--------|----------------|
 | Supabase PAT | ❌ | https://supabase.com/dashboard/account/tokens |
 | Telegram Bot Token | ❌ | @BotFather no Telegram → /newbot |
-| Resend API Key | ❌ | https://resend.com/api-keys |
-| FROM_EMAIL | ❌ | Pode ser `noreply@resend.dev` (default grátis) |
+| Brevo API Key | ❌ | https://app.brevo.com/settings/keys/api |
+| Brevo Sender Email | ❌ | Email verificado no Brevo (ex: `eslyers@gmail.com`) |
 
 **Tudo isso são 5 minutos no total se você tiver as contas criadas.**
