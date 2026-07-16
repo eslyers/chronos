@@ -20,8 +20,10 @@ import {
 import { KanbanSquare, Clock, Flag, Plus, FolderOpen } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useData } from "@/lib/context/DataContext";
 import { TaskAssignee } from "@/components/TaskAssignee";
+import { TaskDialog } from "@/components/TaskDialog";
 
 type TaskLike = {
   id: string;
@@ -247,6 +249,8 @@ export default function KanbanPage() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [activeTask, setActiveTask] = useState<TaskLike | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [defaultStageId, setDefaultStageId] = useState<string | null>(null);
 
   // Sensors: suportam mouse + touch + teclado (acessibilidade)
   const sensors = useSensors(
@@ -443,6 +447,24 @@ export default function KanbanPage() {
             {projectTasks.length} tarefas • {projectStages.length} etapas
           </p>
         </div>
+        <div className="flex gap-2 flex-wrap">
+          {projectStages.map((stage) => (
+            <Button
+              key={stage.id}
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setDefaultStageId(stage.id);
+                setCreateOpen(true);
+              }}
+              title={`Adicionar tarefa na etapa "${stage.name}"`}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              <span className="hidden sm:inline">em </span>
+              {stage.name}
+            </Button>
+          ))}
+        </div>
       </div>
 
       {moveError && (
@@ -511,6 +533,16 @@ export default function KanbanPage() {
         stage_transitions é gravado automaticamente e dispara notificação pra
         quem tiver inscrito no projeto.
       </p>
+
+      <TaskDialog
+        open={createOpen}
+        onOpenChange={(o) => {
+          setCreateOpen(o);
+          if (!o) setDefaultStageId(null);
+        }}
+        projectId={project.id}
+        defaultStageId={defaultStageId}
+      />
     </div>
   );
 }
