@@ -24,6 +24,28 @@ type Activity = {
   note: string | null;
 };
 
+type RawTransition = {
+  id: string;
+  task_id: string;
+  moved_by: string | null;
+  moved_at: string;
+  note: string | null;
+  tasks: {
+    id: string;
+    title: string;
+    project_id: string;
+    projects: { id: string; name: string } | null;
+  } | null;
+  from_stage: { name: string } | null;
+  to_stage: { name: string } | null;
+};
+
+type ProfileRow = {
+  id: string;
+  email: string;
+  full_name: string | null;
+};
+
 export default function ActivityPage() {
   const { user } = useGlobal();
   const [activities, setActivities] = React.useState<Activity[]>([]);
@@ -71,9 +93,11 @@ export default function ActivityPage() {
       console.error("Activity fetch error:", error);
       setActivities([]);
     } else {
+      const rawData = (data || []) as RawTransition[];
+
       // Enriquecer com profiles (movido_por)
       const movedByIds = Array.from(
-        new Set((data || []).map((d: any) => d.moved_by).filter(Boolean))
+        new Set(rawData.map((d) => d.moved_by).filter((id): id is string => Boolean(id)))
       );
       let profileMap: Record<string, { email: string; full_name: string | null }> = {};
       if (movedByIds.length) {
@@ -81,15 +105,16 @@ export default function ActivityPage() {
           .from("profiles")
           .select("id, email, full_name")
           .in("id", movedByIds);
+        const profs = (profData || []) as ProfileRow[];
         profileMap = Object.fromEntries(
-          (profData || []).map((p: any) => [
+          profs.map((p) => [
             p.id,
             { email: p.email, full_name: p.full_name },
           ])
         );
       }
 
-      const enriched: Activity[] = (data || []).map((d: any) => ({
+      const enriched: Activity[] = rawData.map((d) => ({
         id: d.id,
         task_id: d.task_id,
         task_title: d.tasks?.title ?? "(tarefa removida)",
@@ -97,8 +122,8 @@ export default function ActivityPage() {
         project_name: d.tasks?.projects?.name ?? "?",
         from_stage_name: d.from_stage?.name ?? null,
         to_stage_name: d.to_stage?.name ?? "?",
-        moved_by_email: d.moved_by ? profileMap[d.moved_by]?.email : null,
-        moved_by_name: d.moved_by ? profileMap[d.moved_by]?.full_name : null,
+        moved_by_email: d.moved_by ? profileMap[d.moved_by]?.email ?? null : null,
+        moved_by_name: d.moved_by ? profileMap[d.moved_by]?.full_name ?? null : null,
         moved_at: d.moved_at,
         note: d.note,
       }));
