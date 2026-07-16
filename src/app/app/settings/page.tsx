@@ -43,66 +43,93 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState("");
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   const [subscribers, setSubscribers] = useState<Record<string, Subscriber>>({});
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   // Carregar profile + projects + subscribers
   useEffect(() => {
     if (!user) return;
     (async () => {
+      setLoadError(null);
       const supabase = createSPAClient();
 
-      // 1. Profile
-      let p: Profile | null = null;
-      const { data: existing } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .maybeSingle();
-      if (existing) {
-        p = existing as Profile;
-      }
-
-      // Auto-criar profile stub se não existir (trigger deveria ter criado)
-      if (!p) {
-        const stub = {
-          id: user.id,
-          email: user.email ?? "",
-          full_name: null,
-          timezone: "America/Sao_Paulo",
-          notify_by_email: true,
-          notify_by_telegram: false,
-        };
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const profilesClient = supabase.from("profiles") as any;
-        const { data: created, error: createErr } = await profilesClient
-          .insert(stub)
+      try {
+        // 1. Profile (RLS permite SELECT do próprio profile)
+        const { data: existing, error: profileErr } = await supabase
+          .from("profiles")
           .select("*")
-          .single();
-        if (!createErr && created) {
-          p = created as Profile;
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (profileErr) {
+          throw new Error(`Erro ao ler perfil: ${profileErr.message}`);
         }
+
+        let p: Profile | null = (existing as Profile | null) ?? null;
+
+        // Auto-criar profile stub se não existir (requer migration
+        // 20260716000000_fix_profile_insert_policies.sql aplicada)
+        if (!p) {
+          const stub = {
+            id: user.id,
+            email: user.email ?? "",
+            full_name: null,
+            timezone: "America/Sao_Paulo",
+            notify_by_email: true,
+            notify_by_telegram: true,
+          };
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const profilesClient = supabase.from("profiles") as any;
+          const { data: created, error: createErr } = await profilesClient
+            .insert(stub)
+            .select("*")
+            .single();
+
+          if (createErr) {
+            throw new Error(
+              `Não foi possível criar seu perfil (RLS bloqueou INSERT). ` +
+                `Aplique a migration 20260716000000_fix_profile_insert_policies.sql ` +
+                `no Supabase Dashboard. Detalhes: ${createErr.message}`
+            );
+          }
+          if (created) p = created as Profile;
+        }
+        setProfile(p);
+
+        // 2. Projects do user
+        const { data: projs, error: projErr } = await supabase
+          .from("projects")
+          .select("id, name")
+          .order("name");
+        if (projErr) {
+          throw new Error(`Erro ao listar projetos: ${projErr.message}`);
+        }
+        setProjects(projs || []);
+
+        // 3. Subscriber prefs por projeto
+        const { data: subs, error: subsErr } = await supabase
+          .from("notification_subscribers")
+          .select("*")
+          .eq("user_id", user.id);
+        if (subsErr) {
+          throw new Error(
+            `Erro ao ler preferências de notificação: ${subsErr.message}`
+          );
+        }
+
+        const map: Record<string, Subscriber> = {};
+        ((subs || []) as unknown as Subscriber[]).forEach((s) => {
+          map[s.project_id] = s;
+        });
+        setSubscribers(map);
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : "Erro ao carregar configurações";
+        console.error("[Settings] load error:", err);
+        setLoadError(msg);
       }
-      if (p) setProfile(p);
-
-      // 2. Projects do user
-      const { data: projs } = await supabase
-        .from("projects")
-        .select("id, name")
-        .order("name");
-      setProjects(projs || []);
-
-      // 3. Subscriber prefs por projeto
-      const { data: subs } = await supabase
-        .from("notification_subscribers")
-        .select("*")
-        .eq("user_id", user.id);
-
-      const map: Record<string, Subscriber> = {};
-      ((subs || []) as unknown as Subscriber[]).forEach((s) => {
-        map[s.project_id] = s;
-      });
-      setSubscribers(map);
     })();
-  }, [user]);
+  }, [user, retryNonce]);
 
   async function handlePasswordChange(e: React.FormEvent) {
     e.preventDefault();
@@ -220,10 +247,39 @@ export default function SettingsPage() {
     }
   }
 
+  if (loadError) {
+    return (
+      <div className="space-y-4 max-w-2xl">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
+          <p className="text-muted-foreground">Conta, notificações e integrações</p>
+        </div>
+        <Alert variant="destructive">
+          <AlertDescription>
+            <div className="font-semibold mb-1">
+              Não foi possível carregar as configurações
+            </div>
+            <div className="text-sm mb-3 whitespace-pre-wrap">{loadError}</div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRetryNonce((n) => n + 1)}
+            >
+              Tentar novamente
+            </Button>
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   if (!profile) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <span className="ml-3 text-sm text-muted-foreground">
+          Carregando configurações...
+        </span>
       </div>
     );
   }
