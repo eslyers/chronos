@@ -1,13 +1,47 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  TouchSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  closestCenter,
+} from "@dnd-kit/core";
 import { KanbanSquare, Clock, Flag, Plus, FolderOpen } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useData } from "@/lib/context/DataContext";
 import { TaskAssignee } from "@/components/TaskAssignee";
+
+type TaskLike = {
+  id: string;
+  title: string;
+  description: string | null;
+  stage_id: string | null;
+  priority: keyof typeof PRIORITY_COLORS;
+  due_date: string | null;
+  progress: number;
+  assignee_id: string | null;
+};
+
+type StageLike = {
+  id: string;
+  name: string;
+  color: string;
+  position: number;
+  is_done: boolean;
+  project_id: string;
+};
 
 const PRIORITY_COLORS = {
   critical: "border-red-500",
@@ -34,10 +68,243 @@ function daysUntil(iso: string | null): number | null {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Task Card (draggable)
+// ────────────────────────────────────────────────────────────────────────────
+function TaskCard({
+  task,
+  projectId,
+  isDone,
+  router,
+  isOverlay = false,
+}: {
+  task: TaskLike;
+  projectId: string;
+  isDone: boolean;
+  router: ReturnType<typeof useRouter>;
+  isOverlay?: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: task.id,
+    data: { type: "task", stageId: task.stage_id, taskId: task.id },
+    disabled: isOverlay, // evita double bind quando em overlay
+  });
+
+  const days = daysUntil(task.due_date);
+  const overdue = days !== null && days < 0 && !isDone;
+
+  return (
+    <Card
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      className={`border-l-4 ${PRIORITY_COLORS[task.priority as keyof typeof PRIORITY_COLORS]} ${
+        isDragging && !isOverlay ? "opacity-30" : ""
+      } ${isOverlay ? "shadow-2xl rotate-2 cursor-grabbing" : "cursor-grab hover:shadow-md"} transition-shadow`}
+      onClick={(e) => {
+        // Só navega se não estiver arrastando
+        if (!isDragging) {
+          e.stopPropagation();
+          router.push(`/app/projects/${projectId}?task=${task.id}`);
+        }
+      }}
+    >
+      <CardContent className="p-3">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <h4 className="text-sm font-medium leading-tight">{task.title}</h4>
+          <Flag
+            className="h-3 w-3 flex-shrink-0 mt-0.5"
+            style={{
+              color:
+                task.priority === "critical"
+                  ? "#ef4444"
+                  : task.priority === "high"
+                    ? "#f97316"
+                    : task.priority === "medium"
+                      ? "#3b82f6"
+                      : "#64748b",
+            }}
+          />
+        </div>
+
+        {task.description && (
+          <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+            {task.description}
+          </p>
+        )}
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+            {PRIORITY_LABELS[task.priority as keyof typeof PRIORITY_LABELS]}
+          </Badge>
+          {task.due_date && (
+            <span
+              className={`text-[10px] inline-flex items-center gap-1 ${overdue ? "text-red-600 font-medium" : "text-muted-foreground"}`}
+            >
+              <Clock className="h-2.5 w-2.5" />
+              {formatDate(task.due_date)}
+              {overdue && " (atrasado)"}
+            </span>
+          )}
+          {task.progress > 0 && task.progress < 100 && (
+            <span className="text-[10px] text-muted-foreground">
+              {task.progress}%
+            </span>
+          )}
+        </div>
+        {task.assignee_id && (
+          <div className="mt-2 pt-2 border-t border-border/40">
+            <TaskAssignee
+              assigneeId={task.assignee_id}
+              workspaceId={undefined as unknown as string}
+              variant="badge"
+            />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Stage Column (droppable)
+// ────────────────────────────────────────────────────────────────────────────
+function StageColumn({
+  stage,
+  tasks,
+  projectId,
+  isDone,
+  router,
+}: {
+  stage: StageLike;
+  tasks: TaskLike[];
+  projectId: string;
+  isDone: boolean;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: stage.id,
+    data: { type: "stage", stageId: stage.id },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex-shrink-0 w-[85vw] sm:w-80 flex flex-col bg-muted/30 rounded-lg border snap-center transition-colors ${
+        isOver ? "bg-primary/10 border-primary ring-2 ring-primary/30" : ""
+      }`}
+    >
+      <div
+        className="p-3 border-b flex items-center justify-between"
+        style={{
+          borderTopColor: stage.color,
+          borderTopWidth: 3,
+          borderTopLeftRadius: 8,
+          borderTopRightRadius: 8,
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <div
+            className="w-2 h-2 rounded-full"
+            style={{ backgroundColor: stage.color }}
+          />
+          <h3 className="font-medium text-sm">{stage.name}</h3>
+        </div>
+        <Badge variant="secondary" className="text-xs">
+          {tasks.length}
+        </Badge>
+      </div>
+
+      <div className="p-3 space-y-2 flex-1 min-h-[200px] max-h-[600px] overflow-y-auto">
+        {tasks.length === 0 ? (
+          <p
+            className={`text-xs text-center py-8 ${isOver ? "text-primary font-medium" : "text-muted-foreground"}`}
+          >
+            {isOver ? "Solte aqui ✨" : "Nenhuma tarefa"}
+          </p>
+        ) : (
+          tasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              projectId={projectId}
+              isDone={isDone}
+              router={router}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Página principal
+// ────────────────────────────────────────────────────────────────────────────
 export default function KanbanPage() {
   const router = useRouter();
-  const { projects, stages, tasks, loading } = useData();
+  const { projects, stages, tasks, loading, updateTask } = useData();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [activeTask, setActiveTask] = useState<TaskLike | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
+
+  // Sensors: suportam mouse + touch + teclado (acessibilidade)
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 }, // evita clique acidental
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 5 },
+    }),
+    useSensor(KeyboardSensor)
+  );
+
+  // Tasks do projeto selecionado, memoizadas por performance
+  const projectTasks = useMemo(() => {
+    if (!selectedProjectId) return [];
+    return tasks.filter((t) => t.project_id === selectedProjectId);
+  }, [tasks, selectedProjectId]);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setMoveError(null);
+    const task = projectTasks.find((t) => t.id === event.active.id);
+    if (task) setActiveTask(task);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveTask(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const taskId = active.id as string;
+    const overData = over.data.current as
+      | { type: "stage"; stageId: string }
+      | { type: "task"; stageId: string }
+      | undefined;
+
+    // Se soltou em outra task, usa o stage da task alvo
+    // Se soltou direto na coluna, usa o stage da coluna
+    const targetStageId =
+      overData?.type === "task"
+        ? overData.stageId
+        : overData?.type === "stage"
+          ? overData.stageId
+          : null;
+
+    if (!targetStageId) return;
+
+    const movedTask = projectTasks.find((t) => t.id === taskId);
+    if (!movedTask || movedTask.stage_id === targetStageId) return;
+
+    try {
+      await updateTask(taskId, { stage_id: targetStageId });
+    } catch (err) {
+      console.error("[Kanban] move error:", err);
+      setMoveError(
+        err instanceof Error ? err.message : "Falha ao mover tarefa"
+      );
+    }
+  };
 
   if (loading) {
     return (
@@ -47,7 +314,6 @@ export default function KanbanPage() {
     );
   }
 
-  // Sem projetos: pedir pra criar
   if (projects.length === 0) {
     return (
       <div className="space-y-6">
@@ -57,7 +323,6 @@ export default function KanbanPage() {
             Acompanhe o fluxo de execução em colunas
           </p>
         </div>
-
         <Card className="border-dashed border-2">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <div className="p-4 rounded-full bg-blue-500/10 mb-4">
@@ -80,7 +345,6 @@ export default function KanbanPage() {
     );
   }
 
-  // Sem projeto selecionado: lista de projetos
   if (!selectedProjectId) {
     return (
       <div className="space-y-6">
@@ -90,13 +354,13 @@ export default function KanbanPage() {
             Escolha um projeto pra ver o board
           </p>
         </div>
-
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => {
             const projectStages = stages.filter((s) => s.project_id === project.id);
-            const projectTasks = tasks.filter((t) => t.project_id === project.id);
-            const doneCount = projectTasks.filter((t) => t.status === "done").length;
-
+            const projectTasksCount = tasks.filter((t) => t.project_id === project.id).length;
+            const doneCount = tasks.filter(
+              (t) => t.project_id === project.id && t.status === "done"
+            ).length;
             return (
               <Card
                 key={project.id}
@@ -120,14 +384,16 @@ export default function KanbanPage() {
                   </div>
                   <h3 className="font-semibold text-lg">{project.name}</h3>
                   <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
-                    <span>{projectTasks.length} tarefas</span>
+                    <span>{projectTasksCount} tarefas</span>
                     <span>{doneCount} concluídas</span>
                   </div>
                   <div className="mt-3 h-1.5 rounded-full bg-muted overflow-hidden">
                     <div
                       className="h-full rounded-full"
                       style={{
-                        width: `${projectTasks.length ? (doneCount / projectTasks.length) * 100 : 0}%`,
+                        width: `${
+                          projectTasksCount ? (doneCount / projectTasksCount) * 100 : 0
+                        }%`,
                         backgroundColor: project.color,
                       }}
                     />
@@ -141,7 +407,6 @@ export default function KanbanPage() {
     );
   }
 
-  // Projeto selecionado: render board real
   const project = projects.find((p) => p.id === selectedProjectId);
   if (!project) {
     return (
@@ -160,7 +425,6 @@ export default function KanbanPage() {
   const projectStages = stages
     .filter((s) => s.project_id === project.id)
     .sort((a, b) => a.position - b.position);
-  const projectTasks = tasks.filter((t) => t.project_id === project.id);
 
   return (
     <div className="space-y-6">
@@ -172,12 +436,26 @@ export default function KanbanPage() {
           >
             ← Trocar projeto
           </button>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{project.name}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            {project.name}
+          </h1>
           <p className="text-sm text-muted-foreground">
             {projectTasks.length} tarefas • {projectStages.length} etapas
           </p>
         </div>
       </div>
+
+      {moveError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+          ❌ {moveError}
+          <button
+            onClick={() => setMoveError(null)}
+            className="ml-2 text-xs underline"
+          >
+            fechar
+          </button>
+        </div>
+      )}
 
       {projectStages.length === 0 ? (
         <Card className="border-dashed border-2">
@@ -188,123 +466,50 @@ export default function KanbanPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory">
-          {projectStages.map((stage) => {
-            const stageTasks = projectTasks
-              .filter((t) => t.stage_id === stage.id)
-              .sort((a, b) => a.position - b.position);
-            const isDone = stage.is_done;
-
-            return (
-              <div
-                key={stage.id}
-                className="flex-shrink-0 w-[85vw] sm:w-80 flex flex-col bg-muted/30 rounded-lg border snap-center"
-              >
-                <div
-                  className="p-3 border-b flex items-center justify-between"
-                  style={{ borderTopColor: stage.color, borderTopWidth: 3, borderTopLeftRadius: 8, borderTopRightRadius: 8 }}
-                >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: stage.color }}
-                    />
-                    <h3 className="font-medium text-sm">{stage.name}</h3>
-                  </div>
-                  <Badge variant="secondary" className="text-xs">
-                    {stageTasks.length}
-                  </Badge>
-                </div>
-
-                <div className="p-3 space-y-2 flex-1 min-h-[200px] max-h-[600px] overflow-y-auto">
-                  {stageTasks.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-8">
-                      Nenhuma tarefa
-                    </p>
-                  ) : (
-                    stageTasks.map((task) => {
-                      const days = daysUntil(task.due_date);
-                      const overdue = days !== null && days < 0 && !isDone;
-                      return (
-                        <Card
-                          key={task.id}
-                          className={`border-l-4 ${PRIORITY_COLORS[task.priority]} cursor-pointer hover:shadow-md transition-all`}
-                          onClick={() =>
-                            router.push(`/app/projects/${project.id}?task=${task.id}`)
-                          }
-                        >
-                          <CardContent className="p-3">
-                            <div className="flex items-start justify-between gap-2 mb-2">
-                              <h4 className="text-sm font-medium leading-tight">
-                                {task.title}
-                              </h4>
-                              <Flag
-                                className="h-3 w-3 flex-shrink-0 mt-0.5"
-                                style={{
-                                  color:
-                                    task.priority === "critical"
-                                      ? "#ef4444"
-                                      : task.priority === "high"
-                                        ? "#f97316"
-                                        : task.priority === "medium"
-                                          ? "#3b82f6"
-                                          : "#64748b",
-                                }}
-                              />
-                            </div>
-
-                            {task.description && (
-                              <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-                                {task.description}
-                              </p>
-                            )}
-
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] px-1.5 py-0"
-                              >
-                                {PRIORITY_LABELS[task.priority]}
-                              </Badge>
-                              {task.due_date && (
-                                <span
-                                  className={`text-[10px] inline-flex items-center gap-1 ${overdue ? "text-red-600 font-medium" : "text-muted-foreground"}`}
-                                >
-                                  <Clock className="h-2.5 w-2.5" />
-                                  {formatDate(task.due_date)}
-                                  {overdue && " (atrasado)"}
-                                </span>
-                              )}
-                              {task.progress > 0 && task.progress < 100 && (
-                                <span className="text-[10px] text-muted-foreground">
-                                  {task.progress}%
-                                </span>
-                              )}
-                            </div>
-                            {task.assignee_id && (
-                              <div className="mt-2 pt-2 border-t border-border/40">
-                                <TaskAssignee
-                                  assigneeId={task.assignee_id}
-                                  workspaceId={project.workspace_id}
-                                  variant="badge"
-                                />
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setActiveTask(null)}
+        >
+          <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory">
+            {projectStages.map((stage) => {
+              const stageTasks = projectTasks
+                .filter((t) => t.stage_id === stage.id)
+                .sort((a, b) => a.position - b.position);
+              return (
+                <StageColumn
+                  key={stage.id}
+                  stage={stage}
+                  tasks={stageTasks}
+                  projectId={project.id}
+                  isDone={stage.is_done}
+                  router={router}
+                />
+              );
+            })}
+          </div>
+          <DragOverlay dropAnimation={null}>
+            {activeTask ? (
+              <TaskCard
+                task={activeTask}
+                projectId={project.id}
+                isDone={
+                  projectStages.find((s) => s.id === activeTask.stage_id)?.is_done ?? false
+                }
+                router={router}
+                isOverlay
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
 
       <p className="text-xs text-muted-foreground">
-        💡 Drag-and-drop entre colunas virá na próxima atualização. Por enquanto, edite
-        tarefas no <Link href={`/app/projects/${project.id}`} className="text-primary-600 hover:underline">detalhe do projeto</Link>.
+        💡 <strong>Arraste</strong> tarefas entre colunas pra mudar a etapa. O
+        stage_transitions é gravado automaticamente e dispara notificação pra
+        quem tiver inscrito no projeto.
       </p>
     </div>
   );
