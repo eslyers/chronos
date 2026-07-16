@@ -90,7 +90,7 @@ export default function KanbanPage() {
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => {
             const projectStages = stages.filter((s) => s.project_id === project.id);
             const projectTasks = tasks.filter((t) => t.project_id === project.id);
@@ -163,7 +163,7 @@ export default function KanbanPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <button
             onClick={() => setSelectedProjectId(null)}
@@ -171,8 +171,8 @@ export default function KanbanPage() {
           >
             ← Trocar projeto
           </button>
-          <h1 className="text-3xl font-bold tracking-tight">{project.name}</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{project.name}</h1>
+          <p className="text-sm text-muted-foreground">
             {projectTasks.length} tarefas • {projectStages.length} etapas
           </p>
         </div>
@@ -187,7 +187,7 @@ export default function KanbanPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory">
           {projectStages.map((stage) => {
             const stageTasks = projectTasks
               .filter((t) => t.stage_id === stage.id)
@@ -197,7 +197,7 @@ export default function KanbanPage() {
             return (
               <div
                 key={stage.id}
-                className="flex-shrink-0 w-80 flex flex-col bg-muted/30 rounded-lg border"
+                className="flex-shrink-0 w-[85vw] sm:w-80 flex flex-col bg-muted/30 rounded-lg border snap-center"
               >
                 <div
                   className="p-3 border-b flex items-center justify-between"

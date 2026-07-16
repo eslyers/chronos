@@ -15,8 +15,10 @@ import {
   Clock,
   KanbanSquare,
   CalendarDays,
+  History,
 } from "lucide-react";
 import { useGlobal } from "@/lib/context/GlobalContext";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -46,6 +48,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "Calendário", href: "/app/calendar", icon: CalendarDays },
     { name: "Templates", href: "/app/templates", icon: Library },
     { name: "Notificações", href: "/app/notifications", icon: Bell },
+    { name: "Activity", href: "/app/activity", icon: History },
     { name: "Configurações", href: "/app/settings", icon: Settings },
   ];
 
@@ -126,7 +129,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Menu className="h-5 w-5" />
           </button>
 
-          <div className="relative ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle />
+
+          <div className="relative">
             <button
               onClick={() => setUserDropdownOpen(!isUserDropdownOpen)}
               className="flex items-center gap-2 text-sm rounded-full hover:bg-muted px-2 py-1 transition-colors"
@@ -176,9 +182,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </>
             )}
           </div>
+          </div>
         </header>
 
-        <main className="p-4 md:p-6">{children}</main>
+        <main className="p-3 sm:p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

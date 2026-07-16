@@ -118,8 +118,8 @@ export default function TimelinePage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Calendar className="h-7 w-7" />
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
+          <Calendar className="h-6 w-6 sm:h-7 sm:w-7" />
           Timeline
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
@@ -128,7 +128,7 @@ export default function TimelinePage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <Card>
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
