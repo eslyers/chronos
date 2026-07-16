@@ -383,3 +383,100 @@ export async function getCurrentWorkspaceId(): Promise<string | null> {
     .single();
   return workspaces?.id ?? null;
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// DEPENDENCIES — CRUD de dependências entre tasks
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Busca todas as dependências das tasks de um projeto (otimizado) */
+export async function fetchProjectDependencies(
+  projectId: string
+): Promise<TaskDependency[]> {
+  const supabase = client();
+  // 2 queries: tasks do projeto + deps onde task_id IN (tasks) OR depends_on_task_id IN (tasks)
+  const { data: projectTasks, error: tasksErr } = await supabase
+    .from("tasks")
+    .select("id")
+    .eq("project_id", projectId);
+  if (tasksErr) {
+    console.error("[supabase-data] fetchProjectDependencies (tasks)", tasksErr);
+    return [];
+  }
+  const taskIds = (projectTasks ?? []).map((t: { id: string }) => t.id);
+  if (taskIds.length === 0) return [];
+
+  // Busca deps onde task_id está nas tasks do projeto OU depends_on_task_id está
+  const { data, error } = await supabase
+    .from("task_dependencies")
+    .select("*")
+    .or(`task_id.in.(${taskIds.join(",")}),depends_on_task_id.in.(${taskIds.join(",")})`);
+  if (error) {
+    console.error("[supabase-data] fetchProjectDependencies", error);
+    return [];
+  }
+  return (data ?? []).map(dbToDependency);
+}
+
+/** Cria uma dependência (task A depende de task B) */
+export async function createTaskDependency(input: {
+  task_id: string;
+  depends_on_task_id: string;
+  type?: "FS" | "SS" | "FF" | "SF";
+}): Promise<TaskDependency | null> {
+  if (input.task_id === input.depends_on_task_id) {
+    throw new Error("Uma tarefa não pode depender de si mesma");
+  }
+  const supabase = client();
+  const { data, error } = await supabase
+    .from("task_dependencies")
+    .insert({
+      task_id: input.task_id,
+      depends_on_task_id: input.depends_on_task_id,
+      dependency_type: input.type ?? "FS",
+    })
+    .select("*")
+    .single();
+  if (error) {
+    console.error("[supabase-data] createTaskDependency", error);
+    throw new Error(error.message);
+  }
+  return dbToDependency(data);
+}
+
+/** Remove uma dependência por id */
+export async function deleteTaskDependency(id: string): Promise<void> {
+  const supabase = client();
+  const { error } = await supabase.from("task_dependencies").delete().eq("id", id);
+  if (error) {
+    console.error("[supabase-data] deleteTaskDependency", error);
+    throw new Error(error.message);
+  }
+}
+
+/** Detecta se adicionar a dep (taskId → dependsOnTaskId) criaria ciclo no DAG */
+export function wouldCreateCycle(
+  taskId: string,
+  dependsOnTaskId: string,
+  allDeps: TaskDependency[]
+): boolean {
+  // Constroi mapa: task → [depends_on_task_ids]
+  const adj = new Map<string, string[]>();
+  for (const d of allDeps) {
+    if (!adj.has(d.task_id)) adj.set(d.task_id, []);
+    adj.get(d.task_id)!.push(d.depends_on_task_id);
+  }
+
+  // BFS/DFS a partir de dependsOnTaskId; se chegar em taskId, há ciclo
+  // (porque taskId passaria a depender transitivamente de si mesmo)
+  const visited = new Set<string>();
+  const stack = [dependsOnTaskId];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    if (current === taskId) return true; // ciclo detectado
+    if (visited.has(current)) continue;
+    visited.add(current);
+    const next = adj.get(current) ?? [];
+    for (const n of next) stack.push(n);
+  }
+  return false;
+}

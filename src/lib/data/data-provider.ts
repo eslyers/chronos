@@ -145,3 +145,20 @@ export const dataProvider = {
   moveTask: moveTaskToStage,
   deleteTask: supabaseDeleteTask,
 };
+
+// ────────────────────────────────────────────────────────────────────────────
+// DEPENDENCIES — exposto via dataProvider
+// ────────────────────────────────────────────────────────────────────────────
+import {
+  fetchProjectDependencies,
+  createTaskDependency as supabaseCreateDependency,
+  deleteTaskDependency as supabaseDeleteDependency,
+  wouldCreateCycle as checkCycle,
+} from "./supabase-data";
+
+export const dependencyProvider = {
+  fetchProject: fetchProjectDependencies,
+  create: supabaseCreateDependency,
+  delete: supabaseDeleteDependency,
+  wouldCreateCycle: checkCycle,
+};

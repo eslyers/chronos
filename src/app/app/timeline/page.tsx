@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import Link from "next/link";
 import { useData, type Project, type Task } from "@/lib/context/DataContext";
+import { DependencyManager } from "@/components/DependencyManager";
 
 const VIEW_MODES = [
   { value: ViewMode.Day, label: "Dia" },
@@ -25,9 +26,40 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 export default function TimelinePage() {
-  const { projects, getTasksByProject, loading } = useData();
+  const { projects, getTasksByProject, dependencies, loading } = useData();
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.Week);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
+
+  // projectTasks: lista plana de tasks dos projetos visíveis
+  const projectTasks = useMemo(() => {
+    const visibleProjectIds =
+      selectedProjectId === "all"
+        ? new Set(projects.map((p) => p.id))
+        : new Set([selectedProjectId]);
+    return projects
+      .filter((p) => visibleProjectIds.has(p.id))
+      .flatMap((p) => getTasksByProject(p.id));
+  }, [projects, selectedProjectId, getTasksByProject]);
+
+  // Mapa de dependências: task_id → [depends_on_task_ids]
+  // (gantt-task-react usa dependências POR task)
+  const dependenciesByTask = useMemo(() => {
+    const visibleProjectIds =
+      selectedProjectId === "all"
+        ? new Set(projects.map((p) => p.id))
+        : new Set([selectedProjectId]);
+    const projectIdByTaskId = new Map<string, string>();
+    for (const t of projectTasks) projectIdByTaskId.set(t.id, t.project_id);
+
+    const map = new Map<string, string[]>();
+    for (const d of dependencies) {
+      const targetProjectId = projectIdByTaskId.get(d.task_id);
+      if (!targetProjectId || !visibleProjectIds.has(targetProjectId)) continue;
+      if (!map.has(d.task_id)) map.set(d.task_id, []);
+      map.get(d.task_id)!.push(d.depends_on_task_id);
+    }
+    return map;
+  }, [dependencies, projectTasks, projects, selectedProjectId]);
 
   // Converte dados do DataContext → formato Gantt
   const ganttTasks: GanttTask[] = useMemo(() => {
@@ -81,6 +113,7 @@ export default function TimelinePage() {
           type: "task",
           progress: task.progress,
           project: `project-${project.id}`,
+          dependencies: dependenciesByTask.get(task.id),
           styles: {
             backgroundColor: PRIORITY_COLORS[task.priority] || "#64748b",
             backgroundSelectedColor: PRIORITY_COLORS[task.priority] || "#64748b",
@@ -92,7 +125,7 @@ export default function TimelinePage() {
     });
 
     return result;
-  }, [projects, selectedProjectId, getTasksByProject]);
+  }, [projects, selectedProjectId, getTasksByProject, dependenciesByTask]);
 
   // Estatísticas
   const stats = useMemo(() => {
@@ -221,6 +254,9 @@ export default function TimelinePage() {
               ))}
             </div>
           </div>
+          {selectedProjectId !== "all" && (
+            <DependencyManager projectId={selectedProjectId} />
+          )}
         </CardContent>
       </Card>
 

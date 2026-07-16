@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import {
   dataProvider,
+  dependencyProvider,
   loadWorkspaceContext,
   getDataLayer,
 } from "@/lib/data/data-provider";
@@ -89,12 +90,21 @@ type DataContextType = DataState & {
   updateTask: (id: string, data: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   moveTask: (id: string, stageId: string, position: number) => Promise<void>;
+  // Dependencies (RF-06)
+  addDependency: (
+    taskId: string,
+    dependsOnTaskId: string,
+    type?: "FS" | "SS" | "FF" | "SF"
+  ) => Promise<TaskDependency>;
+  removeDependency: (id: string) => Promise<void>;
   // Helpers
   getProject: (id: string) => Project | undefined;
   getStagesByProject: (projectId: string) => Stage[];
   getTasksByProject: (projectId: string) => Task[];
   getTasksByStage: (stageId: string) => Task[];
-  refresh: () => void;
+  getDependenciesForTask: (taskId: string) => TaskDependency[];
+  getReverseDependenciesForTask: (taskId: string) => TaskDependency[];
+  refresh: () => Promise<void>;
 };
 
 const STORAGE_KEY = "chronos:data:v1";
@@ -524,6 +534,54 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  // ── Dependencies (RF-06) ────────────────────────────────────
+  const addDependency = useCallback(
+    async (
+      taskId: string,
+      dependsOnTaskId: string,
+      type: "FS" | "SS" | "FF" | "SF" = "FS"
+    ): Promise<TaskDependency> => {
+      if (taskId === dependsOnTaskId) {
+        throw new Error("Uma tarefa não pode depender de si mesma");
+      }
+      // Detecção de ciclo client-side (rápida)
+      if (dependencyProvider.wouldCreateCycle(taskId, dependsOnTaskId, state.dependencies)) {
+        throw new Error("Esta dependência criaria um ciclo no grafo");
+      }
+
+      if (getDataLayer() === "supabase") {
+        const dep = await dependencyProvider.create({
+          task_id: taskId,
+          depends_on_task_id: dependsOnTaskId,
+          type,
+        });
+        if (!dep) throw new Error("Falha ao criar dependência");
+        setState((prev) => ({ ...prev, dependencies: [...prev.dependencies, dep] }));
+        return dep;
+      }
+      // Modo demo
+      const dep: TaskDependency = {
+        id: `dep-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        task_id: taskId,
+        depends_on_task_id: dependsOnTaskId,
+        type,
+      };
+      setState((prev) => ({ ...prev, dependencies: [...prev.dependencies, dep] }));
+      return dep;
+    },
+    [state.dependencies]
+  );
+
+  const removeDependency = useCallback(async (id: string): Promise<void> => {
+    if (getDataLayer() === "supabase") {
+      await dependencyProvider.delete(id);
+    }
+    setState((prev) => ({
+      ...prev,
+      dependencies: prev.dependencies.filter((d) => d.id !== id),
+    }));
+  }, []);
+
   // ── Helpers ─────────────────────────────────────────────────
   const getProject = useCallback(
     (id: string) => state.projects.find((p) => p.id === id),
@@ -554,6 +612,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [state.tasks]
   );
 
+  const getDependenciesForTask = useCallback(
+    (taskId: string) => state.dependencies.filter((d) => d.task_id === taskId),
+    [state.dependencies]
+  );
+
+  const getReverseDependenciesForTask = useCallback(
+    (taskId: string) =>
+      state.dependencies.filter((d) => d.depends_on_task_id === taskId),
+    [state.dependencies]
+  );
+
   return (
     <DataContext.Provider
       value={{
@@ -568,10 +637,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         updateTask,
         deleteTask,
         moveTask,
+        addDependency,
+        removeDependency,
         getProject,
         getStagesByProject,
         getTasksByProject,
         getTasksByStage,
+        getDependenciesForTask,
+        getReverseDependenciesForTask,
         refresh,
       }}
     >
