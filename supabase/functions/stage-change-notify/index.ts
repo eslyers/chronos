@@ -6,8 +6,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "CHRONOS <noreply@resend.dev>";
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY"); // deprecated, kept for back-compat
+// Brevo (https://app.brevo.com/settings/keys/api) — transactional emails
+const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY") ?? RESEND_API_KEY ?? "";
+const BREVO_SENDER_EMAIL = Deno.env.get("BREVO_SENDER_EMAIL") ?? "eslyers@gmail.com";
+const BREVO_SENDER_NAME = Deno.env.get("BREVO_SENDER_NAME") ?? "CHRONOS";
 
 interface Payload {
   type: "INSERT" | "UPDATE" | "DELETE";
@@ -215,7 +218,7 @@ Deno.serve(async (req: Request) => {
 
       // Email
       if (sub.email_enabled && p.email) {
-        if (RESEND_API_KEY) {
+        if (BREVO_API_KEY) {
           const emailHtml = `
             <h2 style="color:#1e293b">🔄 Mudança de etapa</h2>
             <p>Olá ${p.full_name || ""},</p>
@@ -234,17 +237,18 @@ Deno.serve(async (req: Request) => {
             <a href="https://chronos.app/app/projects/${t.project_id}" style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;margin-top:16px">Ver projeto →</a>
           `;
 
-          const emailRes = await fetch("https://api.resend.com/emails", {
+          const emailRes = await fetch("https://api.brevo.com/v3/smtp/email", {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${RESEND_API_KEY}`,
+              "api-key": BREVO_API_KEY,
               "Content-Type": "application/json",
+              "Accept": "application/json",
             },
             body: JSON.stringify({
-              from: FROM_EMAIL,
-              to: [p.email],
+              sender: { name: BREVO_SENDER_NAME, email: BREVO_SENDER_EMAIL },
+              to: [{ email: p.email, name: p.full_name || "Usuário CHRONOS" }],
               subject: `🔄 ${t.title} → ${newStageName}`,
-              html: emailHtml,
+              htmlContent: emailHtml,
             }),
           });
 

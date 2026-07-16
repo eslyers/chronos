@@ -6,8 +6,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "CHRONOS <noreply@resend.dev>";
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY"); // deprecated, kept for back-compat
+// Brevo (https://app.brevo.com/settings/keys/api) — transactional emails
+const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY") ?? RESEND_API_KEY ?? "";
+const BREVO_SENDER_EMAIL = Deno.env.get("BREVO_SENDER_EMAIL") ?? "eslyers@gmail.com";
+const BREVO_SENDER_NAME = Deno.env.get("BREVO_SENDER_NAME") ?? "CHRONOS";
 
 interface Payload {
   type: "INSERT" | "UPDATE" | "DELETE";
@@ -232,7 +235,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Email
-    if (emailEnabled && p.email && RESEND_API_KEY) {
+    if (emailEnabled && p.email && BREVO_API_KEY) {
       const emailHtml = `
         <div style="background:linear-gradient(135deg,#f97316,#ea580c);padding:24px;border-radius:12px 12px 0 0;color:white">
           <h1 style="margin:0;font-size:22px">📥 Nova tarefa atribuída!</h1>
@@ -263,17 +266,18 @@ Deno.serve(async (req: Request) => {
         </div>
       `;
 
-      const emailRes = await fetch("https://api.resend.com/emails", {
+      const emailRes = await fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${RESEND_API_KEY}`,
+          "api-key": BREVO_API_KEY,
           "Content-Type": "application/json",
+          "Accept": "application/json",
         },
         body: JSON.stringify({
-          from: FROM_EMAIL,
-          to: [p.email],
+          sender: { name: BREVO_SENDER_NAME, email: BREVO_SENDER_EMAIL },
+          to: [{ email: p.email, name: p.full_name || "Usuário CHRONOS" }],
           subject: `📥 Nova tarefa: ${t.title}`,
-          html: emailHtml,
+          htmlContent: emailHtml,
         }),
       });
 
