@@ -156,7 +156,7 @@ export function TaskDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-4 py-4">
           <div className="space-y-2">
             <label htmlFor="task-title" className="text-sm font-medium">
               Título *
@@ -164,9 +164,8 @@ export function TaskDialog({
             <Input
               id="task-title"
               placeholder="Ex: Implementar autenticação"
-              value={title}
+              value={title ?? ""}
               onChange={(e) => setTitle(e.target.value)}
-              autoFocus
             />
           </div>
 
@@ -177,7 +176,7 @@ export function TaskDialog({
             <Textarea
               id="task-desc"
               placeholder="Detalhes, critérios de aceite, links úteis..."
-              value={description}
+              value={description ?? ""}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
             />
@@ -190,7 +189,7 @@ export function TaskDialog({
               </label>
               <Select
                 id="task-stage"
-                value={stageId}
+                value={stageId ?? ""}
                 onChange={(e) => setStageId(e.target.value)}
               >
                 {stages.map((s) => (
@@ -208,7 +207,7 @@ export function TaskDialog({
               </label>
               <Select
                 id="task-assignee"
-                value={assigneeId}
+                value={assigneeId ?? ""}
                 onChange={(e) => setAssigneeId(e.target.value)}
                 disabled={assignees.length === 0}
               >
@@ -232,7 +231,7 @@ export function TaskDialog({
               </label>
               <Select
                 id="task-priority"
-                value={priority}
+                value={priority ?? "medium"}
                 onChange={(e) => setPriority(e.target.value as typeof priority)}
               >
                 <option value="low">⬇️ Baixa</option>
@@ -251,7 +250,7 @@ export function TaskDialog({
               <Input
                 id="task-start"
                 type="date"
-                value={startDate}
+                value={startDate ?? ""}
                 onChange={(e) => setStartDate(e.target.value)}
               />
             </div>
@@ -262,7 +261,7 @@ export function TaskDialog({
               <Input
                 id="task-due"
                 type="date"
-                value={dueDate}
+                value={dueDate ?? ""}
                 onChange={(e) => setDueDate(e.target.value)}
               />
             </div>
@@ -290,13 +289,13 @@ export function TaskDialog({
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
-        </div>
+        </form>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={loading}>
+          <Button type="button" onClick={handleSubmit} disabled={loading}>
             {loading ? "Salvando..." : isEdit ? "Salvar" : "Criar tarefa"}
           </Button>
         </DialogFooter>
