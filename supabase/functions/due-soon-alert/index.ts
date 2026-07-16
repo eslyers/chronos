@@ -8,8 +8,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Env vars (configurar via `supabase secrets set ...`)
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
-const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "CHRONOS <noreply@resend.dev>";
+// Brevo (https://app.brevo.com/settings/keys/api) — transactional emails
+const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY") ?? "";
+const BREVO_SENDER_EMAIL = Deno.env.get("BREVO_SENDER_EMAIL") ?? "eslyers@gmail.com";
+const BREVO_SENDER_NAME = Deno.env.get("BREVO_SENDER_NAME") ?? "CHRONOS";
 const APP_URL = Deno.env.get("APP_URL") ?? "https://chronos-temp.vercel.app";
 
 // ── Interfaces ───────────────────────────────────────────────
@@ -161,7 +163,7 @@ Deno.serve(async (req: Request) => {
       if (!pref) continue;
 
       // 3) Decidir canais ativos
-      const sendEmail = pref.email_enabled && p.email && RESEND_API_KEY;
+      const sendEmail = pref.email_enabled && p.email && BREVO_API_KEY;
       const sendTelegram = pref.telegram_enabled &&
         (p.telegram_chat_id || pref.telegram_chat_id) &&
         TELEGRAM_BOT_TOKEN;
@@ -293,17 +295,20 @@ Deno.serve(async (req: Request) => {
         const subject = `🕐 ${urgencyLabel}: ${task.title}`;
 
         try {
-          const emailRes = await fetch("https://api.resend.com/emails", {
+          // Brevo API v3 — Transactional emails
+          // Docs: https://developers.brevo.com/reference/sendtransacemail
+          const emailRes = await fetch("https://api.brevo.com/v3/smtp/email", {
             method: "POST",
             headers: {
-              Authorization: `Bearer ${RESEND_API_KEY}`,
+              "api-key": BREVO_API_KEY,
               "Content-Type": "application/json",
+              "Accept": "application/json",
             },
             body: JSON.stringify({
-              from: FROM_EMAIL,
-              to: [p.email],
+              sender: { name: BREVO_SENDER_NAME, email: BREVO_SENDER_EMAIL },
+              to: [{ email: p.email, name: p.full_name || "Usuário CHRONOS" }],
               subject,
-              html: emailHtml,
+              htmlContent: emailHtml,
             }),
           });
 
