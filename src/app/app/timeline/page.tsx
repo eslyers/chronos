@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/select";
 import Link from "next/link";
 import { useData, type Project, type Task } from "@/lib/context/DataContext";
 import { DependencyManager } from "@/components/DependencyManager";
+import { TaskHierarchy } from "@/components/TaskHierarchy";
 
 const VIEW_MODES = [
   { value: ViewMode.Day, label: "Dia" },
@@ -141,7 +142,9 @@ export default function TimelinePage() {
       // Nível 2: Tarefas (escondidas se projeto colapsado)
       if (!isCollapsed) {
         const tasks = getTasksByProject(project.id);
-        tasks.forEach((task: Task) => {
+        // Filtra apenas tasks raiz (sem parent) — sub-tasks são filhas
+        const rootTasks = tasks.filter((t) => !t.parent_task_id);
+        rootTasks.forEach((task: Task) => {
           const start = task.start_date
             ? new Date(task.start_date)
             : projectStart;
@@ -166,6 +169,38 @@ export default function TimelinePage() {
               progressColor: "#ffffff",
               progressSelectedColor: "#ffffff",
             },
+          });
+        });
+
+        // Nível 3+: Sub-tasks (filhas das root tasks)
+        rootTasks.forEach((parent: Task) => {
+          const children = tasks.filter((t) => t.parent_task_id === parent.id);
+          children.forEach((subtask: Task) => {
+            const start = subtask.start_date
+              ? new Date(subtask.start_date)
+              : projectStart;
+            const end = subtask.due_date
+              ? new Date(subtask.due_date)
+              : new Date(start.getTime() + 7 * 86400000);
+            result.push({
+              start,
+              end,
+              name: `↳ ${subtask.title}`,
+              id: `task-${subtask.id}`,
+              type: "task",
+              progress: subtask.progress,
+              project: `task-${parent.id}`, // <- hierarquia: filho do parent
+              dependencies: dependenciesByTask.get(subtask.id),
+              hideChildren: false,
+              styles: {
+                backgroundColor:
+                  PRIORITY_COLORS[subtask.priority] || "#94a3b8",
+                backgroundSelectedColor:
+                  PRIORITY_COLORS[subtask.priority] || "#94a3b8",
+                progressColor: "#ffffff",
+                progressSelectedColor: "#ffffff",
+              },
+            });
           });
         });
       }
@@ -302,7 +337,10 @@ export default function TimelinePage() {
             </div>
           </div>
           {selectedProjectId !== "all" && (
-            <DependencyManager projectId={selectedProjectId} />
+            <>
+              <TaskHierarchy projectId={selectedProjectId} />
+              <DependencyManager projectId={selectedProjectId} />
+            </>
           )}
         </CardContent>
       </Card>

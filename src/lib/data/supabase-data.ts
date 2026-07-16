@@ -124,6 +124,7 @@ function dbToTask(d: DbTask): Task {
     due_date: d.due_date,
     assignee_id: d.assignee_id,
     position: 0,
+    parent_task_id: (d as { parent_task_id?: string | null }).parent_task_id ?? null,
     created_at: d.created_at,
     updated_at: d.updated_at,
   };
@@ -273,6 +274,7 @@ export async function createTask(input: {
   priority?: Task["priority"];
   due_date?: string | null;
   start_date?: string | null;
+  parent_task_id?: string | null;
   created_by: string;
 }): Promise<Task | null> {
   const supabase = client();
@@ -287,6 +289,7 @@ export async function createTask(input: {
       priority: input.priority ?? "medium",
       due_date: input.due_date ?? null,
       start_date: input.start_date ?? null,
+      parent_task_id: input.parent_task_id ?? null,
       created_by: input.created_by,
     } as any).select()
     .single();
@@ -308,6 +311,8 @@ export async function updateTask(id: string, patch: Partial<Task>): Promise<void
     progress: patch.progress,
     due_date: patch.due_date,
     start_date: patch.start_date,
+    parent_task_id: patch.parent_task_id,
+    assignee_id: patch.assignee_id,
   };
   const { error } = await supabase.from("tasks").update(payload).eq("id", id);
   if (error) console.error("[supabase-data] updateTask", error);

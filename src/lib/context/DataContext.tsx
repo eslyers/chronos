@@ -42,6 +42,7 @@ export type Task = {
   due_date: string | null; // ISO
   assignee_id: string | null;
   position: number;
+  parent_task_id: string | null; // WBS hierarchy
   created_at: string;
   updated_at: string;
 };
@@ -177,6 +178,7 @@ function seedMockData(): DataState {
       due_date: new Date(now.getTime() + 2 * 86400000).toISOString(),
       assignee_id: USER_ID,
       position: 0,
+      parent_task_id: null,
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
     },
@@ -193,6 +195,7 @@ function seedMockData(): DataState {
       due_date: new Date(now.getTime() + 1 * 86400000).toISOString(),
       assignee_id: USER_ID,
       position: 0,
+      parent_task_id: null,
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
     },
@@ -209,6 +212,7 @@ function seedMockData(): DataState {
       due_date: new Date(now.getTime() - 5 * 86400000).toISOString(),
       assignee_id: USER_ID,
       position: 0,
+      parent_task_id: null,
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
     },
@@ -226,6 +230,7 @@ function seedMockData(): DataState {
       due_date: new Date(now.getTime() + 14 * 86400000).toISOString(),
       assignee_id: USER_ID,
       position: 0,
+      parent_task_id: null,
       created_at: now.toISOString(),
       updated_at: now.toISOString(),
     },
@@ -493,6 +498,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       due_date: data.due_date ?? null,
       assignee_id: data.assignee_id ?? userId,
       position: data.position ?? 0,
+      parent_task_id: data.parent_task_id ?? null,
       created_at: now,
       updated_at: now,
     };
