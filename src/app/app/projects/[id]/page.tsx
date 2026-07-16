@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { useData, type Task } from "@/lib/context/DataContext";
 import { ProjectDialog } from "@/components/ProjectDialog";
 import { TaskDialog } from "@/components/TaskDialog";
+import { TaskAssignee } from "@/components/TaskAssignee";
 
 const PRIORITY_COLORS = {
   low: { bg: "bg-slate-500/15", text: "text-slate-600 dark:text-slate-400", label: "Baixa" },
@@ -254,6 +255,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                             <div className="text-xs text-muted-foreground mt-1 text-right">
                               {task.progress}%
                             </div>
+                          </div>
+                        )}
+
+                        {task.assignee_id && (
+                          <div className="mt-2 pt-2 border-t border-border/40">
+                            <TaskAssignee
+                              assigneeId={task.assignee_id}
+                              workspaceId={project.workspace_id}
+                              variant="full"
+                            />
                           </div>
                         )}
                       </div>

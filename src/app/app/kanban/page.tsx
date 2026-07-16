@@ -7,6 +7,7 @@ import { KanbanSquare, Clock, Flag, Plus, FolderOpen } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useData } from "@/lib/context/DataContext";
+import { TaskAssignee } from "@/components/TaskAssignee";
 
 const PRIORITY_COLORS = {
   critical: "border-red-500",
@@ -280,6 +281,15 @@ export default function KanbanPage() {
                                 </span>
                               )}
                             </div>
+                            {task.assignee_id && (
+                              <div className="mt-2 pt-2 border-t border-border/40">
+                                <TaskAssignee
+                                  assigneeId={task.assignee_id}
+                                  workspaceId={project.workspace_id}
+                                  variant="badge"
+                                />
+                              </div>
+                            )}
                           </CardContent>
                         </Card>
                       );
