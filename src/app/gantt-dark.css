@@ -1,0 +1,72 @@
+/* Gantt Dark Mode Overrides - loaded AFTER gantt-task-react CSS */
+
+/* Reset gantt's hardcoded whites to dark slate */
+.dark .gantt-wrapper [class*="_3ZbQT"],
+.dark .gantt-wrapper [class*="_34SS0"],
+.dark .gantt-wrapper [class*="_3lLk3"] {
+  background-color: hsl(222 47% 11%) !important;
+  color: hsl(210 40% 98%) !important;
+}
+
+/* Even rows zebra striping in dark */
+.dark .gantt-wrapper [class*="_34SS0"]:nth-of-type(even) {
+  background-color: hsl(217 33% 17%) !important;
+}
+
+/* SVG grid rows */
+.dark .gantt-wrapper svg rect[fill="#fff"] {
+  fill: hsl(222 47% 11%) !important;
+}
+.dark .gantt-wrapper svg rect[fill="#f5f5f5"] {
+  fill: hsl(217 33% 17%) !important;
+}
+.dark .gantt-wrapper svg rect[fill="#ffffff"] {
+  fill: hsl(217 33% 22%) !important;
+  stroke: hsl(217 33% 25%) !important;
+}
+
+/* Tick lines */
+.dark .gantt-wrapper svg line[stroke="#e6e4e4"],
+.dark .gantt-wrapper svg line[stroke="#ebeff2"] {
+  stroke: hsl(217 33% 22%) !important;
+}
+
+/* Row lines (borderas internas) */
+.dark .gantt-wrapper div[style*="border-bottom"] {
+  border-bottom-color: hsl(217 33% 25%) !important;
+}
+
+/* Calendar header cells - fix top row */
+.dark .gantt-wrapper > div:first-child > div > div:first-child,
+.dark .gantt-wrapper [class*="calendarHeader"] {
+  background-color: hsl(217 33% 17%) !important;
+}
+
+/* Force SVG background */
+.dark .gantt-wrapper svg {
+  background-color: hsl(222 47% 11%) !important;
+}
+
+/* Bar text colors */
+.dark .gantt-wrapper [class*="barLabel"] {
+  fill: hsl(210 40% 98%) !important;
+}
+
+/* Tooltip */
+.dark .gantt-wrapper [class*="_3T42e"] {
+  background: hsl(222 47% 11%) !important;
+  color: hsl(210 40% 98%) !important;
+  border: 1px solid hsl(217 33% 25%) !important;
+}
+
+/* Light mode - explicit overrides too */
+.gantt-wrapper [class*="_3ZbQT"],
+.gantt-wrapper [class*="_34SS0"],
+.gantt-wrapper [class*="_3lLk3"] {
+  background-color: hsl(0 0% 100%) !important;
+  color: hsl(222 47% 11%) !important;
+}
+
+.gantt-wrapper [class*="_34SS0"]:nth-of-type(even) {
+  background-color: hsl(210 40% 96.1%) !important;
+}
