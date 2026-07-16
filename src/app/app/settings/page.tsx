@@ -51,11 +51,36 @@ export default function SettingsPage() {
       const supabase = createSPAClient();
 
       // 1. Profile
-      const { data: p } = await supabase
+      let p: Profile | null = null;
+      const { data: existing } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", user.id)
         .maybeSingle();
+      if (existing) {
+        p = existing as Profile;
+      }
+
+      // Auto-criar profile stub se não existir (trigger deveria ter criado)
+      if (!p) {
+        const stub = {
+          id: user.id,
+          email: user.email ?? "",
+          full_name: null,
+          timezone: "America/Sao_Paulo",
+          notify_by_email: true,
+          notify_by_telegram: false,
+        };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const profilesClient = supabase.from("profiles") as any;
+        const { data: created, error: createErr } = await profilesClient
+          .insert(stub)
+          .select("*")
+          .single();
+        if (!createErr && created) {
+          p = created as Profile;
+        }
+      }
       if (p) setProfile(p);
 
       // 2. Projects do user

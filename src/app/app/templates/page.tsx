@@ -75,8 +75,8 @@ export default function TemplatesPage() {
       setSuccessId(tpl.id);
       await new Promise((r) => setTimeout(r, 800));
 
-      router.push(`/app/projects/${result.project.id}`);
       router.refresh();
+      router.push(`/app/projects/${result.project.id}`);
     } catch (err) {
       setErrorMsg(
         err instanceof Error ? err.message : "Erro ao usar template"

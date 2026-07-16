@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +35,7 @@ interface ProjectDialogProps {
 
 export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProps) {
   const { createProject, updateProject } = useData();
+  const router = useRouter();
   const isEdit = !!project;
 
   const [name, setName] = useState("");
@@ -89,6 +91,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
         await createProject(data);
       }
       onOpenChange(false);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao salvar");
     } finally {

@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { useData, type Task } from "@/lib/context/DataContext";
+import { createSPAClient } from "@/lib/supabase/client";
+import { UserCircle2 } from "lucide-react";
 
 interface TaskDialogProps {
   open: boolean;
@@ -42,6 +44,8 @@ export function TaskDialog({
   const [progress, setProgress] = useState(0);
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [assigneeId, setAssigneeId] = useState<string>("");
+  const [assignees, setAssignees] = useState<{ id: string; email: string; full_name: string | null }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -56,6 +60,7 @@ export function TaskDialog({
         setProgress(task.progress);
         setStartDate(task.start_date ? task.start_date.split("T")[0] : "");
         setDueDate(task.due_date ? task.due_date.split("T")[0] : "");
+        setAssigneeId((task as unknown as { assignee_id?: string | null }).assignee_id ?? "");
       } else {
         setTitle("");
         setDescription("");
@@ -65,10 +70,45 @@ export function TaskDialog({
         setProgress(0);
         setStartDate(new Date().toISOString().split("T")[0]);
         setDueDate("");
+        setAssigneeId("");
       }
       setError("");
+
+      // Carregar lista de responsáveis (profiles via workspace_members)
+      (async () => {
+        const supabase = createSPAClient();
+        // Buscar profiles via workspace (project → workspace → members → profiles)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const projectsClient = supabase.from("projects") as any;
+        const { data: proj } = await projectsClient
+          .select("workspace_id")
+          .eq("id", projectId)
+          .maybeSingle();
+        const workspaceId = proj?.workspace_id;
+        if (!workspaceId) {
+          setAssignees([]);
+          return;
+        }
+        const { data: members } = await supabase
+          .from("workspace_members")
+          .select("user_id")
+          .eq("workspace_id", workspaceId);
+        type MemberRow = { user_id: string };
+        const userIds = ((members || []) as MemberRow[]).map((m) => m.user_id);
+        if (!userIds.length) {
+          setAssignees([]);
+          return;
+        }
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("id, email, full_name")
+          .in("id", userIds)
+          .order("email");
+        type ProfileRow = { id: string; email: string; full_name: string | null };
+        setAssignees((profs || []) as ProfileRow[]);
+      })();
     }
-  }, [open, task, defaultStageId, stages]);
+  }, [open, task, defaultStageId, stages, projectId]);
 
   async function handleSubmit() {
     if (!title.trim()) {
@@ -88,6 +128,7 @@ export function TaskDialog({
         progress,
         start_date: startDate ? new Date(startDate).toISOString() : null,
         due_date: dueDate ? new Date(dueDate).toISOString() : null,
+        assignee_id: assigneeId || null,
       };
 
       if (isEdit && task) {
@@ -158,6 +199,31 @@ export function TaskDialog({
                   </option>
                 ))}
               </Select>
+            </div>
+
+            <div className="space-y-2 col-span-2">
+              <label htmlFor="task-assignee" className="text-sm font-medium flex items-center gap-1.5">
+                <UserCircle2 className="h-3.5 w-3.5" />
+                Responsável
+              </label>
+              <Select
+                id="task-assignee"
+                value={assigneeId}
+                onChange={(e) => setAssigneeId(e.target.value)}
+                disabled={assignees.length === 0}
+              >
+                <option value="">— Sem responsável —</option>
+                {assignees.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.full_name || a.email}
+                  </option>
+                ))}
+              </Select>
+              {assignees.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Nenhum membro encontrado neste workspace.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
