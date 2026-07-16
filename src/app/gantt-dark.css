@@ -1,72 +1,91 @@
-/* Gantt Dark Mode Overrides - loaded AFTER gantt-task-react CSS */
+/* ULTRA DARK MODE - !important everywhere to beat Emotion specificity */
 
-/* Reset gantt's hardcoded whites to dark slate */
-.dark .gantt-wrapper [class*="_3ZbQT"],
-.dark .gantt-wrapper [class*="_34SS0"],
-.dark .gantt-wrapper [class*="_3lLk3"] {
+/* task list dark */
+.dark .gantt-wrapper div[class*="taskListWrapper"],
+.dark .gantt-wrapper div[class*="taskListTableRow"],
+.dark .gantt-wrapper div[class*="taskListCell"] {
   background-color: hsl(222 47% 11%) !important;
   color: hsl(210 40% 98%) !important;
 }
 
-/* Even rows zebra striping in dark */
-.dark .gantt-wrapper [class*="_34SS0"]:nth-of-type(even) {
-  background-color: hsl(217 33% 17%) !important;
+.dark .gantt-wrapper div[class*="taskListTableRow"]:nth-of-type(even) {
+  background-color: hsl(215 28% 17%) !important;
 }
 
-/* SVG grid rows */
+.dark .gantt-wrapper div[class*="taskListTableRow"]:nth-of-type(odd) {
+  background-color: hsl(222 47% 11%) !important;
+}
+
+.dark .gantt-wrapper div[class*="taskListNameWrapper"],
+.dark .gantt-wrapper div[class*="taskListExpander"],
+.dark .gantt-wrapper span[class*="taskListName"] {
+  background-color: transparent !important;
+  color: hsl(210 40% 98%) !important;
+}
+
+/* SVG grid - rect fill attribute selectors */
 .dark .gantt-wrapper svg rect[fill="#fff"] {
   fill: hsl(222 47% 11%) !important;
 }
 .dark .gantt-wrapper svg rect[fill="#f5f5f5"] {
-  fill: hsl(217 33% 17%) !important;
+  fill: hsl(215 28% 17%) !important;
 }
 .dark .gantt-wrapper svg rect[fill="#ffffff"] {
-  fill: hsl(217 33% 22%) !important;
-  stroke: hsl(217 33% 25%) !important;
+  fill: hsl(215 28% 17%) !important;
+}
+
+/* SVG calendar header */
+.dark .gantt-wrapper svg rect[fill="#ffffff"] {
+  fill: hsl(215 28% 17%) !important;
+  stroke: hsl(215 25% 27%) !important;
+}
+
+.dark .gantt-wrapper svg rect[stroke="#e0e0e0"] {
+  stroke: hsl(215 25% 27%) !important;
 }
 
 /* Tick lines */
 .dark .gantt-wrapper svg line[stroke="#e6e4e4"],
 .dark .gantt-wrapper svg line[stroke="#ebeff2"] {
-  stroke: hsl(217 33% 22%) !important;
+  stroke: hsl(215 25% 27%) !important;
 }
 
-/* Row lines (borderas internas) */
-.dark .gantt-wrapper div[style*="border-bottom"] {
-  border-bottom-color: hsl(217 33% 25%) !important;
+/* Bar text in SVG */
+.dark .gantt-wrapper svg text {
+  fill: hsl(210 40% 98%) !important;
 }
 
-/* Calendar header cells - fix top row */
-.dark .gantt-wrapper > div:first-child > div > div:first-child,
-.dark .gantt-wrapper [class*="calendarHeader"] {
-  background-color: hsl(217 33% 17%) !important;
-}
-
-/* Force SVG background */
+/* Force SVG bg */
 .dark .gantt-wrapper svg {
   background-color: hsl(222 47% 11%) !important;
 }
 
-/* Bar text colors */
-.dark .gantt-wrapper [class*="barLabel"] {
+/* Tooltip */
+.dark .gantt-wrapper div[class*="tooltipDefaultContainer"] {
+  background-color: hsl(222 47% 11%) !important;
+  color: hsl(210 40% 98%) !important;
+  border: 1px solid hsl(215 25% 27%) !important;
+}
+
+/* Calendar text top */
+.dark .gantt-wrapper svg text {
   fill: hsl(210 40% 98%) !important;
 }
 
-/* Tooltip */
-.dark .gantt-wrapper [class*="_3T42e"] {
-  background: hsl(222 47% 11%) !important;
-  color: hsl(210 40% 98%) !important;
-  border: 1px solid hsl(217 33% 25%) !important;
+/* Selected row highlight */
+.dark .gantt-wrapper div[class*="taskListTableRow"][class*="selected"],
+.dark .gantt-wrapper div[class*="taskListTableRow"]:hover {
+  background-color: hsl(215 25% 25%) !important;
 }
 
-/* Light mode - explicit overrides too */
-.gantt-wrapper [class*="_3ZbQT"],
-.gantt-wrapper [class*="_34SS0"],
-.gantt-wrapper [class*="_3lLk3"] {
+/* Light mode - explicit overrides (case dark mode off) */
+.gantt-wrapper div[class*="taskListWrapper"],
+.gantt-wrapper div[class*="taskListTableRow"],
+.gantt-wrapper div[class*="taskListCell"] {
   background-color: hsl(0 0% 100%) !important;
   color: hsl(222 47% 11%) !important;
 }
 
-.gantt-wrapper [class*="_34SS0"]:nth-of-type(even) {
+.gantt-wrapper div[class*="taskListTableRow"]:nth-of-type(even) {
   background-color: hsl(210 40% 96.1%) !important;
 }
