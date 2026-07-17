@@ -370,20 +370,26 @@ body .gantt-wrapper svg line[stroke="#ebeff2"] {
   border: 1px solid var(--gantt-tooltip-border) !important;
   border-radius: 0.5rem;
   box-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.25);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
   width: max-content !important;
-  max-width: 320px !important;
+  max-width: 280px !important;
   min-width: 0 !important;
-  padding: 8px 12px !important;
+  padding: 6px 10px !important;
   white-space: nowrap !important;
 }
 .gantt-wrapper [class*="_29NTg"] {
   color: var(--gantt-tooltip-text) !important;
-  opacity: 0.8;
+  opacity: 0.75;
   font-size: 0.6875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin: 4px 0 0 0 !important;
+  text-transform: none;
+  letter-spacing: 0;
+  margin: 3px 0 0 0 !important;
+  font-weight: 500;
+}
+.gantt-wrapper [class*="_3T42e"] b {
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
 }
 
 /* Scrollbar (aparece quando ha overflow horizontal) */

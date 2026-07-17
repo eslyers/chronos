@@ -38,7 +38,8 @@ export function GanttTooltipPT({
   };
 
   const titleStyle: CSSProperties = {
-    fontSize: `${parseFloat(fontSize) + 6}px`,
+    fontSize: `${parseFloat(fontSize) + 1}px`,
+    fontWeight: 600,
   };
 
   const days = Math.round(

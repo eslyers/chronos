@@ -31,6 +31,11 @@ function formatDateBR(date: Date): string {
   return `${dd}/${mm}/${yy}`;
 }
 
+// Larguras independentes por coluna (customizacao do design CHRONOS)
+// "Projetos" precisa de mais espaco para nao cortar nomes longos
+const COL_WIDTH_NAME = "240px";
+const COL_WIDTH_DATE = "90px";
+
 /**
  * TaskListTable PT-BR com datas abreviadas.
  * Substitui o default que vinha com "sex., 17 de julho de 2026".
@@ -39,7 +44,6 @@ function formatDateBR(date: Date): string {
  */
 export function GanttTaskListTablePT({
   rowHeight,
-  rowWidth,
   tasks,
   fontFamily,
   fontSize,
@@ -47,9 +51,15 @@ export function GanttTaskListTablePT({
   setSelectedTask,
   onExpanderClick,
 }: TaskListTableProps) {
-  const cellStyle: CSSProperties = {
-    minWidth: rowWidth,
-    maxWidth: rowWidth,
+  const nameCellStyle: CSSProperties = {
+    minWidth: COL_WIDTH_NAME,
+    maxWidth: COL_WIDTH_NAME,
+  };
+
+  const dateCellStyle: CSSProperties = {
+    minWidth: COL_WIDTH_DATE,
+    maxWidth: COL_WIDTH_DATE,
+    textAlign: "center",
   };
 
   const rowStyle: CSSProperties = {
@@ -77,7 +87,7 @@ export function GanttTaskListTablePT({
           >
             <div
               className="_3lLk3"
-              style={cellStyle}
+              style={nameCellStyle}
               title={t.name}
             >
               <div className="_nI1Xw">
@@ -92,14 +102,14 @@ export function GanttTaskListTablePT({
                 >
                   {expanderSymbol}
                 </div>
-                <div>{t.name}</div>
+                <div className="truncate">{t.name}</div>
               </div>
             </div>
-            <div className="_3lLk3" style={cellStyle}>
-              &nbsp;{formatDateBR(t.start)}
+            <div className="_3lLk3" style={dateCellStyle}>
+              {formatDateBR(t.start)}
             </div>
-            <div className="_3lLk3" style={cellStyle}>
-              &nbsp;{formatDateBR(t.end)}
+            <div className="_3lLk3" style={dateCellStyle}>
+              {formatDateBR(t.end)}
             </div>
           </div>
         );

@@ -9,9 +9,15 @@ interface TaskListHeaderProps {
   fontSize: string;
 }
 
+// Larguras devem ser iguais as do GanttTaskListTablePT para
+// header e body ficarem alinhados.
+const COL_WIDTH_NAME = "240px";
+const COL_WIDTH_DATE = "90px";
+
 /**
  * TaskListHeader PT-BR para o Gantt.
  * Substitui o default que vem com "Name", "From", "To" em ingles.
+ * Titulos centralizados com largura customizada (Projetos mais largo).
  *
  * Uso: <Gantt TaskListHeader={GanttTaskListHeaderPT} ... />
  *
@@ -23,7 +29,6 @@ interface TaskListHeaderProps {
  */
 export function GanttTaskListHeaderPT({
   headerHeight,
-  rowWidth,
   fontFamily,
   fontSize,
 }: TaskListHeaderProps) {
@@ -36,8 +41,24 @@ export function GanttTaskListHeaderPT({
     height: headerHeight - 2,
   };
 
-  const headerItemStyle: CSSProperties = {
-    minWidth: rowWidth,
+  const nameItemStyle: CSSProperties = {
+    minWidth: COL_WIDTH_NAME,
+    maxWidth: COL_WIDTH_NAME,
+    textAlign: "center",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 600,
+  };
+
+  const dateItemStyle: CSSProperties = {
+    minWidth: COL_WIDTH_DATE,
+    maxWidth: COL_WIDTH_DATE,
+    textAlign: "center",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 600,
   };
 
   const separatorStyle = (marginTop: number): CSSProperties => ({
@@ -48,15 +69,15 @@ export function GanttTaskListHeaderPT({
   return (
     <div className="_3_ygE" style={tableStyle}>
       <div className="_1nBOt" style={headerStyle}>
-        <div className="_WuQ0f" style={headerItemStyle}>
-          &nbsp;Nome
+        <div className="_WuQ0f" style={nameItemStyle}>
+          &nbsp;Projetos
         </div>
         <div className="_2eZzQ" style={separatorStyle(headerHeight * 0.2)} />
-        <div className="_WuQ0f" style={headerItemStyle}>
+        <div className="_WuQ0f" style={dateItemStyle}>
           &nbsp;Início
         </div>
         <div className="_2eZzQ" style={separatorStyle(headerHeight * 0.25)} />
-        <div className="_WuQ0f" style={headerItemStyle}>
+        <div className="_WuQ0f" style={dateItemStyle}>
           &nbsp;Término
         </div>
       </div>
