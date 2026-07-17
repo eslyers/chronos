@@ -188,6 +188,19 @@
   filter: brightness(1.05);
 }
 
+/* Deep-link highlight: quando URL tem ?task=<id>, scroll ate a task e pisca */
+.task-highlight-flash {
+  animation: task-flash 2.5s ease-out;
+  border-color: #f97316 !important;
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.4) !important;
+}
+
+@keyframes task-flash {
+  0% { background-color: rgba(249, 115, 22, 0.4); transform: scale(1.02); }
+  20% { background-color: rgba(249, 115, 22, 0.25); transform: scale(1.01); }
+  100% { background-color: transparent; transform: scale(1); }
+}
+
 /* Tab cells com nome/data/etc */
 .gantt-wrapper [class*="_3lLk3"],
 .gantt-wrapper [class*="_nI1Xw"] {

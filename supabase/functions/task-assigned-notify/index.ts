@@ -11,6 +11,9 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY"); // deprecated, kept for b
 const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY") ?? RESEND_API_KEY ?? "";
 const BREVO_SENDER_EMAIL = Deno.env.get("BREVO_SENDER_EMAIL") ?? "eslyers@gmail.com";
 const BREVO_SENDER_NAME = Deno.env.get("BREVO_SENDER_NAME") ?? "CHRONOS";
+// URL base do app — vem de env var pra funcionar em qualquer deploy
+// (Vercel production, Vercel preview, local, custom domain, etc)
+const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? "https://chronos-temp.vercel.app";
 
 interface Payload {
   type: "INSERT" | "UPDATE" | "DELETE";
@@ -199,7 +202,7 @@ Deno.serve(async (req: Request) => {
         `🎯 Etapa: ${escapeMd(t.stages.name)}\n` +
         `📅 Vencimento: ${dueDateStr}\n` +
         `⚡ Prioridade: ${t.priority}\n\n` +
-        `🔗 https://chronos.app/app/projects/${t.project_id}`;
+        `🔗 ${APP_BASE_URL}/app/projects/${t.project_id}?task=${t.id}`;
 
       const tgRes = await fetch(
         `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
@@ -262,7 +265,7 @@ Deno.serve(async (req: Request) => {
               <td style="padding:8px;font-weight:600;text-transform:uppercase">${t.priority}</td>
             </tr>
           </table>
-          <a href="https://chronos.app/app/projects/${t.project_id}" style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;margin-top:16px">Ver projeto →</a>
+          <a href="${APP_BASE_URL}/app/projects/${t.project_id}?task=${t.id}" style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;margin-top:16px">Ver tarefa →</a>
         </div>
       `;
 
