@@ -226,16 +226,16 @@
 }
 
 /* Calendar header background */
-.gantt-wrapper svg rect[fill="#fff"],
-.gantt-wrapper svg rect[fill="#ffffff"] {
+body .gantt-wrapper svg rect[fill="#fff"],
+body .gantt-wrapper svg rect[fill="#ffffff"] {
   fill: hsl(210 40% 98%) !important;
   fill: var(--gantt-cal-header-bg, hsl(210 40% 98%)) !important;
   stroke: hsl(214.3 31.8% 88%) !important;
   stroke: var(--gantt-grid-line, hsl(214.3 31.8% 88%)) !important;
 }
 
-.dark .gantt-wrapper svg rect[fill="#fff"],
-.dark .gantt-wrapper svg rect[fill="#ffffff"] {
+.dark body .gantt-wrapper svg rect[fill="#fff"],
+.dark body .gantt-wrapper svg rect[fill="#ffffff"] {
   fill: hsl(217.2 32.6% 12%) !important;
   fill: var(--gantt-cal-header-bg, hsl(217.2 32.6% 12%)) !important;
   stroke: hsl(217.2 32.6% 22%) !important;
@@ -243,12 +243,12 @@
 }
 
 /* Grid row backgrounds (linhas alternadas) */
-.gantt-wrapper svg rect[fill="#f5f5f5"] {
+body .gantt-wrapper svg rect[fill="#f5f5f5"] {
   fill: hsl(210 40% 98%) !important;
   fill: var(--gantt-row-alt, hsl(210 40% 98%)) !important;
 }
 
-.dark .gantt-wrapper svg rect[fill="#f5f5f5"] {
+.dark body .gantt-wrapper svg rect[fill="#f5f5f5"] {
   fill: hsl(217.2 32.6% 14%) !important;
   fill: var(--gantt-row-alt, hsl(217.2 32.6% 14%)) !important;
 }
