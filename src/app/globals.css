@@ -64,95 +64,229 @@
   }
 }
 
-/* Gantt Task React overrides — adapta ao tema escuro */
-/* As classes sao hasheadas pelo Emotion do gantt-task-react, entao usamos
-   seletores pela estrutura do DOM (task list area, grid rows, etc) */
+/* ============================================================== */
+/* GANTT CHART — PREMIUM THEME (light default, dark em .gantt-dark.css) */
+/* ============================================================== */
+/* Sistema de CSS variables que deixa o Gantt harmonioso com o resto
+   do app. As classes do gantt-task-react sao hasheadas pelo Emotion,
+   entao atacamos via:
+   1. Classes hasheadas: [class*="_34SS0"] (taskListTableRow), etc
+   2. Atributos do DOM: [class*="_35nLX"] rect[fill="#fff"] (calendarHeader)
+   3. Cores hardcoded: svg line[stroke="#e6e4e4"] (grid ticks)
+   O result: visual premium, identico em ambos os temas. */
+
+:root {
+  /* Gantt surface */
+  --gantt-bg: hsl(0 0% 100%);
+  --gantt-row-alt: hsl(210 40% 98%);
+  --gantt-row-base: hsl(0 0% 100%);
+  --gantt-header-bg: hsl(210 40% 96.1%);
+  --gantt-grid-line: hsl(214.3 31.8% 88%);
+  --gantt-grid-line-strong: hsl(214.3 31.8% 80%);
+  --gantt-row-height: 40px;
+  --gantt-header-height: 56px;
+  --gantt-bar-radius: 6px;
+  --gantt-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+
+  /* Task list (left) */
+  --gantt-list-bg: hsl(0 0% 100%);
+  --gantt-list-header-bg: hsl(210 40% 96.1%);
+  --gantt-list-text: hsl(222.2 47.4% 11.2%);
+  --gantt-list-text-muted: hsl(215.4 16.3% 46.9%);
+  --gantt-list-border: hsl(214.3 31.8% 91.4%);
+  --gantt-list-hover: hsl(210 40% 96.1%);
+
+  /* Calendar (right) */
+  --gantt-cal-bg: hsl(0 0% 100%);
+  --gantt-cal-header-bg: hsl(210 40% 98%);
+  --gantt-cal-text: hsl(222.2 47.4% 11.2%);
+  --gantt-cal-text-muted: hsl(215.4 16.3% 46.9%);
+  --gantt-today-line: hsl(24 95% 53% / 0.6);
+
+  /* Bars (priority) */
+  --gantt-bar-low: hsl(199 89% 48%);        /* sky-500 */
+  --gantt-bar-medium: hsl(217 91% 60%);     /* blue-500 */
+  --gantt-bar-high: hsl(38 92% 50%);        /* amber-500 */
+  --gantt-bar-critical: hsl(0 84% 60%);     /* red-500 */
+  --gantt-bar-project: hsl(215 16% 47%);    /* slate-500 */
+  --gantt-bar-project-selected: hsl(215 19% 35%);
+  --gantt-bar-selected-ring: hsl(24 95% 53%);
+
+  /* Tooltip */
+  --gantt-tooltip-bg: hsl(222.2 47.4% 11.2%);
+  --gantt-tooltip-text: hsl(210 40% 98%);
+  --gantt-tooltip-border: hsl(217.2 32.6% 17.5%);
+}
+
+.dark {
+  --gantt-bg: hsl(222.2 47.4% 8%);
+  --gantt-row-alt: hsl(217.2 32.6% 14%);
+  --gantt-row-base: hsl(222.2 47.4% 8%);
+  --gantt-header-bg: hsl(217.2 32.6% 14%);
+  --gantt-grid-line: hsl(217.2 32.6% 22%);
+  --gantt-grid-line-strong: hsl(217.2 32.6% 30%);
+  --gantt-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+
+  --gantt-list-bg: hsl(222.2 47.4% 8%);
+  --gantt-list-header-bg: hsl(217.2 32.6% 14%);
+  --gantt-list-text: hsl(210 40% 98%);
+  --gantt-list-text-muted: hsl(215 20.2% 65.1%);
+  --gantt-list-border: hsl(217.2 32.6% 22%);
+  --gantt-list-hover: hsl(217.2 32.6% 18%);
+
+  --gantt-cal-bg: hsl(222.2 47.4% 8%);
+  --gantt-cal-header-bg: hsl(217.2 32.6% 12%);
+  --gantt-cal-text: hsl(210 40% 98%);
+  --gantt-cal-text-muted: hsl(215 20.2% 65.1%);
+  --gantt-today-line: hsl(24 95% 60% / 0.7);
+
+  --gantt-bar-low: hsl(199 89% 55%);
+  --gantt-bar-medium: hsl(217 91% 65%);
+  --gantt-bar-high: hsl(38 92% 55%);
+  --gantt-bar-critical: hsl(0 84% 65%);
+  --gantt-bar-project: hsl(215 16% 55%);
+  --gantt-bar-project-selected: hsl(215 19% 65%);
+
+  --gantt-tooltip-bg: hsl(210 40% 98%);
+  --gantt-tooltip-text: hsl(222.2 47.4% 11.2%);
+  --gantt-tooltip-border: hsl(214.3 31.8% 88%);
+}
+
+/* ===== Gantt wrapper — surface ===== */
 .gantt-wrapper {
-  background-color: transparent !important;
+  background: var(--gantt-list-bg) !important;
+  border-radius: 0.75rem;
+  border: 1px solid var(--gantt-list-border);
+  overflow: hidden;
+  box-shadow: var(--gantt-shadow);
 }
 
-/* Cabeçalho do calendario (.calendarHeader = _35nLX) */
-.gantt-wrapper svg rect[fill="#ffffff"] {
-  fill: hsl(217 33% 17%) !important;
-  stroke: hsl(217 33% 25%) !important;
+/* ===== Task list (left) ===== */
+.gantt-wrapper > div,
+.gantt-wrapper > div > div {
+  background-color: var(--gantt-list-bg) !important;
 }
 
-/* Linhas verticais do grid (.gridTick = _RuwuK) */
-.gantt-wrapper svg line[stroke="#e6e4e4"],
-.gantt-wrapper svg line[stroke="#ebeff2"] {
-  stroke: hsl(217 33% 22%) !important;
+/* Task list rows */
+.gantt-wrapper [class*="_3ZbQT"] {
+  background: var(--gantt-list-bg) !important;
+  border-color: var(--gantt-list-border) !important;
+}
+.gantt-wrapper [class*="_34SS0"] {
+  background-color: var(--gantt-row-base) !important;
+  color: var(--gantt-list-text) !important;
+  border-color: var(--gantt-list-border) !important;
+  transition: background-color 0.15s ease;
+}
+.gantt-wrapper [class*="_34SS0"]:nth-of-type(even) {
+  background-color: var(--gantt-row-alt) !important;
+}
+.gantt-wrapper [class*="_34SS0"]:hover {
+  background-color: var(--gantt-list-hover) !important;
 }
 
-/* Rows de fundo do grid (.gridRow = _2dZTy, fill="#fff" e fill="#f5f5f5") */
-.gantt-wrapper svg rect[fill="#fff"] {
-  fill: hsl(222 47% 11%) !important;
-}
-.gantt-wrapper svg rect[fill="#f5f5f5"] {
-  fill: hsl(217 33% 14%) !important;
-}
-
-/* Tabela da lista de tarefas (lado esquerdo) */
-.gantt-wrapper > div > div > div {
-  background-color: transparent !important;
-}
-
-/* Area de SVG do Gantt (lado direito) */
-.gantt-wrapper svg {
-  background-color: hsl(222 47% 11%) !important;
-}
-
-/* Dark mode - areas claras no DOM (caso hajam rows de tabela com fundo branco) */
-.dark .gantt-wrapper [style*="background-color: rgb(255, 255, 255)"],
-.dark .gantt-wrapper [style*="background-color: #fff"],
-.dark .gantt-wrapper [style*="background-color: #ffffff"],
-.dark .gantt-wrapper [style*="background-color: white"] {
-  background-color: hsl(222 47% 11%) !important;
-}
-
-/* Task list rows com bordas e fundo em dark */
-.dark .gantt-wrapper table,
-.dark .gantt-wrapper tbody,
-.dark .gantt-wrapper tr,
-.dark .gantt-wrapper td {
-  background-color: transparent !important;
-  border-color: hsl(217 33% 17%) !important;
-  color: hsl(210 40% 98%) !important;
-}
-
-/* Force TODOS os rows da task-list-table (incluindo :nth-of-type(even)) */
-.gantt-wrapper [class*="_34SS0"],
-.gantt-wrapper [class*="_3ZbQT"] [class*="_34SS0"] {
-  background-color: hsl(222 47% 11%) !important;
-  color: hsl(210 40% 98%) !important;
-}
-.gantt-wrapper [class*="_34SS0"]:nth-of-type(even),
-.gantt-wrapper [class*="_3ZbQT"] [class*="_34SS0"]:nth-of-type(even) {
-  background-color: hsl(217 33% 17%) !important; /* zebra slate-700 */
-}
-.gantt-wrapper [class*="_34SS0"]:nth-of-type(odd),
-.gantt-wrapper [class*="_3ZbQT"] [class*="_34SS0"]:nth-of-type(odd) {
-  background-color: hsl(222 47% 11%) !important; /* base slate-900 */
-}
-
-/* Tab cells transparentes — texto vem por heranca */
+/* Tab cells com nome/data/etc */
 .gantt-wrapper [class*="_3lLk3"],
 .gantt-wrapper [class*="_nI1Xw"] {
   background-color: transparent !important;
-  color: hsl(210 40% 98%) !important;
+  color: var(--gantt-list-text) !important;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  font-size: 0.8125rem;
 }
 
-/* Cabeçalho (row-lines) - primeira linha da task-list-table */
+/* Headers da task list (primeira linha) */
 .gantt-wrapper [class*="_3ZbQT"] > [class*="rowLines_"],
 .gantt-wrapper [class*="rowLines_"] {
-  background-color: hsl(222 47% 11%) !important;
-  color: hsl(210 40% 98%) !important;
+  background-color: var(--gantt-list-header-bg) !important;
+  color: var(--gantt-list-text) !important;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--gantt-list-border) !important;
+}
+
+/* Outer border (esquerda) */
+.gantt-wrapper [class*="_3_ygE"],
+.gantt-wrapper [class*="_3ZbQT"] {
+  border-color: var(--gantt-list-border) !important;
+}
+
+/* ===== Calendar grid (right) ===== */
+.gantt-wrapper svg {
+  background-color: var(--gantt-cal-bg) !important;
+}
+
+/* Calendar header background */
+.gantt-wrapper svg rect[fill="#fff"],
+.gantt-wrapper svg rect[fill="#ffffff"] {
+  fill: var(--gantt-cal-header-bg) !important;
+  stroke: var(--gantt-grid-line) !important;
+}
+
+/* Grid row backgrounds (linhas alternadas) */
+.gantt-wrapper svg rect[fill="#f5f5f5"] {
+  fill: var(--gantt-row-alt) !important;
+}
+
+/* Grid vertical tick lines */
+.gantt-wrapper svg line[stroke="#e6e4e4"],
+.gantt-wrapper svg line[stroke="#ebeff2"] {
+  stroke: var(--gantt-grid-line) !important;
+}
+
+/* Grid horizontal row line */
+.gantt-wrapper svg line[stroke="#e0e0e0"] {
+  stroke: var(--gantt-grid-line-strong) !important;
+}
+
+/* Date text labels */
+.gantt-wrapper svg text[text-anchor="middle"] {
+  fill: var(--gantt-cal-text) !important;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Today vertical line */
+.gantt-wrapper svg line[stroke="#ff0000"] {
+  stroke: var(--gantt-today-line) !important;
+}
+
+/* Bar handles (drag dots) */
+.gantt-wrapper svg [class*="_3w_5u"] {
+  fill: var(--gantt-list-bg) !important;
+  opacity: 0.9;
 }
 
 /* Tooltip */
-._3T42e, [class*="_3T42e"] {
-  background: hsl(222 47% 11%) !important;
-  color: hsl(210 40% 98%) !important;
-  border: 1px solid hsl(217 33% 25%);
+.gantt-wrapper [class*="_3T42e"] {
+  background: var(--gantt-tooltip-bg) !important;
+  color: var(--gantt-tooltip-text) !important;
+  border: 1px solid var(--gantt-tooltip-border) !important;
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.25);
+  font-size: 0.8125rem;
+}
+.gantt-wrapper [class*="_29NTg"] {
+  color: var(--gantt-tooltip-text) !important;
+  opacity: 0.8;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Scrollbar (aparece quando ha overflow horizontal) */
+.gantt-wrapper [class*="_1eT-t"]::-webkit-scrollbar-thumb {
+  background: var(--gantt-list-border) !important;
+  border: 4px solid transparent;
+  background-clip: padding-box;
+  border-radius: 10px;
+}
+.gantt-wrapper [class*="_1eT-t"]::-webkit-scrollbar-thumb:hover {
+  background: var(--gantt-grid-line-strong) !important;
+  border: 3px solid transparent;
+  background-clip: padding-box;
 }
 
 

@@ -20,41 +20,50 @@ const VIEW_MODES = [
   { value: ViewMode.Year, label: "Ano" },
 ];
 
-const PRIORITY_COLORS: Record<string, string> = {
-  low: "#94a3b8",
-  medium: "#3b82f6",
-  high: "#f59e0b",
-  critical: "#ef4444",
-};
-
-// Paleta adaptativa por tema (claro/escuro)
+// Paleta adaptativa por tema (claro/escuro) — alinhada com o sistema CSS
+// variables definidas em globals.css (--gantt-bar-*). Cores escolhidas
+// para harmonizar com o resto do app (laranja queimado como accent).
 function paletteFor(isDark: boolean) {
   return isDark
     ? {
-        barBackground: "#475569",         // slate-600
-        barBackgroundSelected: "#fbbf24",
-        projectBackground: "#64748b",     // slate-500
-        projectBackgroundSelected: "#94a3b8",
-        projectProgress: "#fbbf24",
-        projectProgressSelected: "#fde047",
-        arrowColor: "#cbd5e1",             // setas claras
-        milestoneBackground: "#f87171",
-        milestoneSelected: "#ef4444",
-        todayColor: "rgba(239, 68, 68, 0.7)",
+        // Barras (task bars) — gradient sutil, contrast forte no dark
+        barBackground: "#3b82f6",          // blue-500 (default p/ task sem priority)
+        barBackgroundSelected: "#fbbf24",  // amber-400 (laranja-amarelado)
+        // Project bars (linha pai) — mais neutra
+        projectBackground: "#475569",      // slate-600
+        projectBackgroundSelected: "#94a3b8", // slate-400
+        // Progresso (parte preenchida da barra)
+        projectProgress: "#22c55e",        // green-500
+        projectProgressSelected: "#4ade80", // green-400
+        // Setas de dependência
+        arrowColor: "#94a3b8",              // slate-400 (visível no dark)
+        // Milestones (diamantes)
+        milestoneBackground: "#f87171",    // red-400
+        milestoneSelected: "#ef4444",      // red-500
+        // Linha "hoje"
+        todayColor: "rgba(251, 146, 60, 0.7)", // orange-400
       }
     : {
-        barBackground: "#64748b",
-        barBackgroundSelected: "#fbbf24",
-        projectBackground: "#cbd5e1",     // slate-300
-        projectBackgroundSelected: "#94a3b8",
-        projectProgress: "#fbbf24",
-        projectProgressSelected: "#fb923c",
-        arrowColor: "#475569",
-        milestoneBackground: "#ef4444",
-        milestoneSelected: "#dc2626",
-        todayColor: "rgba(239, 68, 68, 0.5)",
+        barBackground: "#3b82f6",          // blue-500
+        barBackgroundSelected: "#f59e0b",  // amber-500 (laranja queimado = accent)
+        projectBackground: "#94a3b8",      // slate-400
+        projectBackgroundSelected: "#475569", // slate-600
+        projectProgress: "#16a34a",        // green-600
+        projectProgressSelected: "#22c55e", // green-500
+        arrowColor: "#475569",              // slate-600
+        milestoneBackground: "#ef4444",     // red-500
+        milestoneSelected: "#b91c1c",       // red-700
+        todayColor: "rgba(234, 88, 12, 0.6)", // orange-600
       };
 }
+
+// Cores por prioridade (usado quando task.priority está setada)
+const PRIORITY_PALETTE: Record<string, { light: string; dark: string }> = {
+  low:      { light: "#0ea5e9", dark: "#38bdf8" },      // sky
+  medium:   { light: "#3b82f6", dark: "#60a5fa" },      // blue
+  high:     { light: "#f59e0b", dark: "#fbbf24" },      // amber
+  critical: { light: "#ef4444", dark: "#f87171" },      // red
+};
 
 export default function TimelinePage() {
   const { projects, getTasksByProject, dependencies, loading } = useData();
@@ -152,6 +161,16 @@ export default function TimelinePage() {
             ? new Date(task.due_date)
             : new Date(start.getTime() + 7 * 86400000);
 
+          // Cor adaptativa ao tema: usa PRIORITY_PALETTE se tem priority setada,
+          // senao cai pro barBackground default da palette
+          const priority = task.priority as keyof typeof PRIORITY_PALETTE | undefined;
+          const paletteForTask = priority && PRIORITY_PALETTE[priority]
+            ? PRIORITY_PALETTE[priority]
+            : null;
+          const barColor = paletteForTask
+            ? (isDark ? paletteForTask.dark : paletteForTask.light)
+            : palette.barBackground;
+
           result.push({
             start,
             end,
@@ -163,9 +182,8 @@ export default function TimelinePage() {
             dependencies: dependenciesByTask.get(task.id),
             hideChildren: false,
             styles: {
-              backgroundColor: PRIORITY_COLORS[task.priority] || "#64748b",
-              backgroundSelectedColor:
-                PRIORITY_COLORS[task.priority] || "#64748b",
+              backgroundColor: barColor,
+              backgroundSelectedColor: barColor,
               progressColor: "#ffffff",
               progressSelectedColor: "#ffffff",
             },
@@ -182,6 +200,14 @@ export default function TimelinePage() {
             const end = subtask.due_date
               ? new Date(subtask.due_date)
               : new Date(start.getTime() + 7 * 86400000);
+            // Mesma lógica de cor adaptativa da root task
+            const subPriority = subtask.priority as keyof typeof PRIORITY_PALETTE | undefined;
+            const subPalette = subPriority && PRIORITY_PALETTE[subPriority]
+              ? PRIORITY_PALETTE[subPriority]
+              : null;
+            const subBarColor = subPalette
+              ? (isDark ? subPalette.dark : subPalette.light)
+              : palette.projectBackground;
             result.push({
               start,
               end,
@@ -193,10 +219,8 @@ export default function TimelinePage() {
               dependencies: dependenciesByTask.get(subtask.id),
               hideChildren: false,
               styles: {
-                backgroundColor:
-                  PRIORITY_COLORS[subtask.priority] || "#94a3b8",
-                backgroundSelectedColor:
-                  PRIORITY_COLORS[subtask.priority] || "#94a3b8",
+                backgroundColor: subBarColor,
+                backgroundSelectedColor: subBarColor,
                 progressColor: "#ffffff",
                 progressSelectedColor: "#ffffff",
               },

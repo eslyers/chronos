@@ -1,96 +1,91 @@
-/* ULTRA DARK MODE - !important everywhere to beat Emotion specificity */
+/* ============================================================== */
+/* GANTT DARK OVERRIDES — complement to globals.css               */
+/* ============================================================== */
+/* As regras base (light + dark via CSS variables) ficam no
+   globals.css. Este arquivo só contém ajustes finos que dependem
+   de especificidade ou de regras do .dark que precisam sobrescrever
+   seletores do Emotion (que tem specificity alta). */
 
-/* task list dark */
-.dark .gantt-wrapper div[class*="taskListWrapper"],
-.dark .gantt-wrapper div[class*="taskListTableRow"],
-.dark .gantt-wrapper div[class*="taskListCell"] {
-  background-color: hsl(222 47% 11%) !important;
-  color: hsl(210 40% 98%) !important;
+.dark .gantt-wrapper {
+  background: var(--gantt-list-bg) !important;
 }
 
-.dark .gantt-wrapper div[class*="taskListTableRow"]:nth-of-type(even) {
-  background-color: hsl(215 28% 17%) !important;
+/* Task list — dark */
+.dark .gantt-wrapper [class*="_3ZbQT"],
+.dark .gantt-wrapper [class*="_3ZbQT"] [class*="_3_ygE"] {
+  background: var(--gantt-list-bg) !important;
+  border-color: var(--gantt-list-border) !important;
 }
 
-.dark .gantt-wrapper div[class*="taskListTableRow"]:nth-of-type(odd) {
-  background-color: hsl(222 47% 11%) !important;
+.dark .gantt-wrapper [class*="_34SS0"] {
+  background-color: var(--gantt-row-base) !important;
+  color: var(--gantt-list-text) !important;
+  border-color: var(--gantt-list-border) !important;
+}
+.dark .gantt-wrapper [class*="_34SS0"]:nth-of-type(even) {
+  background-color: var(--gantt-row-alt) !important;
+}
+.dark .gantt-wrapper [class*="_34SS0"]:hover {
+  background-color: var(--gantt-list-hover) !important;
 }
 
-.dark .gantt-wrapper div[class*="taskListNameWrapper"],
-.dark .gantt-wrapper div[class*="taskListExpander"],
-.dark .gantt-wrapper span[class*="taskListName"] {
+/* Task list cell text */
+.dark .gantt-wrapper [class*="_3lLk3"],
+.dark .gantt-wrapper [class*="_nI1Xw"] {
   background-color: transparent !important;
-  color: hsl(210 40% 98%) !important;
+  color: var(--gantt-list-text) !important;
 }
 
-/* SVG grid - rect fill attribute selectors */
-.dark .gantt-wrapper svg rect[fill="#fff"] {
-  fill: hsl(222 47% 11%) !important;
+/* Headers */
+.dark .gantt-wrapper [class*="_3ZbQT"] > [class*="rowLines_"],
+.dark .gantt-wrapper [class*="rowLines_"] {
+  background-color: var(--gantt-list-header-bg) !important;
+  color: var(--gantt-list-text) !important;
+  border-bottom: 1px solid var(--gantt-list-border) !important;
+}
+
+/* Calendar grid */
+.dark .gantt-wrapper svg {
+  background-color: var(--gantt-cal-bg) !important;
+}
+.dark .gantt-wrapper svg rect[fill="#fff"],
+.dark .gantt-wrapper svg rect[fill="#ffffff"] {
+  fill: var(--gantt-cal-header-bg) !important;
+  stroke: var(--gantt-grid-line) !important;
 }
 .dark .gantt-wrapper svg rect[fill="#f5f5f5"] {
-  fill: hsl(215 28% 17%) !important;
+  fill: var(--gantt-row-alt) !important;
 }
-.dark .gantt-wrapper svg rect[fill="#ffffff"] {
-  fill: hsl(215 28% 17%) !important;
-}
-
-/* SVG calendar header */
-.dark .gantt-wrapper svg rect[fill="#ffffff"] {
-  fill: hsl(215 28% 17%) !important;
-  stroke: hsl(215 25% 27%) !important;
-}
-
-.dark .gantt-wrapper svg rect[stroke="#e0e0e0"] {
-  stroke: hsl(215 25% 27%) !important;
-}
-
-/* Tick lines */
 .dark .gantt-wrapper svg line[stroke="#e6e4e4"],
 .dark .gantt-wrapper svg line[stroke="#ebeff2"] {
-  stroke: hsl(215 25% 27%) !important;
+  stroke: var(--gantt-grid-line) !important;
+}
+.dark .gantt-wrapper svg line[stroke="#e0e0e0"] {
+  stroke: var(--gantt-grid-line-strong) !important;
+}
+.dark .gantt-wrapper svg text[text-anchor="middle"] {
+  fill: var(--gantt-cal-text) !important;
+}
+.dark .gantt-wrapper svg line[stroke="#ff0000"] {
+  stroke: var(--gantt-today-line) !important;
 }
 
-/* Bar text in SVG */
-.dark .gantt-wrapper svg text {
-  fill: hsl(210 40% 98%) !important;
+/* Outer left border */
+.dark .gantt-wrapper [class*="_3_ygE"] {
+  border-color: var(--gantt-list-border) !important;
 }
 
-/* Force SVG bg */
-.dark .gantt-wrapper svg {
-  background-color: hsl(222 47% 11%) !important;
+/* Inline style fallback (caso Emotion injete background-color: #fff) */
+.dark .gantt-wrapper [style*="background-color: rgb(255, 255, 255)"],
+.dark .gantt-wrapper [style*="background-color: #fff"],
+.dark .gantt-wrapper [style*="background-color: #ffffff"],
+.dark .gantt-wrapper [style*="background-color: white"] {
+  background-color: var(--gantt-list-bg) !important;
 }
 
-/* Tooltip */
-.dark .gantt-wrapper div[class*="tooltipDefaultContainer"] {
-  background-color: hsl(222 47% 11%) !important;
-  color: hsl(210 40% 98%) !important;
-  border: 1px solid hsl(215 25% 27%) !important;
-}
-
-/* Calendar text top */
-.dark .gantt-wrapper svg text {
-  fill: hsl(210 40% 98%) !important;
-}
-
-/* Selected row highlight */
-.dark .gantt-wrapper div[class*="taskListTableRow"][class*="selected"],
-.dark .gantt-wrapper div[class*="taskListTableRow"]:hover {
-  background-color: hsl(215 25% 25%) !important;
-}
-
-/* Light mode - explicit overrides (case dark mode off) */
-/* FIX 2026-07-17: wrappei em :not(.dark) no ancestor pra essas regras
-   NÃO sobrescreverem o dark mode. Antes essas regras aplicavam em QUALQUER
-   modo (sem .dark no seletor) e o gantt-dark.css é importado DEPOIS de
-   globals.css, então vencia todas as regras de dark mode, forçando fundo
-   branco. A classe .dark é aplicada no <html> pelo next-themes. */
-:not(.dark) .gantt-wrapper div[class*="taskListWrapper"],
-:not(.dark) .gantt-wrapper div[class*="taskListTableRow"],
-:not(.dark) .gantt-wrapper div[class*="taskListCell"] {
-  background-color: hsl(0 0% 100%) !important;
-  color: hsl(222 47% 11%) !important;
-}
-
-:not(.dark) .gantt-wrapper div[class*="taskListTableRow"]:nth-of-type(even) {
-  background-color: hsl(210 40% 96.1%) !important;
+/* Tooltip dark (inverte no dark) */
+.dark .gantt-wrapper [class*="_3T42e"] {
+  background: var(--gantt-tooltip-bg) !important;
+  color: var(--gantt-tooltip-text) !important;
+  border-color: var(--gantt-tooltip-border) !important;
 }
