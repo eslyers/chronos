@@ -184,6 +184,9 @@
 .gantt-wrapper [class*="_34SS0"]:hover {
   background-color: var(--gantt-list-hover) !important;
 }
+.gantt-wrapper [class*="_34SS0"]:hover {
+  filter: brightness(1.05);
+}
 
 /* Tab cells com nome/data/etc */
 .gantt-wrapper [class*="_3lLk3"],

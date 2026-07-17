@@ -13,6 +13,8 @@ interface TaskListTableProps {
   selectedTaskId: string;
   setSelectedTask: (taskId: string) => void;
   onExpanderClick: (task: GanttTask) => void;
+  // NOVO: callback opcional para click no corpo da row (abre dialog de edicao)
+  onTaskClick?: (task: GanttTask) => void;
 }
 
 // Classes hasheadas do gantt-task-react (Emotion):
@@ -50,6 +52,7 @@ export function GanttTaskListTablePT({
   selectedTaskId,
   setSelectedTask,
   onExpanderClick,
+  onTaskClick,
 }: TaskListTableProps) {
   const nameCellStyle: CSSProperties = {
     minWidth: COL_WIDTH_NAME,
@@ -86,9 +89,17 @@ export function GanttTaskListTablePT({
         return (
           <div
             className={"_34SS0" + (isSelected ? " _3ZbQT-selected" : "")}
-            style={rowStyle}
+            style={{
+              ...rowStyle,
+              cursor: t.type === "task" && onTaskClick ? "pointer" : "default",
+            }}
             key={t.id + "row"}
-            onClick={() => setSelectedTask(t.id)}
+            onClick={() => {
+              setSelectedTask(t.id);
+              if (t.type === "task" && onTaskClick) {
+                onTaskClick(t);
+              }
+            }}
           >
             <div
               className="_3lLk3"

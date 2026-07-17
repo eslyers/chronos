@@ -15,6 +15,7 @@ import { TaskHierarchy } from "@/components/TaskHierarchy";
 import { GanttTaskListHeaderPT } from "@/components/GanttTaskListHeader";
 import { GanttTaskListTablePT } from "@/components/GanttTaskListTablePT";
 import { GanttTooltipPT } from "@/components/GanttTooltipPT";
+import { TaskDialog } from "@/components/TaskDialog";
 
 const VIEW_MODES = [
   { value: ViewMode.Day, label: "Dia" },
@@ -76,6 +77,9 @@ export default function TimelinePage() {
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(
     new Set()
   );
+  // Estado: edicao de task (clique na row ou na bar)
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -424,7 +428,21 @@ export default function TimelinePage() {
                   handleWidth={8}
                   timeStep={300000}
                   TaskListHeader={GanttTaskListHeaderPT}
-                  TaskListTable={GanttTaskListTablePT}
+                  TaskListTable={(props) => (
+                    <GanttTaskListTablePT
+                      {...props}
+                      onTaskClick={(ganttTask) => {
+                        if (ganttTask.type === "task") {
+                          const realId = String(ganttTask.id).replace(/^task-/, "");
+                          const found = projectTasks.find((t) => t.id === realId);
+                          if (found) {
+                            setEditingTask(found);
+                            setTaskDialogOpen(true);
+                          }
+                        }
+                      }}
+                    />
+                  )}
                   TooltipContent={GanttTooltipPT}
                   onClick={(task) => {
                     // Drill-down: clicar no projeto expande/colapsa tasks
@@ -436,6 +454,16 @@ export default function TimelinePage() {
                         else next.add(projectId);
                         return next;
                       });
+                      return;
+                    }
+                    // Clique em task/sub-task: abre popup de edicao
+                    if (task.type === "task") {
+                      const realId = String(task.id).replace(/^task-/, "");
+                      const found = projectTasks.find((t) => t.id === realId);
+                      if (found) {
+                        setEditingTask(found);
+                        setTaskDialogOpen(true);
+                      }
                     }
                   }}
                 />
@@ -479,6 +507,19 @@ export default function TimelinePage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Task edit dialog (abre ao clicar em row ou em bar de task) */}
+      {editingTask && (
+        <TaskDialog
+          open={taskDialogOpen}
+          onOpenChange={(o) => {
+            setTaskDialogOpen(o);
+            if (!o) setEditingTask(null);
+          }}
+          task={editingTask}
+          projectId={editingTask.project_id}
+        />
+      )}
     </div>
   );
 }
