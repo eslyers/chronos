@@ -371,6 +371,11 @@ body .gantt-wrapper svg line[stroke="#ebeff2"] {
   border-radius: 0.5rem;
   box-shadow: 0 8px 24px -4px rgb(0 0 0 / 0.25);
   font-size: 0.8125rem;
+  width: max-content !important;
+  max-width: 320px !important;
+  min-width: 0 !important;
+  padding: 8px 12px !important;
+  white-space: nowrap !important;
 }
 .gantt-wrapper [class*="_29NTg"] {
   color: var(--gantt-tooltip-text) !important;
@@ -378,6 +383,7 @@ body .gantt-wrapper svg line[stroke="#ebeff2"] {
   font-size: 0.6875rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  margin: 4px 0 0 0 !important;
 }
 
 /* Scrollbar (aparece quando ha overflow horizontal) */
