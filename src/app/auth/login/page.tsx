@@ -2,20 +2,23 @@
 import { isSupabaseConfigured } from "@/lib/supabase/mode";
 import { signInWithPassword, signInWithGoogle } from "@/lib/auth/supabase-auth";
 import { demoSignIn } from "@/lib/auth/demo-auth";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 
-export default function LoginPage() {
+function LoginPageInner() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Captura ?redirect=/app/projects/xxx?task=yyy do middleware
+  const redirectTo = searchParams.get("redirect") || "/app";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,7 +29,7 @@ export default function LoginPage() {
       // Modo DEMO (sem Supabase): qualquer email/senha funciona
       if (!isSupabaseConfigured()) {
         demoSignIn(email, password);
-        router.push("/app");
+        router.push(redirectTo);
         router.refresh();
         return;
       }
@@ -34,7 +37,7 @@ export default function LoginPage() {
       // Modo PRODUÇÃO: Supabase real via helper
       const result = await signInWithPassword(email, password);
       if (!result.ok) throw new Error(result.error);
-      router.push("/app");
+      router.push(redirectTo);
       router.refresh();
     } catch (err: unknown) {
       setError(
@@ -49,6 +52,12 @@ export default function LoginPage() {
     if (!isSupabaseConfigured()) {
       setError("Login com Google requer Supabase configurado. Use email/senha no modo demo.");
       return;
+    }
+    // Passa o redirectTo via URL pro supabase-auth.ts pegar
+    if (typeof window !== "undefined" && redirectTo !== "/app") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("redirect", redirectTo);
+      window.history.replaceState({}, "", url.toString());
     }
     const result = await signInWithGoogle();
     if (!result.ok) {
@@ -173,5 +182,14 @@ export default function LoginPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+// useSearchParams() exige Suspense boundary no Next.js 15
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="p-4 text-muted-foreground">Carregando…</div>}>
+      <LoginPageInner />
+    </Suspense>
   );
 }

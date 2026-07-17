@@ -1,11 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createSPAClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
 
-export default function AuthCallbackPage() {
+function AuthCallbackInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,12 +21,14 @@ export default function AuthCallbackPage() {
         setError(error.message);
         return;
       }
-      router.push("/app");
+      // Respeita ?redirect=<path> passado pelo Google OAuth
+      const redirectTo = searchParams.get("redirect") || "/app";
+      router.push(redirectTo);
       router.refresh();
     }
 
     handleCallback();
-  }, [router]);
+  }, [router, searchParams]);
 
   if (error) {
     return (
@@ -49,5 +53,14 @@ export default function AuthCallbackPage() {
         Confirmando login, aguarde...
       </p>
     </div>
+  );
+}
+
+// useSearchParams() exige Suspense boundary no Next.js 15
+export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={<div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground mx-auto"></div></div>}>
+      <AuthCallbackInner />
+    </Suspense>
   );
 }

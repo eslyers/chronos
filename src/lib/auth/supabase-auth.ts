@@ -50,11 +50,19 @@ export async function getSession(): Promise<{
 }
 
 export async function signInWithGoogle(): Promise<{ ok: boolean; error?: string }> {
+  // Aceita ?redirect=/app/projects/xxx?task=yyy como param pra voltar
+  // pro destino original apos login social (deep-link preservado)
+  let redirectPath = "";
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    const r = params.get("redirect");
+    if (r) redirectPath = `?redirect=${encodeURIComponent(r)}`;
+  }
   const supabase = createSPAClient();
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback`,
+      redirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback${redirectPath}`,
     },
   });
   if (error) return { ok: false, error: error.message };

@@ -40,6 +40,10 @@ export async function updateSession(request: NextRequest) {
     ) {
         const url = request.nextUrl.clone()
         url.pathname = '/auth/login'
+        // Preserva query params (ex: ?task=<id>) + adiciona ?redirect=<path>
+        // pra que apos o login o user volte pra pagina original com deep-link
+        const returnTo = request.nextUrl.pathname + request.nextUrl.search
+        url.search = `?redirect=${encodeURIComponent(returnTo)}`
         return NextResponse.redirect(url)
     }
 
