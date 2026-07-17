@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useData, type Project, type Task } from "@/lib/context/DataContext";
 import { DependencyManager } from "@/components/DependencyManager";
 import { TaskHierarchy } from "@/components/TaskHierarchy";
+import { GanttTaskListHeaderPT } from "@/components/GanttTaskListHeader";
 
 const VIEW_MODES = [
   { value: ViewMode.Day, label: "Dia" },
@@ -420,6 +421,7 @@ export default function TimelinePage() {
                   rtl={false}
                   handleWidth={8}
                   timeStep={300000}
+                  TaskListHeader={GanttTaskListHeaderPT}
                   onClick={(task) => {
                     // Drill-down: clicar no projeto expande/colapsa tasks
                     if (task.type === "project") {

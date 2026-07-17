@@ -6,6 +6,7 @@
 import { useEffect } from "react";
 import { Gantt, ViewMode, type Task as GanttTask } from "gantt-task-react";
 import "gantt-task-react/dist/index.css";
+import { GanttTaskListHeaderPT } from "@/components/GanttTaskListHeader";
 
 // Forca DARK MODE nesta pagina de teste antes do primeiro render
 if (typeof document !== "undefined") {
@@ -92,6 +93,7 @@ export default function DemoGanttDark() {
               locale="pt-BR"
               listCellWidth=""
               columnWidth={60}
+              TaskListHeader={GanttTaskListHeaderPT}
             />
           </div>
         </div>

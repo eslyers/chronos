@@ -137,7 +137,7 @@
   --gantt-cal-bg: hsl(222.2 47.4% 8%);
   --gantt-cal-header-bg: hsl(217.2 32.6% 12%);
   --gantt-cal-text: hsl(210 40% 98%);
-  --gantt-cal-text-muted: hsl(215 20.2% 65.1%);
+  --gantt-cal-text-muted: hsl(215 20.2% 75.1%);
   --gantt-today-line: hsl(24 95% 60% / 0.7);
 
   --gantt-bar-low: hsl(199 89% 55%);
@@ -277,6 +277,32 @@ body .gantt-wrapper svg [class*="_3zRJQ"] {
 .dark body .gantt-wrapper svg [class*="_3zRJQ"] {
   fill: hsl(210 40% 98%) !important;
   fill: var(--gantt-cal-text, hsl(210 40% 98%)) !important;
+}
+
+/* Calendar TOP TEXT (._2q1Kt) - "Julho, 2026" - DEVE ser forte/visivel */
+body .gantt-wrapper svg [class*="_2q1Kt"] {
+  fill: hsl(222.2 47.4% 11.2%) !important;
+  fill: var(--gantt-cal-text, hsl(222.2 47.4% 11.2%)) !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+}
+.dark body .gantt-wrapper svg [class*="_2q1Kt"] {
+  fill: hsl(210 40% 98%) !important;
+  fill: var(--gantt-cal-text, hsl(210 40% 98%)) !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+}
+
+/* Calendar BOTTOM TEXT (._9w8d5) - numero do dia/mes - forte */
+body .gantt-wrapper svg [class*="_9w8d5"] {
+  fill: hsl(215.4 16.3% 46.9%) !important;
+  fill: var(--gantt-cal-text-muted, hsl(215.4 16.3% 46.9%)) !important;
+  font-weight: 500 !important;
+}
+.dark body .gantt-wrapper svg [class*="_9w8d5"] {
+  fill: hsl(215 20.2% 75.1%) !important;
+  fill: var(--gantt-cal-text-muted, hsl(215 20.2% 75.1%)) !important;
+  font-weight: 500 !important;
 }
 
 /* Text labels secundarias (._3KcaM) */
