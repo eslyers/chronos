@@ -14,6 +14,7 @@ import { DependencyManager } from "@/components/DependencyManager";
 import { TaskHierarchy } from "@/components/TaskHierarchy";
 import { GanttTaskListHeaderPT } from "@/components/GanttTaskListHeader";
 import { GanttTaskListTablePT } from "@/components/GanttTaskListTablePT";
+import { GanttTooltipPT } from "@/components/GanttTooltipPT";
 
 const VIEW_MODES = [
   { value: ViewMode.Day, label: "Dia" },
@@ -403,7 +404,7 @@ export default function TimelinePage() {
                       ? 200
                       : 300
                   }
-                  listCellWidth="220px"
+                  listCellWidth="155px"
                   barBackgroundColor={palette.barBackground}
                   barBackgroundSelectedColor={palette.barBackgroundSelected}
                   todayColor={palette.todayColor}
@@ -424,6 +425,7 @@ export default function TimelinePage() {
                   timeStep={300000}
                   TaskListHeader={GanttTaskListHeaderPT}
                   TaskListTable={GanttTaskListTablePT}
+                  TooltipContent={GanttTooltipPT}
                   onClick={(task) => {
                     // Drill-down: clicar no projeto expande/colapsa tasks
                     if (task.type === "project") {
