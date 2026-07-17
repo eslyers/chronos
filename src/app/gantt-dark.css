@@ -1,91 +1,10 @@
 /* ============================================================== */
-/* GANTT DARK OVERRIDES — complement to globals.css               */
+/* GANTT DARK OVERRIDES — DEPRECIADO                             */
 /* ============================================================== */
-/* As regras base (light + dark via CSS variables) ficam no
-   globals.css. Este arquivo só contém ajustes finos que dependem
-   de especificidade ou de regras do .dark que precisam sobrescrever
-   seletores do Emotion (que tem specificity alta). */
+/* As regras de dark mode agora vivem dentro do proprio globals.css
+   com fallback hardcoded (cobrem casos onde a CSS variable nao
+   carrega por cache/CDN/ordering). Este arquivo e mantido apenas
+   para garantir que o import "./gantt-dark.css" no layout.tsx
+   nao quebre, mas e um no-op agora.
 
-.dark .gantt-wrapper {
-  background: var(--gantt-list-bg) !important;
-}
-
-/* Task list — dark */
-.dark .gantt-wrapper [class*="_3ZbQT"],
-.dark .gantt-wrapper [class*="_3ZbQT"] [class*="_3_ygE"] {
-  background: var(--gantt-list-bg) !important;
-  border-color: var(--gantt-list-border) !important;
-}
-
-.dark .gantt-wrapper [class*="_34SS0"] {
-  background-color: var(--gantt-row-base) !important;
-  color: var(--gantt-list-text) !important;
-  border-color: var(--gantt-list-border) !important;
-}
-.dark .gantt-wrapper [class*="_34SS0"]:nth-of-type(even) {
-  background-color: var(--gantt-row-alt) !important;
-}
-.dark .gantt-wrapper [class*="_34SS0"]:hover {
-  background-color: var(--gantt-list-hover) !important;
-}
-
-/* Task list cell text */
-.dark .gantt-wrapper [class*="_3lLk3"],
-.dark .gantt-wrapper [class*="_nI1Xw"] {
-  background-color: transparent !important;
-  color: var(--gantt-list-text) !important;
-}
-
-/* Headers */
-.dark .gantt-wrapper [class*="_3ZbQT"] > [class*="rowLines_"],
-.dark .gantt-wrapper [class*="rowLines_"] {
-  background-color: var(--gantt-list-header-bg) !important;
-  color: var(--gantt-list-text) !important;
-  border-bottom: 1px solid var(--gantt-list-border) !important;
-}
-
-/* Calendar grid */
-.dark .gantt-wrapper svg {
-  background-color: var(--gantt-cal-bg) !important;
-}
-.dark .gantt-wrapper svg rect[fill="#fff"],
-.dark .gantt-wrapper svg rect[fill="#ffffff"] {
-  fill: var(--gantt-cal-header-bg) !important;
-  stroke: var(--gantt-grid-line) !important;
-}
-.dark .gantt-wrapper svg rect[fill="#f5f5f5"] {
-  fill: var(--gantt-row-alt) !important;
-}
-.dark .gantt-wrapper svg line[stroke="#e6e4e4"],
-.dark .gantt-wrapper svg line[stroke="#ebeff2"] {
-  stroke: var(--gantt-grid-line) !important;
-}
-.dark .gantt-wrapper svg line[stroke="#e0e0e0"] {
-  stroke: var(--gantt-grid-line-strong) !important;
-}
-.dark .gantt-wrapper svg text[text-anchor="middle"] {
-  fill: var(--gantt-cal-text) !important;
-}
-.dark .gantt-wrapper svg line[stroke="#ff0000"] {
-  stroke: var(--gantt-today-line) !important;
-}
-
-/* Outer left border */
-.dark .gantt-wrapper [class*="_3_ygE"] {
-  border-color: var(--gantt-list-border) !important;
-}
-
-/* Inline style fallback (caso Emotion injete background-color: #fff) */
-.dark .gantt-wrapper [style*="background-color: rgb(255, 255, 255)"],
-.dark .gantt-wrapper [style*="background-color: #fff"],
-.dark .gantt-wrapper [style*="background-color: #ffffff"],
-.dark .gantt-wrapper [style*="background-color: white"] {
-  background-color: var(--gantt-list-bg) !important;
-}
-
-/* Tooltip dark (inverte no dark) */
-.dark .gantt-wrapper [class*="_3T42e"] {
-  background: var(--gantt-tooltip-bg) !important;
-  color: var(--gantt-tooltip-text) !important;
-  border-color: var(--gantt-tooltip-border) !important;
-}
+   Em caso de bug visual no dark mode, edite globals.css.        */
