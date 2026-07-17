@@ -91,7 +91,7 @@ export default function DemoGanttDark() {
               tasks={SAMPLE_TASKS}
               viewMode={ViewMode.Week}
               locale="pt-BR"
-              listCellWidth=""
+              listCellWidth="220px"
               columnWidth={60}
               TaskListHeader={GanttTaskListHeaderPT}
             />
