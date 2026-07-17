@@ -7,6 +7,13 @@ import { useEffect } from "react";
 import { Gantt, ViewMode, type Task as GanttTask } from "gantt-task-react";
 import "gantt-task-react/dist/index.css";
 
+// Forca DARK MODE nesta pagina de teste antes do primeiro render
+if (typeof document !== "undefined") {
+  document.documentElement.classList.remove("light");
+  document.documentElement.classList.add("dark");
+  document.documentElement.style.colorScheme = "dark";
+}
+
 const SAMPLE_TASKS: GanttTask[] = [
   {
     start: new Date(2026, 6, 13),

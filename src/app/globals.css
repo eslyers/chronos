@@ -225,62 +225,110 @@
   background-color: var(--gantt-cal-bg, hsl(222.2 47.4% 8%)) !important;
 }
 
-/* Calendar header background */
-body .gantt-wrapper svg rect[fill="#fff"],
-body .gantt-wrapper svg rect[fill="#ffffff"] {
+/* ===== Calendar grid (right) — PRECISA sobrescrever via CLASSE === */
+/* O gantt-task-react aplica fill via CSS de classes hasheadas:
+   ._35nLX { fill: #ffffff }  → calendar header
+   ._2dZTy { fill: #fff }     → grid rows
+   ._3zRJQ { fill: #fff }     → text labels
+   ._RuwuK { stroke: #e6e4e4} → grid tick lines
+   ._3rUKi { stroke: #ebeff2} → outras tick lines
+   NAO ha atributo fill="#fff" no DOM, entao minha regra anterior
+   nunca aplicava. Agora sobrescrevo pelas classes hasheadas. */
+
+/* Calendar header (._35nLX) */
+body .gantt-wrapper svg [class*="_35nLX"] {
   fill: hsl(210 40% 98%) !important;
   fill: var(--gantt-cal-header-bg, hsl(210 40% 98%)) !important;
   stroke: hsl(214.3 31.8% 88%) !important;
   stroke: var(--gantt-grid-line, hsl(214.3 31.8% 88%)) !important;
 }
-
-.dark body .gantt-wrapper svg rect[fill="#fff"],
-.dark body .gantt-wrapper svg rect[fill="#ffffff"] {
+.dark body .gantt-wrapper svg [class*="_35nLX"] {
   fill: hsl(217.2 32.6% 12%) !important;
   fill: var(--gantt-cal-header-bg, hsl(217.2 32.6% 12%)) !important;
   stroke: hsl(217.2 32.6% 22%) !important;
   stroke: var(--gantt-grid-line, hsl(217.2 32.6% 22%)) !important;
 }
 
-/* Grid row backgrounds (linhas alternadas) */
-body .gantt-wrapper svg rect[fill="#f5f5f5"] {
+/* Grid rows (._2dZTy) */
+body .gantt-wrapper svg [class*="_2dZTy"] {
+  fill: hsl(0 0% 100%) !important;
+  fill: var(--gantt-row-base, hsl(0 0% 100%)) !important;
+}
+.dark body .gantt-wrapper svg [class*="_2dZTy"] {
+  fill: hsl(222.2 47.4% 8%) !important;
+  fill: var(--gantt-row-base, hsl(222.2 47.4% 8%)) !important;
+}
+
+/* Grid rows alternadas */
+body .gantt-wrapper svg [class*="_2dZTy"]:nth-of-type(even) {
   fill: hsl(210 40% 98%) !important;
   fill: var(--gantt-row-alt, hsl(210 40% 98%)) !important;
 }
-
-.dark body .gantt-wrapper svg rect[fill="#f5f5f5"] {
+.dark body .gantt-wrapper svg [class*="_2dZTy"]:nth-of-type(even) {
   fill: hsl(217.2 32.6% 14%) !important;
   fill: var(--gantt-row-alt, hsl(217.2 32.6% 14%)) !important;
 }
 
-/* Grid vertical tick lines */
-.gantt-wrapper svg line[stroke="#e6e4e4"],
-.gantt-wrapper svg line[stroke="#ebeff2"] {
+/* Text labels (._3zRJQ) - datas em negrito */
+body .gantt-wrapper svg [class*="_3zRJQ"] {
+  fill: hsl(222.2 47.4% 11.2%) !important;
+  fill: var(--gantt-cal-text, hsl(222.2 47.4% 11.2%)) !important;
+}
+.dark body .gantt-wrapper svg [class*="_3zRJQ"] {
+  fill: hsl(210 40% 98%) !important;
+  fill: var(--gantt-cal-text, hsl(210 40% 98%)) !important;
+}
+
+/* Text labels secundarias (._3KcaM) */
+body .gantt-wrapper svg [class*="_3KcaM"] {
+  fill: hsl(215.4 16.3% 46.9%) !important;
+  fill: var(--gantt-cal-text-muted, hsl(215.4 16.3% 46.9%)) !important;
+}
+.dark body .gantt-wrapper svg [class*="_3KcaM"] {
+  fill: hsl(215 20.2% 65.1%) !important;
+  fill: var(--gantt-cal-text-muted, hsl(215 20.2% 65.1%)) !important;
+}
+
+/* Grid vertical tick lines (._RuwuK) */
+body .gantt-wrapper svg [class*="_RuwuK"] {
   stroke: hsl(214.3 31.8% 88%) !important;
   stroke: var(--gantt-grid-line, hsl(214.3 31.8% 88%)) !important;
 }
-
-.dark .gantt-wrapper svg line[stroke="#e6e4e4"],
-.dark .gantt-wrapper svg line[stroke="#ebeff2"] {
+.dark body .gantt-wrapper svg [class*="_RuwuK"] {
   stroke: hsl(217.2 32.6% 22%) !important;
   stroke: var(--gantt-grid-line, hsl(217.2 32.6% 22%)) !important;
 }
 
-/* Grid horizontal row line */
-.gantt-wrapper svg line[stroke="#e0e0e0"] {
-  stroke: var(--gantt-grid-line-strong) !important;
+/* Grid horizontal lines (._3rUKi) */
+body .gantt-wrapper svg [class*="_3rUKi"] {
+  stroke: hsl(214.3 31.8% 80%) !important;
+  stroke: var(--gantt-grid-line-strong, hsl(214.3 31.8% 80%)) !important;
+}
+.dark body .gantt-wrapper svg [class*="_3rUKi"] {
+  stroke: hsl(217.2 32.6% 30%) !important;
+  stroke: var(--gantt-grid-line-strong, hsl(217.2 32.6% 30%)) !important;
 }
 
-/* Date text labels */
-.gantt-wrapper svg text[text-anchor="middle"] {
-  fill: var(--gantt-cal-text) !important;
-  font-size: 11px;
-  font-weight: 500;
+/* Fallback para casos edge (caso a classe nao tenha hash mas tenha fill inline) */
+body .gantt-wrapper svg rect[fill="#fff"],
+body .gantt-wrapper svg rect[fill="#ffffff"] {
+  fill: hsl(210 40% 98%) !important;
+  fill: var(--gantt-cal-header-bg, hsl(210 40% 98%)) !important;
 }
-
-/* Today vertical line */
-.gantt-wrapper svg line[stroke="#ff0000"] {
-  stroke: var(--gantt-today-line) !important;
+.dark body .gantt-wrapper svg rect[fill="#fff"],
+.dark body .gantt-wrapper svg rect[fill="#ffffff"] {
+  fill: hsl(217.2 32.6% 12%) !important;
+  fill: var(--gantt-cal-header-bg, hsl(217.2 32.6% 12%)) !important;
+}
+body .gantt-wrapper svg line[stroke="#e6e4e4"],
+body .gantt-wrapper svg line[stroke="#ebeff2"] {
+  stroke: hsl(214.3 31.8% 88%) !important;
+  stroke: var(--gantt-grid-line, hsl(214.3 31.8% 88%)) !important;
+}
+.dark body .gantt-wrapper svg line[stroke="#e6e4e4"],
+.dark body .gantt-wrapper svg line[stroke="#ebeff2"] {
+  stroke: hsl(217.2 32.6% 22%) !important;
+  stroke: var(--gantt-grid-line, hsl(217.2 32.6% 22%)) !important;
 }
 
 /* Bar handles (drag dots) */
