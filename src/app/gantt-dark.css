@@ -79,13 +79,18 @@
 }
 
 /* Light mode - explicit overrides (case dark mode off) */
-.gantt-wrapper div[class*="taskListWrapper"],
-.gantt-wrapper div[class*="taskListTableRow"],
-.gantt-wrapper div[class*="taskListCell"] {
+/* FIX 2026-07-17: wrappei em :not(.dark) no ancestor pra essas regras
+   NÃO sobrescreverem o dark mode. Antes essas regras aplicavam em QUALQUER
+   modo (sem .dark no seletor) e o gantt-dark.css é importado DEPOIS de
+   globals.css, então vencia todas as regras de dark mode, forçando fundo
+   branco. A classe .dark é aplicada no <html> pelo next-themes. */
+:not(.dark) .gantt-wrapper div[class*="taskListWrapper"],
+:not(.dark) .gantt-wrapper div[class*="taskListTableRow"],
+:not(.dark) .gantt-wrapper div[class*="taskListCell"] {
   background-color: hsl(0 0% 100%) !important;
   color: hsl(222 47% 11%) !important;
 }
 
-.gantt-wrapper div[class*="taskListTableRow"]:nth-of-type(even) {
+:not(.dark) .gantt-wrapper div[class*="taskListTableRow"]:nth-of-type(even) {
   background-color: hsl(210 40% 96.1%) !important;
 }
