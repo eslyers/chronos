@@ -48,9 +48,10 @@ export function GanttTooltipPT({
 
   return (
     <div className="_3T42e" style={containerStyle}>
-      <b style={titleStyle}>
-        {task.name}: {formatDateBR(task.start)} - {formatDateBR(task.end)}
-      </b>
+      <b style={titleStyle}>{task.name}</b>
+      <p className="_29NTg" style={{ margin: 0 }}>
+        {formatDateBR(task.start)} → {formatDateBR(task.end)}
+      </p>
       {task.end.getTime() - task.start.getTime() !== 0 && (
         <p className="_29NTg">Duração: {days} dia(s)</p>
       )}

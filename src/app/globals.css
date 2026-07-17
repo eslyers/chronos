@@ -363,7 +363,7 @@ body .gantt-wrapper svg line[stroke="#ebeff2"] {
   opacity: 0.9;
 }
 
-/* Tooltip */
+/* Tooltip — adaptativo: cresce com conteudo ate max-width */
 .gantt-wrapper [class*="_3T42e"] {
   background: var(--gantt-tooltip-bg) !important;
   color: var(--gantt-tooltip-text) !important;
@@ -373,10 +373,11 @@ body .gantt-wrapper svg line[stroke="#ebeff2"] {
   font-size: 0.75rem;
   line-height: 1.4;
   width: max-content !important;
-  max-width: 280px !important;
+  max-width: 360px !important;
   min-width: 0 !important;
-  padding: 6px 10px !important;
-  white-space: nowrap !important;
+  padding: 8px 12px !important;
+  white-space: normal !important;
+  word-break: break-word !important;
 }
 .gantt-wrapper [class*="_29NTg"] {
   color: var(--gantt-tooltip-text) !important;
@@ -384,12 +385,14 @@ body .gantt-wrapper svg line[stroke="#ebeff2"] {
   font-size: 0.6875rem;
   text-transform: none;
   letter-spacing: 0;
-  margin: 3px 0 0 0 !important;
+  margin: 4px 0 0 0 !important;
   font-weight: 500;
 }
 .gantt-wrapper [class*="_3T42e"] b {
   font-size: 0.8125rem !important;
   font-weight: 600 !important;
+  display: block;
+  margin-bottom: 2px;
 }
 
 /* Scrollbar (aparece quando ha overflow horizontal) */
