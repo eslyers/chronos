@@ -9,7 +9,7 @@ import "gantt-task-react/dist/index.css";
 import { GanttTaskListHeaderPT } from "@/components/GanttTaskListHeader";
 import { GanttTaskListTablePT } from "@/components/GanttTaskListTablePT";
 import { GanttTooltipPT } from "@/components/GanttTooltipPT";
-import { X, Calendar, User, AlertTriangle } from "lucide-react";
+import { X, Calendar, AlertTriangle } from "lucide-react";
 
 // Forca DARK MODE nesta pagina de teste antes do primeiro render
 if (typeof document !== "undefined") {
