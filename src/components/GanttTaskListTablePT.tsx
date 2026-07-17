@@ -54,12 +54,17 @@ export function GanttTaskListTablePT({
   const nameCellStyle: CSSProperties = {
     minWidth: COL_WIDTH_NAME,
     maxWidth: COL_WIDTH_NAME,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    verticalAlign: "middle",
   };
 
   const dateCellStyle: CSSProperties = {
     minWidth: COL_WIDTH_DATE,
     maxWidth: COL_WIDTH_DATE,
     textAlign: "center",
+    verticalAlign: "middle",
   };
 
   const rowStyle: CSSProperties = {
@@ -102,7 +107,7 @@ export function GanttTaskListTablePT({
                 >
                   {expanderSymbol}
                 </div>
-                <div className="truncate">{t.name}</div>
+                <div>{t.name}</div>
               </div>
             </div>
             <div className="_3lLk3" style={dateCellStyle}>

@@ -45,9 +45,7 @@ export function GanttTaskListHeaderPT({
     minWidth: COL_WIDTH_NAME,
     maxWidth: COL_WIDTH_NAME,
     textAlign: "center",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    verticalAlign: "middle",
     fontWeight: 600,
   };
 
@@ -55,9 +53,7 @@ export function GanttTaskListHeaderPT({
     minWidth: COL_WIDTH_DATE,
     maxWidth: COL_WIDTH_DATE,
     textAlign: "center",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    verticalAlign: "middle",
     fontWeight: 600,
   };
 
