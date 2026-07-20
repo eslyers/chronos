@@ -37,8 +37,8 @@ interface Profile {
   email: string;
   full_name: string | null;
   telegram_chat_id: string | null;
-  email_enabled: boolean;
-  telegram_enabled: boolean;
+  notify_by_email: boolean;
+  notify_by_telegram: boolean;
 }
 
 interface NotificationPrefs {
@@ -145,7 +145,7 @@ Deno.serve(async (req: Request) => {
       // 1) Buscar perfil completo do assignee
       const { data: profile } = await supabase
         .from("profiles")
-        .select("id, email, full_name, telegram_chat_id, email_enabled, telegram_enabled")
+        .select("id, email, full_name, telegram_chat_id, notify_by_email, notify_by_telegram")
         .eq("id", task.assignee_id)
         .maybeSingle();
 
