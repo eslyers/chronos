@@ -12,7 +12,11 @@ const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY") ?? "";
 const BREVO_SENDER_EMAIL = Deno.env.get("BREVO_SENDER_EMAIL") ?? "eslyers@gmail.com";
 const BREVO_SENDER_NAME = Deno.env.get("BREVO_SENDER_NAME") ?? "CHRONOS";
-const APP_URL = Deno.env.get("APP_URL") ?? "https://chronos-temp.vercel.app";
+// URL base do app — vem de env var pra funcionar em qualquer deploy
+// (Vercel production, Vercel preview, local, custom domain, etc)
+// Mantém compatibilidade com APP_URL antigo (fallback) + usa APP_BASE_URL
+// pra ficar consistente com task-assigned-notify e stage-change-notify
+const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? Deno.env.get("APP_URL") ?? "https://chronos-temp.vercel.app";
 
 // ── Interfaces ───────────────────────────────────────────────
 interface Task {
@@ -171,7 +175,9 @@ Deno.serve(async (req: Request) => {
       if (!sendEmail && !sendTelegram) continue;
 
       // 4) Montar conteúdo (compartilhado)
-      const taskUrl = `${APP_URL}/app/projects/${task.project_id}`;
+      // Link com ?task=<id> pra deep-link no app (abre o TaskDialog
+      // automaticamente e destaca a card em laranja)
+      const taskUrl = `${APP_BASE_URL}/app/projects/${task.project_id}?task=${task.id}`;
       const dueDateStr = formatDateBR(task.due_date);
       const emoji = priorityEmoji(task.priority);
       const displayName = p.full_name || "";
@@ -285,7 +291,7 @@ Deno.serve(async (req: Request) => {
       <a href="${taskUrl}" style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;margin-top:8px">Ver tarefa →</a>
       <p style="margin:24px 0 0;color:#94a3b8;font-size:12px">
         Você está recebendo este email porque é assignee desta tarefa.<br>
-        <a href="${APP_URL}/app/settings" style="color:#94a3b8">Gerenciar preferências de notificação</a>
+        <a href="${APP_BASE_URL}/app/settings" style="color:#94a3b8">Gerenciar preferências de notificação</a>
       </p>
     </div>
   </div>
