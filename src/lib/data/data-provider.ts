@@ -78,6 +78,8 @@ export const dataProvider = {
     description?: string;
     color?: string;
     templateId?: string;
+    customStages?: Array<{ name: string; color: string; sort_order: number; wip_limit?: number | null; is_done?: boolean }>;
+    useDefaultStages?: boolean;
   }) => {
     if (getDataLayer() !== "supabase") return null;
     const { workspaceId, userId } = await loadWorkspaceContext();
@@ -91,7 +93,32 @@ export const dataProvider = {
     });
     if (!project) return null;
 
-    // Se tem templateId, clona as stages do template
+    // Caminho 1: customStages enviado (lista já customizada pelo user no editor)
+    if (input.customStages && input.customStages.length > 0) {
+      const createdStages: import("@/lib/context/DataContext").Stage[] = [];
+      for (const s of input.customStages) {
+        const stage = await supabaseCreateStage({
+          project_id: project.id,
+          name: s.name,
+          color: s.color,
+          sort_order: s.sort_order,
+          wip_limit: s.wip_limit ?? null,
+        });
+        if (stage) {
+          createdStages.push({
+            id: stage.id,
+            project_id: stage.project_id,
+            name: stage.name,
+            color: stage.color,
+            position: stage.position,
+            is_done: s.is_done ?? stage.is_done,
+          });
+        }
+      }
+      return { project, stages: createdStages };
+    }
+
+    // Caminho 2: templateId — clona as stages do template
     if (input.templateId) {
       const { createSPAClient } = await import("@/lib/supabase/client");
       const supabase = createSPAClient();
@@ -123,14 +150,19 @@ export const dataProvider = {
             name: stage.name,
             color: stage.color,
             position: stage.position,
-            is_done: stage.is_done,
+            is_done: s.is_done ?? stage.is_done,
           });
         }
       }
       return { project, stages: createdStages };
     }
 
-    // Sem template, usa as 5 stages default
+    // Caminho 3: useDefaultStages=false → projeto sem stages (user cria depois)
+    if (input.useDefaultStages === false) {
+      return { project, stages: [] };
+    }
+
+    // Caminho 4 (fallback): 5 stages padrão (backlog, a fazer, em progresso, em revisão, concluído)
     const stages = await createDefaultStages(project.id);
     return { project, stages };
   },
