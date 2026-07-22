@@ -37,7 +37,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
   const [preview, setPreview] = React.useState<ImportPreview | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
-  const [result, setResult] = React.useState<{ created: number; skipped: number; failed: number } | null>(null);
+  const [result, setResult] = React.useState<{ created: number; skipped: number; failed: number; wbsLinked: number } | null>(null);
   const [dragOver, setDragOver] = React.useState(false);
 
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -113,6 +113,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
         created: data.summary.created,
         skipped: data.summary.skipped,
         failed: data.summary.failed,
+        wbsLinked: data.summary.wbsLinked ?? 0,
       });
       setPhase("done");
       onImported?.({ created: data.summary.created, skipped: data.summary.skipped });
@@ -213,6 +214,19 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                 <StatBox label="Com erro" value={preview.errorRows} color="red" />
               </div>
 
+              {preview.hasWBS && (
+                <Alert>
+                  <AlertTitle className="flex items-center gap-2">
+                    <span>🏗️</span>
+                    <span>Hierarquia WBS detectada</span>
+                  </AlertTitle>
+                  <AlertDescription>
+                    Coluna <code className="px-1 bg-zinc-100 dark:bg-zinc-800 rounded">Nível</code> encontrada.
+                    Tasks de nível &gt; 1 serão vinculadas como sub-tasks do nível anterior mais próximo.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               <div className="rounded-lg border p-3 bg-zinc-50 dark:bg-zinc-900/50">
                 <p className="text-xs font-medium text-muted-foreground mb-2">📊 Mapeamento detectado</p>
                 <div className="flex flex-wrap gap-2">
@@ -223,7 +237,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                       <span className="font-medium">{FIELD_LABEL[field] || field}</span>
                     </Badge>
                   ))}
-                  {Object.values(preview.mapping).filter((v) => v !== "ignore" && v !== "level").length === 0 && (
+                  {Object.values(preview.mapping).filter((v) => v !== "ignore").length === 0 && (
                     <span className="text-xs text-red-500">⚠️ Nenhuma coluna reconhecida!</span>
                   )}
                 </div>
@@ -241,11 +255,12 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                       <th className="px-2 py-2 text-left">Título</th>
                       <th className="px-2 py-2 text-left">Responsável</th>
                       <th className="px-2 py-2 text-left">Prazo</th>
+                      {preview.hasWBS && <th className="px-2 py-2 text-left">Nível</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {preview.rows.slice(0, 50).map((row) => (
-                      <PreviewRow key={row.index} row={row} />
+                      <PreviewRow key={row.index} row={row} hasWBS={preview.hasWBS} />
                     ))}
                   </tbody>
                 </table>
@@ -275,6 +290,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                 <p className="text-lg font-semibold">Importação concluída!</p>
                 <p className="text-sm text-muted-foreground">
                   {result.created} tarefas criadas · {result.skipped} ignoradas · {result.failed} com falha
+                {result.wbsLinked > 0 && ` · ${result.wbsLinked} vinculadas como sub-tasks`}
                 </p>
               </div>
             </div>
@@ -329,7 +345,7 @@ function StatBox({ label, value, color }: { label: string; value: number; color:
   );
 }
 
-function PreviewRow({ row }: { row: ImportRow }) {
+function PreviewRow({ row, hasWBS }: { row: ImportRow; hasWBS: boolean }) {
   const icon =
     row.status === "valid" ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> :
     row.status === "warning" ? <AlertTriangle className="h-4 w-4 text-amber-500" /> :
@@ -356,6 +372,15 @@ function PreviewRow({ row }: { row: ImportRow }) {
       </td>
       <td className="px-2 py-2 text-muted-foreground text-xs">{row.parsed.assignee_id || "—"}</td>
       <td className="px-2 py-2 text-muted-foreground text-xs">{dueDate}</td>
+      {hasWBS && (
+        <td className="px-2 py-2 text-muted-foreground text-xs">
+          {row.level ? (
+            <Badge variant="outline" className="text-xs">
+              {row.level}
+            </Badge>
+          ) : "—"}
+        </td>
+      )}
     </tr>
   );
 }

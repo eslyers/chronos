@@ -20,6 +20,9 @@ export interface ImportRow {
   warnings: string[];
   errors: string[];
   status: ImportRowStatus;
+  // WBS: número do nível hierárquico (1 = raiz, 2 = sub, etc)
+  // undefined se não tem coluna Nível
+  level?: number;
 }
 
 export interface ImportPreview {
@@ -32,6 +35,7 @@ export interface ImportPreview {
   mapping: Record<string, string>; // coluna do arquivo → campo do task
   rows: ImportRow[];
   sheetName?: string;
+  hasWBS: boolean; // true se alguma row tem level detectado
 }
 
 export interface ImportResult {
@@ -323,6 +327,7 @@ export function buildPreview(
     const warnings: string[] = [];
     const errors: string[] = [];
     const parsed: Partial<Task> = {};
+    let level: number | undefined;
 
     if (!hasTitle) {
       errors.push("Coluna de título (ETAPAS/TAREFA/TASK) não detectada — impossível criar task");
@@ -330,7 +335,19 @@ export function buildPreview(
 
     // Mapear campos
     for (const [colName, fieldName] of Object.entries(mapping)) {
-      if (fieldName === "ignore" || fieldName === "level") continue;
+      if (fieldName === "ignore") continue;
+
+      if (fieldName === "level") {
+        const raw = row[colName];
+        if (raw === null || raw === undefined || raw === "") break;
+        const n = typeof raw === "number" ? raw : parseInt(String(raw).trim(), 10);
+        if (isNaN(n) || n < 1) {
+          warnings.push(`Nível "${raw}" inválido — esperado número >= 1`);
+          break;
+        }
+        level = n;
+        break;
+      }
       const raw = row[colName];
 
       switch (fieldName) {
@@ -404,6 +421,7 @@ export function buildPreview(
       warnings,
       errors,
       status,
+      level,
     };
   });
 
@@ -417,5 +435,6 @@ export function buildPreview(
     columns: headers,
     mapping,
     rows: importRows,
+    hasWBS: importRows.some((r) => r.level !== undefined),
   };
 }

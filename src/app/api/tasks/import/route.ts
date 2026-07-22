@@ -55,6 +55,9 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
 
+    // Verificar se tem hierarquia WBS detectada (coluna Nível)
+    const hasWBS = preview.hasWBS;
+
     // Verificar autenticação
     const { data: { user }, error: authError } = await sb.auth.getUser();
     if (authError || !user) {
@@ -105,7 +108,7 @@ export async function POST(request: NextRequest) {
 
     // ── Inserir tasks válidas ──
     const validRows = preview.rows.filter((r) => r.status !== "error");
-    const created: { id: string; rowIndex: number; title: string }[] = [];
+    const created: { id: string; rowIndex: number; title: string; level?: number }[] = [];
     const failed: { row: number; message: string }[] = [];
 
     for (const row of validRows) {
@@ -137,7 +140,47 @@ export async function POST(request: NextRequest) {
           id: created_task.id,
           rowIndex: row.index,
           title: created_task.title,
+          level: row.level,
         });
+      }
+    }
+
+    // ── Segundo pass: WBS (parent_task_id) ──
+    // Algoritmo: pra cada task criada, encontra o pai mais próximo de nível (level - 1)
+    // criado ANTERIORMENTE no mesmo import.
+    let wbsLinked = 0;
+    if (hasWBS) {
+      // Mapa de fallback: se level não definido, considera 1
+      const getLevel = (l?: number) => (l === undefined ? 1 : l);
+
+      for (const task of created) {
+        const myLevel = getLevel(task.level);
+        if (myLevel <= 1) continue; // raiz — sem pai
+
+        // Procura o pai: primeira task ANTES dessa com nível == (myLevel - 1)
+        let parent: { id: string } | undefined;
+        for (let i = created.indexOf(task) - 1; i >= 0; i--) {
+          const candidate = created[i];
+          if (!candidate) continue;
+          if (getLevel(candidate.level) === myLevel - 1) {
+            parent = { id: candidate.id };
+            break;
+          }
+        }
+
+        if (parent) {
+          const { error: updateErr } = await sb
+            .from("tasks")
+            .update({ parent_task_id: parent.id })
+            .eq("id", task.id);
+          if (!updateErr) {
+            wbsLinked++;
+          } else {
+            console.warn(`[import] Failed to link WBS for task ${task.id}:`, updateErr);
+          }
+        } else {
+          console.warn(`[import] Task ${task.id} (level ${myLevel}) não tem pai no nível ${myLevel - 1}`);
+        }
       }
     }
 
@@ -149,6 +192,7 @@ export async function POST(request: NextRequest) {
         created: created.length,
         skipped: preview.errorRows,
         failed: failed.length,
+        wbsLinked,
       },
       created,
       failed,
@@ -157,6 +201,7 @@ export async function POST(request: NextRequest) {
         warningRows: preview.warningRows,
         errorRows: preview.errorRows,
         mapping: preview.mapping,
+        hasWBS,
       },
     });
   } catch (err) {
