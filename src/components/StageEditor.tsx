@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -81,80 +82,98 @@ function SortableStageRow({
     zIndex: isDragging ? 10 : 1,
   };
 
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-2 bg-card border border-border rounded-md p-2"
+      className="flex flex-col gap-2 bg-card border border-border rounded-md p-2"
     >
-      {/* Drag handle */}
-      <button
-        type="button"
-        {...attributes}
-        {...listeners}
-        className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground p-1"
-        aria-label="Reordenar"
-        title="Arraste pra reordenar"
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-
-      {/* Color picker (swatches) */}
-      <div className="relative">
-        <div
-          className="h-7 w-7 rounded-md border-2 border-border"
-          style={{ backgroundColor: stage.color }}
-          title="Cor da etapa"
-        />
-        <select
-          value={stage.color}
-          onChange={(e) => onChange({ ...stage, color: e.target.value })}
-          className="absolute inset-0 opacity-0 cursor-pointer"
-          aria-label="Cor da etapa"
+      <div className="flex items-center gap-2">
+        {/* Drag handle */}
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground p-1"
+          aria-label="Reordenar"
+          title="Arraste pra reordenar"
         >
-          {PRESET_COLORS.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+          <GripVertical className="h-4 w-4" />
+        </button>
+
+        {/* Color picker trigger (swatch que abre paleta) */}
+        <button
+          type="button"
+          onClick={() => setPaletteOpen((v) => !v)}
+          className="h-7 w-7 rounded-md border-2 border-border hover:scale-110 transition-transform"
+          style={{ backgroundColor: stage.color }}
+          title="Escolher cor da etapa"
+          aria-label="Abrir paleta de cores"
+          aria-expanded={paletteOpen}
+        />
+
+        {/* Name input */}
+        <Input
+          value={stage.name}
+          onChange={(e) => onChange({ ...stage, name: e.target.value })}
+          placeholder="Nome da etapa"
+          className="flex-1"
+          maxLength={50}
+        />
+
+        {/* Mark as done (optional) */}
+        <button
+          type="button"
+          onClick={() => onChange({ ...stage, is_done: !stage.is_done })}
+          className={`p-1.5 rounded-md transition-colors ${
+            stage.is_done
+              ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25"
+              : "text-muted-foreground hover:bg-muted"
+          }`}
+          title={stage.is_done ? "Marcar como não concluída" : "Marcar como concluída"}
+          aria-label="Concluída"
+        >
+          <Check className="h-4 w-4" />
+        </button>
+
+        {/* Remove */}
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={!canRemove}
+          className="p-1.5 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          title="Remover etapa"
+          aria-label="Remover etapa"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
       </div>
 
-      {/* Name input */}
-      <Input
-        value={stage.name}
-        onChange={(e) => onChange({ ...stage, name: e.target.value })}
-        placeholder="Nome da etapa"
-        className="flex-1"
-        maxLength={50}
-      />
-
-      {/* Mark as done (optional) */}
-      <button
-        type="button"
-        onClick={() => onChange({ ...stage, is_done: !stage.is_done })}
-        className={`p-1.5 rounded-md transition-colors ${
-          stage.is_done
-            ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25"
-            : "text-muted-foreground hover:bg-muted"
-        }`}
-        title={stage.is_done ? "Marcar como não concluída" : "Marcar como concluída"}
-        aria-label="Concluída"
-      >
-        <Check className="h-4 w-4" />
-      </button>
-
-      {/* Remove */}
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={!canRemove}
-        className="p-1.5 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        title="Remover etapa"
-        aria-label="Remover etapa"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      {/* Paleta inline (abre/fecha) */}
+      {paletteOpen && (
+        <div className="flex flex-wrap gap-1.5 p-2 bg-muted/50 rounded-md">
+          {PRESET_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => {
+                onChange({ ...stage, color: c });
+                setPaletteOpen(false);
+              }}
+              className={`h-6 w-6 rounded-md transition-all ${
+                stage.color === c
+                  ? "ring-2 ring-offset-2 ring-foreground scale-110"
+                  : "hover:scale-105"
+              }`}
+              style={{ backgroundColor: c }}
+              title={c}
+              aria-label={`Cor ${c}`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
