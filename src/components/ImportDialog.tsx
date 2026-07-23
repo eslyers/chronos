@@ -65,6 +65,21 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
     setEditedRows((prev) => ({ ...prev, [idx]: { ...prev[idx], ...patch } }));
   };
 
+  // === FEATURE 3: pagina\u00e7\u00e3o do preview ===
+  const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
+  const [pageSize, setPageSize] = React.useState<(typeof PAGE_SIZE_OPTIONS)[number]>(50);
+  const [currentPage, setCurrentPage] = React.useState(0);
+  // Reset pra p\u00e1gina 0 quando muda pageSize ou chega novo preview
+  React.useEffect(() => {
+    setCurrentPage(0);
+  }, [pageSize, preview]);
+  const totalRows = preview?.rows.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const safePage = Math.min(currentPage, totalPages - 1);
+  const pageStart = safePage * pageSize + 1; // 1-based
+  const pageEnd = Math.min((safePage + 1) * pageSize, totalRows);
+  const pageRows = preview?.rows.slice(safePage * pageSize, (safePage + 1) * pageSize) ?? [];
+
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   // Reset ao fechar
@@ -304,7 +319,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                     </tr>
                   </thead>
                   <tbody>
-                    {preview.rows.slice(0, 50).map((row) => (
+                    {pageRows.map((row) => (
                       <PreviewRow
                         key={row.index}
                         row={row}
@@ -317,10 +332,49 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                     ))}
                   </tbody>
                 </table>
-                {preview.rows.length > 50 && (
-                  <p className="text-xs text-center text-muted-foreground py-2 bg-zinc-50 dark:bg-zinc-900">
-                    Mostrando 50 de {preview.rows.length} linhas
-                  </p>
+
+                {totalRows > 0 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-3 py-2 bg-zinc-50 dark:bg-zinc-900 border-t text-xs text-muted-foreground">
+                    <div className="flex items-center gap-3">
+                      <span>
+                        Mostrando <strong className="text-foreground">{pageStart}–{pageEnd}</strong> de <strong className="text-foreground">{totalRows}</strong> linhas
+                      </span>
+                      <span className="opacity-50">•</span>
+                      <label className="flex items-center gap-1">
+                        Por p\u00e1gina:
+                        <select
+                          value={pageSize}
+                          onChange={(e) => setPageSize(Number(e.target.value) as (typeof PAGE_SIZE_OPTIONS)[number])}
+                          className="bg-transparent border rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                        >
+                          {PAGE_SIZE_OPTIONS.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                        disabled={safePage === 0}
+                        className="px-2 py-1 rounded border hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        ← Anterior
+                      </button>
+                      <span className="px-2">
+                        P\u00e1gina <strong className="text-foreground">{safePage + 1}</strong> de {totalPages}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+                        disabled={safePage >= totalPages - 1}
+                        className="px-2 py-1 rounded border hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Pr\u00f3xima →
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             </>
