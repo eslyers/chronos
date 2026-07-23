@@ -16,6 +16,7 @@ import {
   KanbanSquare,
   CalendarDays,
   History,
+  Users,
 } from "lucide-react";
 import { useGlobal } from "@/lib/context/GlobalContext";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -47,6 +48,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "Kanban", href: "/app/kanban", icon: KanbanSquare },
     { name: "Calendário", href: "/app/calendar", icon: CalendarDays },
     { name: "Templates", href: "/app/templates", icon: Library },
+    { name: "Equipe", href: "/app/users", icon: Users },
     { name: "Notificações", href: "/app/notifications", icon: Bell },
     { name: "Activity", href: "/app/activity", icon: History },
     { name: "Configurações", href: "/app/settings", icon: Settings },

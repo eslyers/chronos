@@ -1,6 +1,8 @@
+// ⚠️  DEPRECATED (2026-07-22): Migrado para Brevo por decisão do Esly.
+//     Use `src/lib/email/brevo.ts` em vez deste arquivo.
+//     Este módulo será removido após validação completa em prod.
 // ─────────────────────────────────────────────────────────────
-// CHRONOS — Email via Resend API
-// Notificações por email (tarefas vencendo, lembretes, etc.)
+// CHRONOS — Email via Resend API (LEGACY)
 // ─────────────────────────────────────────────────────────────
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;

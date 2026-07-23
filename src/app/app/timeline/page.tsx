@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { Gantt, ViewMode, type Task as GanttTask } from "gantt-task-react";
 import "gantt-task-react/dist/index.css";
-import { Calendar, FolderKanban, Layers } from "lucide-react";
+import { Calendar, FolderKanban, Layers, Upload } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -16,6 +16,7 @@ import { GanttTaskListHeaderPT } from "@/components/GanttTaskListHeader";
 import { GanttTaskListTablePT } from "@/components/GanttTaskListTablePT";
 import { GanttTooltipPT } from "@/components/GanttTooltipPT";
 import { TaskDialog } from "@/components/TaskDialog";
+import { ImportDialog } from "@/components/ImportDialog";
 
 const VIEW_MODES = [
   { value: ViewMode.Day, label: "Dia" },
@@ -80,6 +81,7 @@ export default function TimelinePage() {
   // Estado: edicao de task (clique na row ou na bar)
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -371,6 +373,16 @@ export default function TimelinePage() {
             <>
               <TaskHierarchy projectId={selectedProjectId} />
               <DependencyManager projectId={selectedProjectId} />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setImportDialogOpen(true)}
+                className="gap-2"
+                title="Importar planilha Excel/CSV/ODS"
+              >
+                <Upload className="h-4 w-4" />
+                Importar planilha
+              </Button>
             </>
           )}
         </CardContent>
@@ -520,6 +532,23 @@ export default function TimelinePage() {
           projectId={editingTask.project_id}
         />
       )}
+
+      {/* Import dialog de planilha */}
+      {selectedProjectId !== "all" && (() => {
+        const selProject = projects.find((p) => p.id === selectedProjectId);
+        return selProject ? (
+          <ImportDialog
+            open={importDialogOpen}
+            onOpenChange={setImportDialogOpen}
+            projectId={selectedProjectId}
+            workspaceId={selProject.workspace_id}
+            onImported={() => {
+              // Forçar reload das tasks via context — DataContext vai refazer fetch
+              window.location.reload();
+            }}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }
