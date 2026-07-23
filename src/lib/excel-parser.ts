@@ -353,31 +353,45 @@ export async function parseImportFile(buffer: Buffer, filename: string): Promise
   const sheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
 
-  // Pegar como matriz (pra detectar cabe\u00e7alho)
+  // Pegar como matriz (pra detectar cabe\u00e7alho E recortar range)
   const matrix: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
   const headerIdx = findHeaderRow(matrix);
-  const headerRow = matrix[headerIdx] as unknown[];
+  const headerRow = (matrix[headerIdx] as unknown[]) || [];
 
-  // Pegar dados a partir do cabe\u00e7alho
-  const dataRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-    range: headerIdx,
-    raw: true,
-    defval: null,
-  });
+  // === Range real: corta colunas sem header (planilhas tipo cronograma do Esly
+  // t\u00eam 300+ colunas vazias com datas serializadas como header — viram chaves
+  // tipo "45839.99" que confundem o sheet_to_json).
+  // L\u00f3gica: para no primeiro header que \u00e9 (null, undefined, vazio OU n\u00famero puro
+  // tipo data serial). S\u00f3 headers alfab\u00e9ticos/textuais contam.
+  let lastValidCol = 0;
+  for (let i = 0; i < headerRow.length; i++) {
+    const h = headerRow[i];
+    if (h === null || h === undefined) break;
+    const s = String(h).trim();
+    if (!s) break;
+    if (/^\d+(\.\d+)?$/.test(s)) break; // data serial 45838.999... = parar
+    lastValidCol = i + 1;
+  }
+  if (lastValidCol === 0) {
+    return { rows: [], headers: [], sheetName };
+  }
 
-  const headers = headerRow.map((h) => String(h || "").trim()).filter(Boolean);
+  // Recortar matriz pra largura real
+  const cropped = matrix.slice(headerIdx).map((row) => row.slice(0, lastValidCol));
+  const headers = (headerRow.slice(0, lastValidCol) as unknown[])
+    .map((h) => String(h || "").trim())
+    .filter(Boolean);
 
-  // Normalizar + sanitizar cada c\u00e9lula (sem mentiras de TS)
-  const normalized = dataRows.map((row) => {
+  // Construir rows manualmente (sanitizeCell em cada c\u00e9lula, sem reliance no sheet_to_json)
+  const rows = cropped.slice(1).map((row) => {
     const out: Record<string, string | number | null> = {};
-    for (const h of headers) {
-      const { value } = sanitizeCell(row[h]);
-      out[h] = value;
+    for (let i = 0; i < headers.length; i++) {
+      out[headers[i]] = sanitizeCell(row[i]).value;
     }
     return out;
   });
 
-  return { rows: normalized, headers, sheetName };
+  return { rows, headers, sheetName };
 }
 
 // ── Validar e fazer preview ──────────────────────────────────
