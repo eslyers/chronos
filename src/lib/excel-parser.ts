@@ -258,6 +258,36 @@ function findHeaderRow(rows: unknown[][]): number {
 
 // ── Ler arquivo ──────────────────────────────────────────────
 
+// ── Sanitizador de c\u00e9lula: garante string | number | null (sem mentira de TS) ──
+// SheetJS retorna c\u00e9lulas com tipo 'e' (error: #REF!, #NAME?, #VALUE!, #DIV/0!, #N/A) como
+// objetos Error nativos do JS. Mandar isso pra frente quebra Radix Select / JSON.stringify
+// com "Unsupported value type error". Aqui a gente converte pra string e marca como erro.
+function sanitizeCell(value: unknown): { value: string | number | null; cellError: boolean } {
+  if (value === null || value === undefined || value === "") {
+    return { value: null, cellError: false };
+  }
+  // Erro do Excel (#REF!, #NAME?, etc) \u2014 vira string com prefixo visivel
+  if (value instanceof Error) {
+    return { value: `#ERR:${value.message || "UNKNOWN"}`, cellError: true };
+  }
+  // Date object \u2192 ISO string (SheetJS j\u00e1 faz isso com cellDates:true, mas garantimos)
+  if (value instanceof Date) {
+    const t = value.getTime();
+    if (Number.isNaN(t)) return { value: null, cellError: false };
+    return { value: value.toISOString().slice(0, 10), cellError: false };
+  }
+  // Primitivos OK
+  if (typeof value === "string") return { value: value.trim(), cellError: false };
+  if (typeof value === "number") return { value, cellError: false };
+  if (typeof value === "boolean") return { value: value ? "true" : "false", cellError: false };
+  // Fallback: stringify (objetos literais, arrays raros, etc)
+  try {
+    return { value: String(value), cellError: false };
+  } catch {
+    return { value: null, cellError: false };
+  }
+}
+
 export async function parseImportFile(buffer: Buffer, filename: string): Promise<{
   rows: Record<string, string | number | null>[];
   headers: string[];
@@ -275,8 +305,17 @@ export async function parseImportFile(buffer: Buffer, filename: string): Promise
     if (result.errors.length > 0) {
       console.warn("[excel-parser] CSV parse warnings:", result.errors);
     }
+    // Sanitiza tamb\u00e9m o CSV (papaparse j\u00e1 devolve string, mas defensivo)
+    const rows = result.data.map((row) => {
+      const out: Record<string, string | number | null> = {};
+      for (const [k, v] of Object.entries(row)) {
+        const sanitized = sanitizeCell(v);
+        out[k] = sanitized.value;
+      }
+      return out;
+    });
     return {
-      rows: result.data,
+      rows,
       headers: result.meta.fields || [],
     };
   }
@@ -286,12 +325,12 @@ export async function parseImportFile(buffer: Buffer, filename: string): Promise
   const sheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
 
-  // Pegar como matriz (pra detectar cabeçalho)
+  // Pegar como matriz (pra detectar cabe\u00e7alho)
   const matrix: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
   const headerIdx = findHeaderRow(matrix);
   const headerRow = matrix[headerIdx] as unknown[];
 
-  // Pegar dados a partir do cabeçalho
+  // Pegar dados a partir do cabe\u00e7alho
   const dataRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
     range: headerIdx,
     raw: true,
@@ -300,11 +339,12 @@ export async function parseImportFile(buffer: Buffer, filename: string): Promise
 
   const headers = headerRow.map((h) => String(h || "").trim()).filter(Boolean);
 
-  // Normalizar chaves pra bater com headers (SheetJS usa header values)
+  // Normalizar + sanitizar cada c\u00e9lula (sem mentiras de TS)
   const normalized = dataRows.map((row) => {
     const out: Record<string, string | number | null> = {};
     for (const h of headers) {
-      out[h] = (row[h] as string | number | null) ?? null;
+      const { value } = sanitizeCell(row[h]);
+      out[h] = value;
     }
     return out;
   });
