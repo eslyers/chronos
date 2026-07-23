@@ -5,7 +5,7 @@ import { Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, Loader2, X, Downl
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import type { ImportPreview, ImportRow } from "@/lib/excel-parser";
+import type { ImportPreview, ImportRow, ImportRowStatus } from "@/lib/excel-parser";
 
 interface ImportDialogProps {
   open: boolean;
@@ -39,6 +39,30 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
   const [loading, setLoading] = React.useState(false);
   const [result, setResult] = React.useState<{ created: number; skipped: number; failed: number; wbsLinked: number } | null>(null);
   const [dragOver, setDragOver] = React.useState(false);
+
+  // === FEATURE 1: erros expandidos ===
+  const [expandedErrors, setExpandedErrors] = React.useState<Set<number>>(new Set());
+  const toggleExpand = (idx: number) => {
+    setExpandedErrors((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
+
+  // === FEATURE 2: edi\u00e7\u00e3o inline ===
+  type Editable = Partial<{
+    title: string;
+    assignee_id: string;
+    start_date: string; // ISO yyyy-mm-dd
+    due_date: string;
+    level: number;
+  }>;
+  const [editedRows, setEditedRows] = React.useState<Record<number, Editable>>({});
+  const updateRow = (idx: number, patch: Editable) => {
+    setEditedRows((prev) => ({ ...prev, [idx]: { ...prev[idx], ...patch } }));
+  };
 
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -93,13 +117,21 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
   }
 
   async function doImport() {
-    if (!file) return;
+    if (!file || !preview) return;
     setLoading(true);
     setError(null);
     setPhase("importing");
     try {
       const form = new FormData();
-      form.append("file", file);
+      // Se tiver edi\u00e7\u00f5es inline, gera CSV novo com as edi\u00e7\u00f5es aplicadas
+      const hasEdits = Object.keys(editedRows).length > 0;
+      if (hasEdits) {
+        const csv = buildEditedCsv(preview, editedRows);
+        const csvFile = new File([csv], "tarefas-editadas.csv", { type: "text/csv" });
+        form.append("file", csvFile);
+      } else {
+        form.append("file", file);
+      }
       form.append("project_id", projectId);
       form.append("workspace_id", workspaceId);
       form.append("dry_run", "false");
@@ -209,7 +241,19 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
             <>
               <div className="grid grid-cols-4 gap-3">
                 <StatBox label="Total" value={preview.totalRows} color="default" />
-                <StatBox label="Válidas" value={preview.validRows} color="green" />
+                <StatBox
+                  label="Válidas"
+                  value={
+                    Object.keys(editedRows).length === 0
+                      ? preview.validRows
+                      : preview.rows.reduce(
+                          (acc, row) =>
+                            acc + (getEffectiveStatus(row, editedRows[row.index]).status === "valid" ? 1 : 0),
+                          0
+                        )
+                  }
+                  color="green"
+                />
                 <StatBox label="Com avisos" value={preview.warningRows} color="amber" />
                 <StatBox label="Com erro" value={preview.errorRows} color="red" />
               </div>
@@ -260,7 +304,15 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                   </thead>
                   <tbody>
                     {preview.rows.slice(0, 50).map((row) => (
-                      <PreviewRow key={row.index} row={row} hasWBS={preview.hasWBS} />
+                      <PreviewRow
+                        key={row.index}
+                        row={row}
+                        hasWBS={preview.hasWBS}
+                        edits={editedRows}
+                        expand={expandedErrors.has(row.index)}
+                        onToggleExpand={toggleExpand}
+                        onUpdate={updateRow}
+                      />
                     ))}
                   </tbody>
                 </table>
@@ -306,11 +358,25 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
               </Button>
               <Button
                 onClick={doImport}
-                disabled={loading || (preview?.validRows || 0) === 0}
+                disabled={
+                  loading ||
+                  (preview?.rows.reduce(
+                    (acc, row) =>
+                      acc + (getEffectiveStatus(row, editedRows[row.index]).status === "valid" ? 1 : 0),
+                    0
+                  ) || 0) === 0
+                }
                 className="bg-orange-500 hover:bg-orange-600"
               >
                 <Download className="h-4 w-4 mr-2" />
-                Importar {preview?.validRows || 0} tarefas
+                Importar{" "}
+                {preview?.rows.reduce(
+                  (acc, row) =>
+                    acc + (getEffectiveStatus(row, editedRows[row.index]).status === "valid" ? 1 : 0),
+                  0
+                ) || 0}{" "}
+                tarefas
+                {Object.keys(editedRows).length > 0 && " (editadas)"}
               </Button>
             </>
           )}
@@ -345,42 +411,199 @@ function StatBox({ label, value, color }: { label: string; value: number; color:
   );
 }
 
-function PreviewRow({ row, hasWBS }: { row: ImportRow; hasWBS: boolean }) {
+// === Helpers p\u00e9s FEATURE 2 (edição inline) ===
+
+// Mistura edi\u00e7\u00f5es do usu\u00e1rio com a row original
+type Editable = Partial<{
+  title: string;
+  assignee_id: string;
+  start_date: string;
+  due_date: string;
+  level: number;
+}>;
+
+function getEffective<T extends { title?: string | null; assignee_id?: string | null; start_date?: string | null; due_date?: string | null; level?: number | undefined }>(
+  orig: T,
+  edits: Editable | undefined
+): {
+  title: string;
+  assignee_id: string | null;
+  start_date: string | null;
+  due_date: string | null;
+  level: number | null;
+} {
+  return {
+    title: edits?.title ?? orig.title ?? "",
+    assignee_id: edits?.assignee_id ?? orig.assignee_id ?? null,
+    start_date: edits?.start_date ?? orig.start_date ?? null,
+    due_date: edits?.due_date ?? orig.due_date ?? null,
+    level: edits?.level ?? orig.level ?? null,
+  };
+}
+
+// Recalcula status da row ap\u00f3s edi\u00e7\u00e3o
+function getEffectiveStatus(orig: ImportRow, edits: Editable | undefined): { status: ImportRowStatus; errors: string[]; warnings: string[] } {
+  const eff = getEffective(orig, edits);
+  const errors = [...orig.errors];
+  const warnings = [...orig.warnings];
+  const titleEmpty = !eff.title || eff.title.trim() === "";
+  // Remove erro de t\u00edtulo vazio se usu\u00e1rio preencheu
+  if (!titleEmpty) {
+    const i = errors.findIndex((e) => e === "T\u00edtulo vazio");
+    if (i !== -1) errors.splice(i, 1);
+  } else if (!errors.includes("T\u00edtulo vazio")) {
+    errors.push("T\u00edtulo vazio");
+  }
+  let status: ImportRowStatus = "valid";
+  if (errors.length > 0) status = "error";
+  else if (warnings.length > 0) status = "warning";
+  return { status, errors, warnings };
+}
+
+// Gera CSV novo com edi\u00e7\u00f5es aplicadas (pra mandar pro backend se houver edits)
+function buildEditedCsv(preview: ImportPreview, edits: Record<number, Editable>): string {
+  // Detecta quais colunas do arquivo original t\u00eam header \u00fatil (texto)
+  const fileHeaders = preview.columns;
+  const lines: string[] = [fileHeaders.map(csvEscape).join(",")];
+  for (const row of preview.rows) {
+    const edit = edits[row.index];
+    const eff = getEffective(row, edit);
+    const values = fileHeaders.map((h) => {
+      // Detecta qual coluna qual atrav\u00e9s do mapping
+      const fieldName = preview.mapping[h];
+      if (fieldName === "title") return eff.title;
+      if (fieldName === "assignee_id") return eff.assignee_id ?? row.raw[h] ?? "";
+      if (fieldName === "start_date") return eff.start_date ?? row.raw[h] ?? "";
+      if (fieldName === "due_date") return eff.due_date ?? row.raw[h] ?? "";
+      if (fieldName === "level") return eff.level !== null && eff.level !== undefined ? String(eff.level) : row.raw[h] ?? "";
+      // outras colunas: mant\u00e9m valor original
+      const v = row.raw[h];
+      if (v === null || v === undefined) return "";
+      return String(v);
+    });
+    lines.push(values.map(csvEscape).join(","));
+  }
+  return lines.join("\n");
+}
+
+function csvEscape(v: string | number | null): string {
+  const s = v === null || v === undefined ? "" : String(v);
+  if (s.includes(",") || s.includes("\"") || s.includes("\n")) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+function PreviewRow({
+  row,
+  hasWBS,
+  edits,
+  expand,
+  onToggleExpand,
+  onUpdate,
+}: {
+  row: ImportRow;
+  hasWBS: boolean;
+  edits: Record<number, Editable>;
+  expand: boolean;
+  onToggleExpand: (idx: number) => void;
+  onUpdate: (idx: number, patch: Editable) => void;
+}) {
+  const edit = edits[row.index];
+  const eff = getEffective(row, edit);
+  const effStatus = getEffectiveStatus(row, edit);
+  const effectiveStatus = effStatus.status;
+  const effectiveErrors = effStatus.errors;
+  const effectiveWarnings = effStatus.warnings;
+
   const icon =
-    row.status === "valid" ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> :
-    row.status === "warning" ? <AlertTriangle className="h-4 w-4 text-amber-500" /> :
+    effectiveStatus === "valid" ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> :
+    effectiveStatus === "warning" ? <AlertTriangle className="h-4 w-4 text-amber-500" /> :
     <X className="h-4 w-4 text-red-500" />;
 
-  const dueDate = row.parsed.due_date || "—";
+  const hasIssues = effectiveStatus !== "valid";
+  const dueDate = eff.due_date || "";
 
   return (
-    <tr className="border-t hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
-      <td className="px-2 py-2 text-xs text-muted-foreground">{row.index}</td>
-      <td className="px-2 py-2">{icon}</td>
-      <td className="px-2 py-2 font-medium truncate max-w-xs">
-        {row.parsed.title || <span className="text-red-500 italic">sem título</span>}
-        {row.warnings.length > 0 && (
-          <p className="text-xs text-amber-600 dark:text-amber-400 font-normal mt-0.5">
-            ⚠ {row.warnings[0]}
-          </p>
-        )}
-        {row.errors.length > 0 && (
-          <p className="text-xs text-red-600 dark:text-red-400 font-normal mt-0.5">
-            ✗ {row.errors[0]}
-          </p>
-        )}
-      </td>
-      <td className="px-2 py-2 text-muted-foreground text-xs">{row.parsed.assignee_id || "—"}</td>
-      <td className="px-2 py-2 text-muted-foreground text-xs">{dueDate}</td>
-      {hasWBS && (
-        <td className="px-2 py-2 text-muted-foreground text-xs">
-          {row.level ? (
-            <Badge variant="outline" className="text-xs">
-              {row.level}
-            </Badge>
-          ) : "—"}
+    <>
+      <tr
+        className={`border-t hover:bg-zinc-50 dark:hover:bg-zinc-900/50 ${hasIssues ? "cursor-pointer" : ""} ${expand ? "bg-zinc-50 dark:bg-zinc-900/50" : ""}`}
+        onClick={() => hasIssues && onToggleExpand(row.index)}
+      >
+        <td className="px-2 py-2 text-xs text-muted-foreground">
+          {row.index}
+          {hasIssues && (
+            <span className="ml-1 text-[10px] text-red-500">{expand ? "▼" : "▶"}</span>
+          )}
         </td>
+        <td className="px-2 py-2">{icon}</td>
+        <td className="px-2 py-1" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="text"
+            value={eff.title}
+            placeholder="(sem t\u00edtulo)"
+            onChange={(e) => onUpdate(row.index, { title: e.target.value })}
+            className={`w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-orange-500 rounded px-1 py-0.5 text-sm ${!eff.title.trim() ? "italic text-red-500 placeholder-red-300" : "font-medium"}`}
+          />
+        </td>
+        <td className="px-2 py-1" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="text"
+            value={eff.assignee_id ?? ""}
+            placeholder="—"
+            onChange={(e) => onUpdate(row.index, { assignee_id: e.target.value || "" })}
+            className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-orange-500 rounded px-1 py-0.5 text-xs text-muted-foreground"
+          />
+        </td>
+        <td className="px-2 py-1" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(e) => onUpdate(row.index, { due_date: e.target.value })}
+            className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-orange-500 rounded px-1 py-0.5 text-xs text-muted-foreground"
+          />
+        </td>
+        {hasWBS && (
+          <td className="px-2 py-1" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="number"
+              min={1}
+              max={9}
+              value={eff.level ?? ""}
+              placeholder="—"
+              onChange={(e) => onUpdate(row.index, { level: e.target.value ? Number(e.target.value) : 0 })}
+              className="w-14 bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-orange-500 rounded px-1 py-0.5 text-xs text-muted-foreground"
+            />
+          </td>
+        )}
+      </tr>
+
+      {expand && hasIssues && (
+        <tr className="bg-red-50/40 dark:bg-red-950/20">
+          <td colSpan={hasWBS ? 6 : 5} className="px-4 py-3 text-xs space-y-2">
+            {effectiveErrors.length > 0 && (
+              <div>
+                <p className="font-semibold text-red-600 dark:text-red-400 mb-1">❌ Erros (corrigem o status):</p>
+                <ul className="list-disc list-inside space-y-0.5 text-red-700 dark:text-red-300">
+                  {effectiveErrors.map((e, i) => (
+                    <li key={i}>{e}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {effectiveWarnings.length > 0 && (
+              <div>
+                <p className="font-semibold text-amber-600 dark:text-amber-400 mb-1">⚠ Avisos (não bloqueiam import):</p>
+                <ul className="list-disc list-inside space-y-0.5 text-amber-700 dark:text-amber-300">
+                  {effectiveWarnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </td>
+        </tr>
       )}
-    </tr>
+    </>
   );
 }
