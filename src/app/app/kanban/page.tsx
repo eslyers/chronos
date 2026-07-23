@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { useData } from "@/lib/context/DataContext";
 import { TaskAssignee } from "@/components/TaskAssignee";
 import { TaskDialog } from "@/components/TaskDialog";
+import { ImportProjectButton } from "@/components/ImportProjectButton";
 
 type TaskLike = {
   id: string;
@@ -448,6 +449,7 @@ export default function KanbanPage() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <ImportProjectButton mode="single" project={project} />
           {projectStages.map((stage) => (
             <Button
               key={stage.id}

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useData, type Project } from "@/lib/context/DataContext";
 import { ProjectDialog } from "@/components/ProjectDialog";
+import { ImportProjectButton } from "@/components/ImportProjectButton";
 
 export default function ProjectsPage() {
   const { projects, tasks, getTasksByProject, deleteProject, loading } = useData();
@@ -62,10 +63,18 @@ export default function ProjectsPage() {
             {projects.length} projeto{projects.length !== 1 ? "s" : ""} • {tasks.length} tarefas
           </p>
         </div>
-        <Button onClick={openCreate} size="lg">
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Projeto
-        </Button>
+        <div className="flex items-center gap-2">
+          <ImportProjectButton
+            mode="select"
+            projects={projects}
+            size="lg"
+            variant="outline"
+          />
+          <Button onClick={openCreate} size="lg">
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Projeto
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

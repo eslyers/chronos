@@ -11,6 +11,7 @@ import { useData, type Task } from "@/lib/context/DataContext";
 import { ProjectDialog } from "@/components/ProjectDialog";
 import { TaskDialog } from "@/components/TaskDialog";
 import { TaskAssignee } from "@/components/TaskAssignee";
+import { ImportProjectButton } from "@/components/ImportProjectButton";
 
 const PRIORITY_COLORS = {
   low: { bg: "bg-slate-500/15", text: "text-slate-600 dark:text-slate-400", label: "Baixa" },
@@ -152,6 +153,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
           </div>
+          <ImportProjectButton mode="single" project={project} />
           <Button variant="outline" onClick={() => setEditOpen(true)}>
             Editar projeto
           </Button>
