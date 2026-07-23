@@ -52,7 +52,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
     });
   };
 
-  // === FEATURE 2: edi\u00e7\u00e3o inline ===
+  // === FEATURE 2: edição inline ===
   type Editable = Partial<{
     title: string;
     assignee_id: string;
@@ -65,11 +65,11 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
     setEditedRows((prev) => ({ ...prev, [idx]: { ...prev[idx], ...patch } }));
   };
 
-  // === FEATURE 3: pagina\u00e7\u00e3o do preview ===
+  // === FEATURE 3: paginação do preview ===
   const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
   const [pageSize, setPageSize] = React.useState<(typeof PAGE_SIZE_OPTIONS)[number]>(50);
   const [currentPage, setCurrentPage] = React.useState(0);
-  // Reset pra p\u00e1gina 0 quando muda pageSize ou chega novo preview
+  // Reset pra página 0 quando muda pageSize ou chega novo preview
   React.useEffect(() => {
     setCurrentPage(0);
   }, [pageSize, preview]);
@@ -78,7 +78,46 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
   const safePage = Math.min(currentPage, totalPages - 1);
   const pageStart = safePage * pageSize + 1; // 1-based
   const pageEnd = Math.min((safePage + 1) * pageSize, totalRows);
-  const pageRows = preview?.rows.slice(safePage * pageSize, (safePage + 1) * pageSize) ?? [];
+
+  // === FEATURE 4: ordenação ao clicar nos cabeçalhos ===
+  type SortKey = "index" | "status" | "title" | "assignee_id" | "due_date" | "level" | null;
+  type SortDir = "asc" | "desc";
+  const [sortKey, setSortKey] = React.useState<SortKey>(null);
+  const [sortDir, setSortDir] = React.useState<SortDir>("asc");
+  const cycleSort = (key: Exclude<SortKey, null>) => {
+    if (sortKey !== key) { setSortKey(key); setSortDir("asc"); }
+    else if (sortDir === "asc") setSortDir("desc");
+    else { setSortKey(null); setSortDir("asc"); }
+    setCurrentPage(0);
+  };
+  const sortedRows = React.useMemo(() => {
+    if (!preview) return [] as ImportRow[];
+    if (sortKey === null) return preview.rows;
+    const key = sortKey;
+    const dir = sortDir === "asc" ? 1 : -1;
+    function valueOf(row: ImportRow): string | number {
+      const eff = getEffective(row.parsed, row.level, editedRows[row.index]);
+      if (key === "status") {
+        const s = getEffectiveStatus(row, editedRows[row.index]).status;
+        const weight = s === "valid" ? 0 : s === "warning" ? 1 : 2;
+        return weight;
+      }
+      if (key === "index") return row.index;
+      if (key === "level") return eff.level ?? 99;
+      if (key === "title") return eff.title.toLowerCase();
+      if (key === "assignee_id") return (eff.assignee_id ?? "").toLowerCase();
+      if (key === "due_date") return eff.due_date ?? "";
+      return "";
+    }
+    return [...preview.rows].sort((a, b) => {
+      const va = valueOf(a);
+      const vb = valueOf(b);
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), "pt-BR", { numeric: true, sensitivity: "base" }) * dir;
+    });
+  }, [preview, sortKey, sortDir, editedRows]);
+
+  const pageRows = sortedRows.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -139,7 +178,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
     setPhase("importing");
     try {
       const form = new FormData();
-      // Se tiver edi\u00e7\u00f5es inline, gera CSV novo com as edi\u00e7\u00f5es aplicadas
+      // Se tiver edições inline, gera CSV novo com as edições aplicadas
       const hasEdits = Object.keys(editedRows).length > 0;
       if (hasEdits) {
         const csv = buildEditedCsv(preview, editedRows);
@@ -310,12 +349,38 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                 <table className="w-full text-sm">
                   <thead className="bg-zinc-50 dark:bg-zinc-900 sticky top-0">
                     <tr>
-                      <th className="px-2 py-2 text-left w-10">#</th>
-                      <th className="px-2 py-2 text-left">Status</th>
-                      <th className="px-2 py-2 text-left">Título</th>
-                      <th className="px-2 py-2 text-left">Responsável</th>
-                      <th className="px-2 py-2 text-left">Prazo</th>
-                      {preview.hasWBS && <th className="px-2 py-2 text-left">Nível</th>}
+                      <th className="px-2 py-2 text-left w-10">
+                        <button type="button" onClick={() => cycleSort("index")} className="inline-flex items-center gap-1 hover:text-orange-500 transition-colors">
+                          #{sortKey === "index" && <span>{sortDir === "asc" ? "▲" : "▼"}</span>}
+                        </button>
+                      </th>
+                      <th className="px-2 py-2 text-left">
+                        <button type="button" onClick={() => cycleSort("status")} className="inline-flex items-center gap-1 hover:text-orange-500 transition-colors">
+                          Status {sortKey === "status" && <span>{sortDir === "asc" ? "▲" : "▼"}</span>}
+                        </button>
+                      </th>
+                      <th className="px-2 py-2 text-left">
+                        <button type="button" onClick={() => cycleSort("title")} className="inline-flex items-center gap-1 hover:text-orange-500 transition-colors">
+                          Título {sortKey === "title" && <span>{sortDir === "asc" ? "▲" : "▼"}</span>}
+                        </button>
+                      </th>
+                      <th className="px-2 py-2 text-left">
+                        <button type="button" onClick={() => cycleSort("assignee_id")} className="inline-flex items-center gap-1 hover:text-orange-500 transition-colors">
+                          Responsável {sortKey === "assignee_id" && <span>{sortDir === "asc" ? "▲" : "▼"}</span>}
+                        </button>
+                      </th>
+                      <th className="px-2 py-2 text-left">
+                        <button type="button" onClick={() => cycleSort("due_date")} className="inline-flex items-center gap-1 hover:text-orange-500 transition-colors">
+                          Prazo {sortKey === "due_date" && <span>{sortDir === "asc" ? "▲" : "▼"}</span>}
+                        </button>
+                      </th>
+                      {preview.hasWBS && (
+                        <th className="px-2 py-2 text-left">
+                          <button type="button" onClick={() => cycleSort("level")} className="inline-flex items-center gap-1 hover:text-orange-500 transition-colors">
+                            Nível {sortKey === "level" && <span>{sortDir === "asc" ? "▲" : "▼"}</span>}
+                          </button>
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -341,7 +406,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                       </span>
                       <span className="opacity-50">•</span>
                       <label className="flex items-center gap-1">
-                        Por p\u00e1gina:
+                        Por página:
                         <select
                           value={pageSize}
                           onChange={(e) => setPageSize(Number(e.target.value) as (typeof PAGE_SIZE_OPTIONS)[number])}
@@ -363,7 +428,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                         ← Anterior
                       </button>
                       <span className="px-2">
-                        P\u00e1gina <strong className="text-foreground">{safePage + 1}</strong> de {totalPages}
+                        Página <strong className="text-foreground">{safePage + 1}</strong> de {totalPages}
                       </span>
                       <button
                         type="button"
@@ -371,7 +436,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                         disabled={safePage >= totalPages - 1}
                         className="px-2 py-1 rounded border hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        Pr\u00f3xima →
+                        Próxima →
                       </button>
                     </div>
                   </div>
@@ -466,9 +531,9 @@ function StatBox({ label, value, color }: { label: string; value: number; color:
   );
 }
 
-// === Helpers p\u00e9s FEATURE 2 (edição inline) ===
+// === Helpers pés FEATURE 2 (edição inline) ===
 
-// Mistura edi\u00e7\u00f5es do usu\u00e1rio com a row original
+// Mistura edições do usuário com a row original
 type Editable = Partial<{
   title: string;
   assignee_id: string;
@@ -477,7 +542,7 @@ type Editable = Partial<{
   level: number;
 }>;
 
-// Recebe o `parsed` direto (n\u00e3o o ImportRow inteiro) — s\u00e3o os campos Task-like.
+// Recebe o `parsed` direto (não o ImportRow inteiro) — são os campos Task-like.
 function getEffective(
   parsed: Partial<Task>,
   origLevel: number | undefined,
@@ -498,17 +563,17 @@ function getEffective(
   };
 }
 
-// Recalcula status da row ap\u00f3s edi\u00e7\u00e3o
+// Recalcula status da row após edição
 function getEffectiveStatus(orig: ImportRow, edits: Editable | undefined): { status: ImportRowStatus; errors: string[]; warnings: string[] } {
   const eff = getEffective(orig.parsed, orig.level, edits);
   const errors = [...orig.errors];
   const warnings = [...orig.warnings];
   const titleEmpty = !eff.title || eff.title.trim() === "";
   if (!titleEmpty) {
-    const i = errors.findIndex((e) => e === "T\u00edtulo vazio");
+    const i = errors.findIndex((e) => e === "Título vazio");
     if (i !== -1) errors.splice(i, 1);
-  } else if (!errors.includes("T\u00edtulo vazio")) {
-    errors.push("T\u00edtulo vazio");
+  } else if (!errors.includes("Título vazio")) {
+    errors.push("Título vazio");
   }
   let status: ImportRowStatus = "valid";
   if (errors.length > 0) status = "error";
@@ -516,23 +581,23 @@ function getEffectiveStatus(orig: ImportRow, edits: Editable | undefined): { sta
   return { status, errors, warnings };
 }
 
-// Gera CSV novo com edi\u00e7\u00f5es aplicadas (pra mandar pro backend se houver edits)
+// Gera CSV novo com edições aplicadas (pra mandar pro backend se houver edits)
 function buildEditedCsv(preview: ImportPreview, edits: Record<number, Editable>): string {
-  // Detecta quais colunas do arquivo original t\u00eam header \u00fatil (texto)
+  // Detecta quais colunas do arquivo original têm header útil (texto)
   const fileHeaders = preview.columns;
   const lines: string[] = [fileHeaders.map(csvEscape).join(",")];
   for (const row of preview.rows) {
     const edit = edits[row.index];
     const eff = getEffective(row.parsed, row.level, edit);
     const values = fileHeaders.map((h) => {
-      // Detecta qual coluna qual atrav\u00e9s do mapping
+      // Detecta qual coluna qual através do mapping
       const fieldName = preview.mapping[h];
       if (fieldName === "title") return eff.title;
       if (fieldName === "assignee_id") return eff.assignee_id ?? row.raw[h] ?? "";
       if (fieldName === "start_date") return eff.start_date ?? row.raw[h] ?? "";
       if (fieldName === "due_date") return eff.due_date ?? row.raw[h] ?? "";
       if (fieldName === "level") return eff.level !== null && eff.level !== undefined ? String(eff.level) : row.raw[h] ?? "";
-      // outras colunas: mant\u00e9m valor original
+      // outras colunas: mantém valor original
       const v = row.raw[h];
       if (v === null || v === undefined) return "";
       return String(v);
@@ -597,7 +662,7 @@ function PreviewRow({
           <input
             type="text"
             value={eff.title}
-            placeholder="(sem t\u00edtulo)"
+            placeholder="(sem título)"
             onChange={(e) => onUpdate(row.index, { title: e.target.value })}
             className={`w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-orange-500 rounded px-1 py-0.5 text-sm ${!eff.title.trim() ? "italic text-red-500 placeholder-red-300" : "font-medium"}`}
           />
