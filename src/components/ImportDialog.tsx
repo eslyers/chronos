@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import type { ImportPreview, ImportRow, ImportRowStatus } from "@/lib/excel-parser";
+import type { Task } from "@/lib/context/DataContext";
 
 interface ImportDialogProps {
   open: boolean;
@@ -422,9 +423,11 @@ type Editable = Partial<{
   level: number;
 }>;
 
-function getEffective<T extends { title?: string | null; assignee_id?: string | null; start_date?: string | null; due_date?: string | null; level?: number | undefined }>(
-  orig: T,
-  edits: Editable | undefined
+// Recebe o `parsed` direto (n\u00e3o o ImportRow inteiro) — s\u00e3o os campos Task-like.
+function getEffective(
+  parsed: Partial<Task>,
+  origLevel: number | undefined,
+  edits: Editable | undefined,
 ): {
   title: string;
   assignee_id: string | null;
@@ -433,21 +436,20 @@ function getEffective<T extends { title?: string | null; assignee_id?: string | 
   level: number | null;
 } {
   return {
-    title: edits?.title ?? orig.title ?? "",
-    assignee_id: edits?.assignee_id ?? orig.assignee_id ?? null,
-    start_date: edits?.start_date ?? orig.start_date ?? null,
-    due_date: edits?.due_date ?? orig.due_date ?? null,
-    level: edits?.level ?? orig.level ?? null,
+    title: edits?.title ?? parsed.title ?? "",
+    assignee_id: edits?.assignee_id ?? parsed.assignee_id ?? null,
+    start_date: edits?.start_date ?? parsed.start_date ?? null,
+    due_date: edits?.due_date ?? parsed.due_date ?? null,
+    level: edits?.level ?? origLevel ?? null,
   };
 }
 
 // Recalcula status da row ap\u00f3s edi\u00e7\u00e3o
 function getEffectiveStatus(orig: ImportRow, edits: Editable | undefined): { status: ImportRowStatus; errors: string[]; warnings: string[] } {
-  const eff = getEffective(orig, edits);
+  const eff = getEffective(orig.parsed, orig.level, edits);
   const errors = [...orig.errors];
   const warnings = [...orig.warnings];
   const titleEmpty = !eff.title || eff.title.trim() === "";
-  // Remove erro de t\u00edtulo vazio se usu\u00e1rio preencheu
   if (!titleEmpty) {
     const i = errors.findIndex((e) => e === "T\u00edtulo vazio");
     if (i !== -1) errors.splice(i, 1);
@@ -467,7 +469,7 @@ function buildEditedCsv(preview: ImportPreview, edits: Record<number, Editable>)
   const lines: string[] = [fileHeaders.map(csvEscape).join(",")];
   for (const row of preview.rows) {
     const edit = edits[row.index];
-    const eff = getEffective(row, edit);
+    const eff = getEffective(row.parsed, row.level, edit);
     const values = fileHeaders.map((h) => {
       // Detecta qual coluna qual atrav\u00e9s do mapping
       const fieldName = preview.mapping[h];
@@ -510,7 +512,7 @@ function PreviewRow({
   onUpdate: (idx: number, patch: Editable) => void;
 }) {
   const edit = edits[row.index];
-  const eff = getEffective(row, edit);
+  const eff = getEffective(row.parsed, row.level, edit);
   const effStatus = getEffectiveStatus(row, edit);
   const effectiveStatus = effStatus.status;
   const effectiveErrors = effStatus.errors;
