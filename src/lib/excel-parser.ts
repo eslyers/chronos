@@ -7,6 +7,7 @@
 
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
+import AdmZip from "adm-zip";
 import type { Task } from "@/lib/context/DataContext";
 
 // ── Tipos ────────────────────────────────────────────────────
@@ -258,6 +259,30 @@ function findHeaderRow(rows: unknown[][]): number {
 
 // ── Ler arquivo ──────────────────────────────────────────────
 
+// ── Fix ODS: SheetJS 0.18.5 n\u00e3o trata office:value-type="error" e crasha com
+// "Unsupported value type error" ANTES de chegarmos aqui. Patch \u00e9 reabrir o .ods
+// como ZIP, trocar todos os value-type="error" por "string" no content.xml, e
+// devolver um novo buffer pro SheetJS. Preserva o #REF!/#DIV/0! vis\u00edvel na preview.
+function fixOdsErrorTypes(buf: Buffer): Buffer {
+  try {
+    const zip = new AdmZip(buf);
+    const entry = zip.getEntry("content.xml");
+    if (!entry) return buf;
+    let xml = entry.getData().toString("utf-8");
+    const before = (xml.match(/office:value-type="error"/g) || []).length;
+    if (before === 0) return buf;
+    // Troca o tipo "error" por "string" pra SheetJS ler como texto normal.
+    // O valor do erro (#REF!, #DIV/0!, etc) j\u00e1 est\u00e1 no <text:p> que o SheetJS captura como string-value.
+    xml = xml.replace(/office:value-type="error"/g, 'office:value-type="string"');
+    zip.updateFile("content.xml", Buffer.from(xml, "utf-8"));
+    console.log(`[excel-parser] ODS patch: ${before} c\u00e9lula(s) com valor-type="error" convertidas pra "string"`);
+    return zip.toBuffer();
+  } catch (err) {
+    console.warn("[excel-parser] Falha ao patchar ODS, usando buffer original:", err);
+    return buf;
+  }
+}
+
 // ── Sanitizador de c\u00e9lula: garante string | number | null (sem mentira de TS) ──
 // SheetJS retorna c\u00e9lulas com tipo 'e' (error: #REF!, #NAME?, #VALUE!, #DIV/0!, #N/A) como
 // objetos Error nativos do JS. Mandar isso pra frente quebra Radix Select / JSON.stringify
@@ -321,7 +346,10 @@ export async function parseImportFile(buffer: Buffer, filename: string): Promise
   }
 
   // Excel/ODS via SheetJS
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
+  // .ods passa por pre-process pra tratar c\u00e9lulas com office:value-type="error"
+  // (crasha o SheetJS sem o patch — #REF!, #DIV/0!, etc viram string normal).
+  const xlsxBuffer = ext === "ods" ? fixOdsErrorTypes(buffer) : buffer;
+  const workbook = XLSX.read(xlsxBuffer, { type: "buffer", cellDates: false });
   const sheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
 
