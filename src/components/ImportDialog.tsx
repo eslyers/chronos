@@ -79,6 +79,34 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
   const pageStart = safePage * pageSize + 1; // 1-based
   const pageEnd = Math.min((safePage + 1) * pageSize, totalRows);
 
+  // === FEATURE 5: seleção por linha (checkbox) ===
+  // Por padrão, só linhas válidas ficam selecionadas. Usuário pode ligar/desligar.
+  const [selectedRows, setSelectedRows] = React.useState<Set<number>>(new Set());
+  const [userTouchedSelection, setUserTouchedSelection] = React.useState(false);
+  // Quando chega novo preview, pré-seleciona só as válidas (se usuário ainda não mexeu)
+  React.useEffect(() => {
+    if (!preview) {
+      setSelectedRows(new Set());
+      setUserTouchedSelection(false);
+      return;
+    }
+    if (!userTouchedSelection) {
+      const validIdx = new Set(
+        preview.rows.filter((r) => r.status === "valid").map((r) => r.index)
+      );
+      setSelectedRows(validIdx);
+    }
+  }, [preview, userTouchedSelection]);
+  const toggleRow = (idx: number) => {
+    setUserTouchedSelection(true);
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
+
   // === FEATURE 4: ordenação ao clicar nos cabeçalhos ===
   type SortKey = "index" | "status" | "title" | "assignee_id" | "due_date" | "level" | null;
   type SortDir = "asc" | "desc";
@@ -118,6 +146,22 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
   }, [preview, sortKey, sortDir, editedRows]);
 
   const pageRows = sortedRows.slice(safePage * pageSize, (safePage + 1) * pageSize);
+
+  // Toggle-all da página depende de pageRows (declarado acima)
+  const isAllOnPageSelected =
+    pageRows.length > 0 && pageRows.every((r) => selectedRows.has(r.index));
+  const toggleAllOnPage = () => {
+    setUserTouchedSelection(true);
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      if (isAllOnPageSelected) {
+        for (const r of pageRows) next.delete(r.index);
+      } else {
+        for (const r of pageRows) next.add(r.index);
+      }
+      return next;
+    });
+  };
 
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -178,10 +222,10 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
     setPhase("importing");
     try {
       const form = new FormData();
-      // Se tiver edições inline, gera CSV novo com as edições aplicadas
       const hasEdits = Object.keys(editedRows).length > 0;
-      if (hasEdits) {
-        const csv = buildEditedCsv(preview, editedRows);
+      const hasSelectionFilter = userTouchedSelection && selectedRows.size < totalRows;
+      if (hasEdits || hasSelectionFilter) {
+        const csv = buildEditedCsv(preview, editedRows, selectedRows);
         const csvFile = new File([csv], "tarefas-editadas.csv", { type: "text/csv" });
         form.append("file", csvFile);
       } else {
@@ -349,6 +393,15 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                 <table className="w-full text-sm">
                   <thead className="bg-zinc-50 dark:bg-zinc-900 sticky top-0">
                     <tr>
+                      <th className="px-2 py-2 text-left w-8">
+                        <input
+                          type="checkbox"
+                          checked={isAllOnPageSelected}
+                          onChange={toggleAllOnPage}
+                          className="h-4 w-4 rounded border-zinc-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+                          aria-label="Selecionar todas as linhas desta página"
+                        />
+                      </th>
                       <th className="px-2 py-2 text-left w-10">
                         <button type="button" onClick={() => cycleSort("index")} className="inline-flex items-center gap-1 hover:text-orange-500 transition-colors">
                           #{sortKey === "index" && <span>{sortDir === "asc" ? "▲" : "▼"}</span>}
@@ -391,7 +444,9 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                         hasWBS={preview.hasWBS}
                         edits={editedRows}
                         expand={expandedErrors.has(row.index)}
+                        selected={selectedRows.has(row.index)}
                         onToggleExpand={toggleExpand}
+                        onToggleSelect={toggleRow}
                         onUpdate={updateRow}
                       />
                     ))}
@@ -482,7 +537,11 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                   loading ||
                   (preview?.rows.reduce(
                     (acc, row) =>
-                      acc + (getEffectiveStatus(row, editedRows[row.index]).status === "valid" ? 1 : 0),
+                      acc +
+                      (selectedRows.has(row.index) &&
+                      getEffectiveStatus(row, editedRows[row.index]).status === "valid"
+                        ? 1
+                        : 0),
                     0
                   ) || 0) === 0
                 }
@@ -492,11 +551,16 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                 Importar{" "}
                 {preview?.rows.reduce(
                   (acc, row) =>
-                    acc + (getEffectiveStatus(row, editedRows[row.index]).status === "valid" ? 1 : 0),
+                    acc +
+                    (selectedRows.has(row.index) &&
+                    getEffectiveStatus(row, editedRows[row.index]).status === "valid"
+                      ? 1
+                      : 0),
                   0
                 ) || 0}{" "}
-                tarefas
+                selecionadas
                 {Object.keys(editedRows).length > 0 && " (editadas)"}
+                {userTouchedSelection && selectedRows.size < totalRows && " (filtradas)"}
               </Button>
             </>
           )}
@@ -582,22 +646,26 @@ function getEffectiveStatus(orig: ImportRow, edits: Editable | undefined): { sta
 }
 
 // Gera CSV novo com edições aplicadas (pra mandar pro backend se houver edits)
-function buildEditedCsv(preview: ImportPreview, edits: Record<number, Editable>): string {
+function buildEditedCsv(
+  preview: ImportPreview,
+  edits: Record<number, Editable>,
+  selectedRows?: Set<number>,
+): string {
   // Detecta quais colunas do arquivo original têm header útil (texto)
   const fileHeaders = preview.columns;
   const lines: string[] = [fileHeaders.map(csvEscape).join(",")];
   for (const row of preview.rows) {
+    // Filtro de seleção: se tem selection filter e a row não tá nele, pula
+    if (selectedRows && !selectedRows.has(row.index)) continue;
     const edit = edits[row.index];
     const eff = getEffective(row.parsed, row.level, edit);
     const values = fileHeaders.map((h) => {
-      // Detecta qual coluna qual através do mapping
       const fieldName = preview.mapping[h];
       if (fieldName === "title") return eff.title;
       if (fieldName === "assignee_id") return eff.assignee_id ?? row.raw[h] ?? "";
       if (fieldName === "start_date") return eff.start_date ?? row.raw[h] ?? "";
       if (fieldName === "due_date") return eff.due_date ?? row.raw[h] ?? "";
       if (fieldName === "level") return eff.level !== null && eff.level !== undefined ? String(eff.level) : row.raw[h] ?? "";
-      // outras colunas: mantém valor original
       const v = row.raw[h];
       if (v === null || v === undefined) return "";
       return String(v);
@@ -620,14 +688,18 @@ function PreviewRow({
   hasWBS,
   edits,
   expand,
+  selected,
   onToggleExpand,
+  onToggleSelect,
   onUpdate,
 }: {
   row: ImportRow;
   hasWBS: boolean;
   edits: Record<number, Editable>;
   expand: boolean;
+  selected: boolean;
   onToggleExpand: (idx: number) => void;
+  onToggleSelect: (idx: number) => void;
   onUpdate: (idx: number, patch: Editable) => void;
 }) {
   const edit = edits[row.index];
@@ -648,9 +720,18 @@ function PreviewRow({
   return (
     <>
       <tr
-        className={`border-t hover:bg-zinc-50 dark:hover:bg-zinc-900/50 ${hasIssues ? "cursor-pointer" : ""} ${expand ? "bg-zinc-50 dark:bg-zinc-900/50" : ""}`}
+        className={`border-t hover:bg-zinc-50 dark:hover:bg-zinc-900/50 ${hasIssues ? "cursor-pointer" : ""} ${expand ? "bg-zinc-50 dark:bg-zinc-900/50" : ""} ${!selected ? "opacity-40" : ""}`}
         onClick={() => hasIssues && onToggleExpand(row.index)}
       >
+        <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect(row.index)}
+            className="h-4 w-4 rounded border-zinc-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+            aria-label={`Selecionar linha ${row.index}`}
+          />
+        </td>
         <td className="px-2 py-2 text-xs text-muted-foreground">
           {row.index}
           {hasIssues && (
@@ -701,7 +782,7 @@ function PreviewRow({
 
       {expand && hasIssues && (
         <tr className="bg-red-50/40 dark:bg-red-950/20">
-          <td colSpan={hasWBS ? 6 : 5} className="px-4 py-3 text-xs space-y-2">
+          <td colSpan={hasWBS ? 7 : 6} className="px-4 py-3 text-xs space-y-2">
             {effectiveErrors.length > 0 && (
               <div>
                 <p className="font-semibold text-red-600 dark:text-red-400 mb-1">❌ Erros (corrigem o status):</p>

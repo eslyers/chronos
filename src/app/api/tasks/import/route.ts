@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from "next/server";
-import { createSPAClient } from "@/lib/supabase/client";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { parseImportFile, buildPreview } from "@/lib/excel-parser";
 
 export const runtime = "nodejs";
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Inserção real ──
-    const supabase = createSPAClient() as unknown as ReturnType<typeof createSPAClient>;
+    const supabase = await createServerSupabaseClient();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
 
