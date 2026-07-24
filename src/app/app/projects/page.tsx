@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { useData, type Project } from "@/lib/context/DataContext";
 import { ProjectDialog } from "@/components/ProjectDialog";
 import { ImportProjectButton } from "@/components/ImportProjectButton";
-import { ConfirmDialog, useConfirmDialog } from "@/components/ConfirmDialog";
+import { useConfirmDialog } from "@/components/ConfirmDialog";
 
 export default function ProjectsPage() {
   const { projects, tasks, getTasksByProject, deleteProject, loading } = useData();

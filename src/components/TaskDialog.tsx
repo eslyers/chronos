@@ -62,7 +62,6 @@ export function TaskDialog({
       if (res.ok) {
         setAssigneeStatus("invited");
         // Atualiza no banco também
-        const { updateTask } = useData?.() ?? {};
         if (task?.id && updateTask) {
           updateTask(task.id, { assignee_status: "invited" } as Record<string, unknown>).catch(console.error);
         }
@@ -70,7 +69,7 @@ export function TaskDialog({
         const data = await res.json().catch(() => ({}));
         setError(data.error || "Erro ao enviar convite");
       }
-    } catch (e) {
+    } catch {
       setError("Erro ao enviar convite");
     } finally {
       setInviting(false);
