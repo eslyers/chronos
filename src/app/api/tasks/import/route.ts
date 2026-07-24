@@ -111,6 +111,42 @@ export async function POST(request: NextRequest) {
     const created: { id: string; rowIndex: number; title: string; level?: number }[] = [];
     const failed: { row: number; message: string }[] = [];
 
+    // Mapa de assignee: nome da planilha (string) → UUID do membro do workspace
+    const { data: members } = await sb
+      .from("workspace_members")
+      .select("user_id")
+      .eq("workspace_id", workspaceId);
+    const memberIds = (members ?? []).map((m: { user_id: string }) => m.user_id);
+    const profileMap = new Map<string, string>(); // lower-name → user_id
+    if (memberIds.length > 0) {
+      const { data: profs } = await sb
+        .from("profiles")
+        .select("id, email, full_name")
+        .in("id", memberIds);
+      const norm = (s: string) =>
+        s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      for (const p of profs ?? []) {
+        if (p.full_name) profileMap.set(norm(p.full_name), p.id);
+        if (p.email) {
+          profileMap.set(norm(p.email), p.id);
+          const emailLocal = p.email.split("@")[0];
+          if (emailLocal) profileMap.set(norm(emailLocal), p.id);
+        }
+      }
+    }
+    const resolveAssignee = (raw: string | null | undefined): string | null => {
+      if (!raw) return null;
+      const norm = (s: string) =>
+        s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      const target = norm(raw);
+      if (profileMap.has(target)) return profileMap.get(target) ?? null;
+      for (const [name, id] of profileMap.entries()) {
+        if (!name) continue;
+        if (target.includes(name) || name.includes(target)) return id;
+      }
+      return null;
+    };
+
     for (const row of validRows) {
       const t = row.parsed;
       const insertPayload = {
@@ -123,7 +159,7 @@ export async function POST(request: NextRequest) {
         progress: t.progress || 0,
         start_date: t.start_date || null,
         due_date: t.due_date || null,
-        assignee_id: null, // por enquanto string livre — vira FK depois via invite
+        assignee_id: resolveAssignee(t.assignee_id), // match nome→UUID do membro do workspace
         position: position++,
       };
 
