@@ -32,9 +32,50 @@ export function TaskDialog({
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [assigneeId, setAssigneeId] = useState<string>("");
+  const [assigneeName, setAssigneeName] = useState<string | null>(null);
+  const [assigneeStatus, setAssigneeStatus] = useState<string | null>(null);
   const [assignees, setAssignees] = useState<{ id: string; email: string; full_name: string | null }[]>([]);
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [inviting, setInviting] = useState(false);
+
+  // Convidar responsável pendente por email
+  async function handleInvite() {
+    if (!assigneeName || !workspaceId) return;
+    setInviting(true);
+    try {
+      const emailOrName = assigneeName.trim();
+      // Tenta descobrir se é email ou nome
+      const isEmail = emailOrName.includes("@");
+      const res = await fetch("/api/users/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: isEmail ? emailOrName : undefined,
+          name: isEmail ? undefined : emailOrName,
+          role: "member",
+          workspace_id: workspaceId,
+          send_email: true,
+        }),
+      });
+      if (res.ok) {
+        setAssigneeStatus("invited");
+        // Atualiza no banco também
+        const { updateTask } = useData?.() ?? {};
+        if (task?.id && updateTask) {
+          updateTask(task.id, { assignee_status: "invited" } as Record<string, unknown>).catch(console.error);
+        }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Erro ao enviar convite");
+      }
+    } catch (e) {
+      setError("Erro ao enviar convite");
+    } finally {
+      setInviting(false);
+    }
+  }
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   // Reset state quando abrir/fechar ou trocar task
@@ -50,6 +91,8 @@ export function TaskDialog({
       setStartDate(task.start_date ? task.start_date.split("T")[0] : "");
       setDueDate(task.due_date ? task.due_date.split("T")[0] : "");
       setAssigneeId((task as unknown as { assignee_id?: string | null }).assignee_id ?? "");
+      setAssigneeName(task.assignee_name ?? null);
+      setAssigneeStatus(task.assignee_status ?? null);
     } else {
       setTitle("");
       setDescription("");
@@ -59,6 +102,8 @@ export function TaskDialog({
       setStartDate(new Date().toISOString().split("T")[0]);
       setDueDate("");
       setAssigneeId("");
+      setAssigneeName(null);
+      setAssigneeStatus(null);
     }
     setError("");
 
@@ -71,15 +116,16 @@ export function TaskDialog({
       .eq("id", projectId)
       .maybeSingle()
       .then(({ data: proj }: { data: { workspace_id: string } | null }) => {
-        const workspaceId = proj?.workspace_id;
-        if (!workspaceId) {
+        const fetchedWsId = proj?.workspace_id;
+        setWorkspaceId(fetchedWsId ?? null);
+        if (!fetchedWsId) {
           setAssignees([]);
           return;
         }
         return supabase
           .from("workspace_members")
           .select("user_id")
-          .eq("workspace_id", workspaceId);
+          .eq("workspace_id", fetchedWsId);
       })
       .then((res: { data: { user_id: string }[] | null } | undefined) => {
         if (!res) return;
@@ -275,6 +321,30 @@ export function TaskDialog({
               </select>
               {assignees.length === 0 && (
                 <p className="text-xs text-slate-500">Nenhum membro encontrado neste workspace.</p>
+              )}
+              {/* Badge pendente: responsável não-cadastrado no workspace */}
+              {assigneeStatus === "pending" && assigneeName && (
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-xs text-amber-600 dark:text-amber-400">
+                    <AlertTriangle className="h-3 w-3" />
+                    Pendente: <strong>{assigneeName}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleInvite}
+                    disabled={inviting}
+                    className="inline-flex items-center gap-1 rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 disabled:opacity-50 transition-colors"
+                  >
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+                    {inviting ? "Enviando..." : `Convidar ${assigneeName.split(" ")[0]}`}
+                  </button>
+                </div>
+              )}
+              {assigneeStatus === "invited" && (
+                <div className="mt-1 flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+                  Convite pendente de aceite
+                </div>
               )}
             </div>
 

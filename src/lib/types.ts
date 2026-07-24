@@ -173,6 +173,8 @@ export type Database = {
           status: 'todo' | 'in_progress' | 'blocked' | 'review' | 'done'
           priority: 'low' | 'medium' | 'high' | 'critical'
           assignee_id: string | null
+          assignee_name: string | null
+          assignee_status: 'pending' | 'invited' | null
           start_date: string | null
           due_date: string | null
           progress: number
@@ -190,6 +192,8 @@ export type Database = {
           status?: 'todo' | 'in_progress' | 'blocked' | 'review' | 'done'
           priority?: 'low' | 'medium' | 'high' | 'critical'
           assignee_id?: string | null
+          assignee_name?: string | null
+          assignee_status?: 'pending' | 'invited' | null
           start_date?: string | null
           due_date?: string | null
           progress?: number
@@ -207,6 +211,8 @@ export type Database = {
           status?: 'todo' | 'in_progress' | 'blocked' | 'review' | 'done'
           priority?: 'low' | 'medium' | 'high' | 'critical'
           assignee_id?: string | null
+          assignee_name?: string | null
+          assignee_status?: "pending" | "invited" | null
           start_date?: string | null
           due_date?: string | null
           progress?: number

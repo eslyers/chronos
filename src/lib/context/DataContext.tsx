@@ -41,6 +41,8 @@ export type Task = {
   start_date: string | null; // ISO
   due_date: string | null; // ISO
   assignee_id: string | null;
+  assignee_name: string | null; // texto original quando assignee não é membro
+  assignee_status: "pending" | "invited" | null;
   position: number;
   parent_task_id: string | null; // WBS hierarchy
   created_at: string;
@@ -177,6 +179,8 @@ function seedMockData(): DataState {
       start_date: new Date().toISOString(),
       due_date: new Date(now.getTime() + 2 * 86400000).toISOString(),
       assignee_id: USER_ID,
+      assignee_name: null,
+      assignee_status: null,
       position: 0,
       parent_task_id: null,
       created_at: now.toISOString(),
@@ -194,6 +198,8 @@ function seedMockData(): DataState {
       start_date: new Date(now.getTime() - 1 * 86400000).toISOString(),
       due_date: new Date(now.getTime() + 1 * 86400000).toISOString(),
       assignee_id: USER_ID,
+      assignee_name: null,
+      assignee_status: null,
       position: 0,
       parent_task_id: null,
       created_at: now.toISOString(),
@@ -211,6 +217,8 @@ function seedMockData(): DataState {
       start_date: new Date(now.getTime() - 7 * 86400000).toISOString(),
       due_date: new Date(now.getTime() - 5 * 86400000).toISOString(),
       assignee_id: USER_ID,
+      assignee_name: null,
+      assignee_status: null,
       position: 0,
       parent_task_id: null,
       created_at: now.toISOString(),
@@ -229,6 +237,8 @@ function seedMockData(): DataState {
       start_date: new Date(now.getTime() + 5 * 86400000).toISOString(),
       due_date: new Date(now.getTime() + 14 * 86400000).toISOString(),
       assignee_id: USER_ID,
+      assignee_name: null,
+      assignee_status: null,
       position: 0,
       parent_task_id: null,
       created_at: now.toISOString(),
@@ -497,6 +507,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       start_date: data.start_date ?? null,
       due_date: data.due_date ?? null,
       assignee_id: data.assignee_id ?? userId,
+      assignee_name: data.assignee_name ?? null,
+      assignee_status: data.assignee_status ?? null,
       position: data.position ?? 0,
       parent_task_id: data.parent_task_id ?? null,
       created_at: now,

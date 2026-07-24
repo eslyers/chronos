@@ -65,6 +65,8 @@ type DbTask = {
   status: string;
   priority: string;
   assignee_id: string | null;
+  assignee_name: string | null;
+  assignee_status: string | null;
   start_date: string | null;
   due_date: string | null;
   progress: number;
@@ -123,6 +125,8 @@ function dbToTask(d: DbTask): Task {
     start_date: d.start_date,
     due_date: d.due_date,
     assignee_id: d.assignee_id,
+    assignee_name: d.assignee_name ?? null,
+    assignee_status: (d.assignee_status as Task["assignee_status"]) ?? null,
     position: 0,
     parent_task_id: (d as { parent_task_id?: string | null }).parent_task_id ?? null,
     created_at: d.created_at,

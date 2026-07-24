@@ -134,21 +134,26 @@ export async function POST(request: NextRequest) {
         }
       }
     }
-    const resolveAssignee = (raw: string | null | undefined): string | null => {
+    const resolveAssignee = (raw: string | null | undefined): { uuid: string; name: string } | null => {
       if (!raw) return null;
       const norm = (s: string) =>
         s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
       const target = norm(raw);
-      if (profileMap.has(target)) return profileMap.get(target) ?? null;
+      if (profileMap.has(target)) {
+        return { uuid: profileMap.get(target)!, name: raw };
+      }
       for (const [name, id] of profileMap.entries()) {
         if (!name) continue;
-        if (target.includes(name) || name.includes(target)) return id;
+        if (target.includes(name) || name.includes(target)) {
+          return { uuid: id, name: raw };
+        }
       }
       return null;
     };
 
     for (const row of validRows) {
       const t = row.parsed;
+      const resolved = resolveAssignee(t.assignee_id);
       const insertPayload = {
         project_id: projectId,
         stage_id: initialStageId,
@@ -159,7 +164,9 @@ export async function POST(request: NextRequest) {
         progress: t.progress || 0,
         start_date: t.start_date || null,
         due_date: t.due_date || null,
-        assignee_id: resolveAssignee(t.assignee_id), // match nome→UUID do membro do workspace
+        assignee_id: resolved?.uuid ?? null,
+        assignee_name: resolved ? null : (t.assignee_id ? String(t.assignee_id).trim() : null),
+        assignee_status: resolved ? null : (t.assignee_id ? "pending" : null),
         position: position++,
       };
 
