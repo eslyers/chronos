@@ -25,10 +25,11 @@ import {
 } from "@/components/StageEditor";
 
 const COLORS = [
-  { name: "Laranja", value: "#f97316" },
-  { name: "Âmbar", value: "#f59e0b" },
-  { name: "Verde", value: "#10b981" },
   { name: "Azul", value: "#3b82f6" },
+  { name: "Azul Marinho", value: "#1e40af" },
+  { name: "Índigo", value: "#6366f1" },
+  { name: "Verde", value: "#10b981" },
+  { name: "Esmeralda", value: "#059669" },
   { name: "Roxo", value: "#a855f7" },
   { name: "Rosa", value: "#ec4899" },
   { name: "Vermelho", value: "#ef4444" },
@@ -70,7 +71,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [color, setColor] = useState("#f97316");
+  const [color, setColor] = useState("#3b82f6");
   const [status, setStatus] = useState<"active" | "completed" | "archived">("active");
   const [startDate, setStartDate] = useState("");
   const [targetDate, setTargetDate] = useState("");
@@ -122,7 +123,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
       } else {
         setName("");
         setDescription("");
-        setColor("#f97316");
+        setColor("#3b82f6");
         setStatus("active");
         setStartDate(new Date().toISOString().split("T")[0]);
         setTargetDate("");
@@ -312,7 +313,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
           {!isEdit && (
             <div className="space-y-3 pt-2 border-t border-border">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-amber-500" />
+                <Sparkles className="h-4 w-4 text-blue-500" />
                 <label htmlFor="stages_mode" className="text-sm font-medium">
                   Etapas do Kanban
                 </label>
@@ -384,7 +385,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
               )}
 
               {stagesMode === "empty" && (
-                <div className="bg-amber-500/10 border border-amber-500/30 rounded-md p-3 text-xs text-amber-700 dark:text-amber-400">
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-3 text-xs text-blue-700 dark:text-blue-400">
                   ⚠️ Projeto será criado sem etapas. Você poderá adicionar manualmente na página do projeto depois.
                 </div>
               )}

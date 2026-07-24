@@ -263,7 +263,7 @@ export function TaskDialog({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               autoComplete="off"
-              className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-base ring-offset-background placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+              className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-base ring-offset-background placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
             />
           </div>
 
@@ -277,7 +277,7 @@ export function TaskDialog({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="flex min-h-[80px] w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-base ring-offset-background placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+              className="flex min-h-[80px] w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-base ring-offset-background placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
             />
           </div>
 
@@ -290,7 +290,7 @@ export function TaskDialog({
                 id="task-stage"
                 value={stageId}
                 onChange={(e) => setStageId(e.target.value)}
-                className="flex h-10 w-full items-center justify-between rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                className="flex h-10 w-full items-center justify-between rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 {stages.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -310,7 +310,7 @@ export function TaskDialog({
                 value={assigneeId}
                 onChange={(e) => setAssigneeId(e.target.value)}
                 disabled={assignees.length === 0}
-                className="flex h-10 w-full items-center justify-between rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:opacity-50"
+                className="flex h-10 w-full items-center justify-between rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
               >
                 <option value="">— Sem responsável —</option>
                 {assignees.map((a) => (
@@ -325,7 +325,7 @@ export function TaskDialog({
               {/* Badge pendente: responsável não-cadastrado no workspace */}
               {assigneeStatus === "pending" && assigneeName && (
                 <div className="mt-2 flex items-center gap-2 flex-wrap">
-                  <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-xs text-amber-600 dark:text-amber-400">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-blue-500/50 bg-blue-500/10 px-2 py-1 text-xs text-blue-600 dark:text-blue-400">
                     <AlertTriangle className="h-3 w-3" />
                     Pendente: <strong>{assigneeName}</strong>
                   </span>
@@ -333,7 +333,7 @@ export function TaskDialog({
                     type="button"
                     onClick={handleInvite}
                     disabled={inviting}
-                    className="inline-flex items-center gap-1 rounded-md border border-amber-500/50 bg-amber-500/10 px-2 py-1 text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 disabled:opacity-50 transition-colors"
+                    className="inline-flex items-center gap-1 rounded-md border border-blue-500/50 bg-blue-500/10 px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 disabled:opacity-50 transition-colors"
                   >
                     <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg>
                     {inviting ? "Enviando..." : `Convidar ${assigneeName.split(" ")[0]}`}
@@ -356,7 +356,7 @@ export function TaskDialog({
                 id="task-priority"
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as typeof priority)}
-                className="flex h-10 w-full items-center justify-between rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                className="flex h-10 w-full items-center justify-between rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <option value="low">⬇️ Baixa</option>
                 <option value="medium">➡️ Média</option>
@@ -376,7 +376,7 @@ export function TaskDialog({
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               />
             </div>
             <div className="space-y-2">
@@ -388,7 +388,7 @@ export function TaskDialog({
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               />
             </div>
           </div>
@@ -396,7 +396,7 @@ export function TaskDialog({
           <div className="space-y-2">
             <label className="text-sm font-medium flex justify-between">
               <span>Progresso</span>
-              <span className="text-amber-600 font-semibold">{progress}%</span>
+              <span className="text-blue-600 font-semibold">{progress}%</span>
             </label>
             <input
               type="range"
@@ -405,7 +405,7 @@ export function TaskDialog({
               step="5"
               value={progress}
               onChange={(e) => setProgress(Number(e.target.value))}
-              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
             />
             {progress === 100 && (
               <p className="text-xs text-emerald-600">✅ Tarefa será marcada como concluída</p>
@@ -431,7 +431,7 @@ export function TaskDialog({
             <button
               type="submit"
               disabled={loading}
-              className="h-10 px-4 rounded-md bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50 text-sm font-medium"
+              className="h-10 px-4 rounded-md bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50 text-sm font-medium"
             >
               {loading ? "Salvando..." : isEdit ? "Salvar" : "Criar tarefa"}
             </button>

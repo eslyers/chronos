@@ -22,7 +22,7 @@ const ROLE_ICONS: Record<WorkspaceRole, React.ComponentType<{ className?: string
 };
 
 const ROLE_COLORS: Record<WorkspaceRole, string> = {
-  owner: "bg-orange-500/15 text-orange-700 dark:text-orange-300",
+  owner: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
   admin: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
   member: "bg-sky-500/15 text-sky-700 dark:text-sky-300",
   viewer: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300",
@@ -82,7 +82,7 @@ export function MembersTable({ members, invites, isOwner, onRemove, onRevokeInvi
               <tr key={m.id} className="border-t hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-full bg-orange-500/15 text-orange-700 dark:text-orange-300 flex items-center justify-center text-xs font-semibold">
+                    <div className="h-9 w-9 rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 flex items-center justify-center text-xs font-semibold">
                       {initials}
                     </div>
                     <div>
@@ -129,10 +129,10 @@ export function MembersTable({ members, invites, isOwner, onRemove, onRevokeInvi
 
           {/* Convites pendentes */}
           {invites.map((invite) => (
-            <tr key={invite.token} className="border-t bg-amber-50/30 dark:bg-amber-950/10">
+            <tr key={invite.token} className="border-t bg-blue-50/30 dark:bg-blue-950/10">
               <td className="px-4 py-3">
                 <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center text-xs font-semibold">
+                  <div className="h-9 w-9 rounded-full bg-blue-500/15 text-blue-700 dark:text-blue-300 flex items-center justify-center text-xs font-semibold">
                     <Mail className="h-4 w-4" />
                   </div>
                   <div>
@@ -147,7 +147,7 @@ export function MembersTable({ members, invites, isOwner, onRemove, onRevokeInvi
                 </span>
               </td>
               <td className="px-4 py-3">
-                <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20">
+                <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20">
                   <Clock className="h-3 w-3 mr-1" />
                   Pendente
                 </Badge>

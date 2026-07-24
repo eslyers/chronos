@@ -264,7 +264,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <div className="flex items-center gap-2">
-            <FileSpreadsheet className="h-5 w-5 text-orange-500" />
+            <FileSpreadsheet className="h-5 w-5 text-blue-500" />
             <h2 className="text-lg font-semibold">Importar planilha de tarefas</h2>
           </div>
           <button onClick={() => onOpenChange(false)} className="text-muted-foreground hover:text-foreground">
@@ -293,12 +293,12 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                 handleFile(e.dataTransfer.files?.[0]);
               }}
               className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
-                dragOver ? "border-orange-500 bg-orange-500/5" : "border-zinc-300 dark:border-zinc-700"
+                dragOver ? "border-blue-500 bg-blue-500/5" : "border-zinc-300 dark:border-zinc-700"
               }`}
             >
               {loading ? (
                 <div className="space-y-3">
-                  <Loader2 className="h-10 w-10 mx-auto animate-spin text-orange-500" />
+                  <Loader2 className="h-10 w-10 mx-auto animate-spin text-blue-500" />
                   <p className="text-sm text-muted-foreground">Processando arquivo...</p>
                 </div>
               ) : (
@@ -307,7 +307,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                   <p className="text-base font-medium mb-1">Arraste sua planilha aqui</p>
                   <p className="text-sm text-muted-foreground mb-4">
                     ou{" "}
-                    <button onClick={() => inputRef.current?.click()} className="text-orange-500 hover:underline font-medium">
+                    <button onClick={() => inputRef.current?.click()} className="text-blue-500 hover:underline font-medium">
                       escolha um arquivo
                     </button>
                     {" "}(.xlsx, .xls, .ods, .csv)
@@ -353,7 +353,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                   }
                   color="green"
                 />
-                <StatBox label="Com avisos" value={preview.warningRows} color="amber" />
+                <StatBox label="Com avisos" value={preview.warningRows} color="yellow" />
                 <StatBox label="Com erro" value={preview.errorRows} color="red" />
               </div>
 
@@ -398,38 +398,38 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                           type="checkbox"
                           checked={isAllOnPageSelected}
                           onChange={toggleAllOnPage}
-                          className="h-4 w-4 rounded border-zinc-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+                          className="h-4 w-4 rounded border-zinc-300 text-blue-500 focus:ring-blue-500 cursor-pointer"
                           aria-label="Selecionar todas as linhas desta página"
                         />
                       </th>
                       <th className="px-2 py-2 text-left w-10">
-                        <button type="button" onClick={() => cycleSort("index")} className="inline-flex items-center gap-1 hover:text-orange-500 transition-colors">
+                        <button type="button" onClick={() => cycleSort("index")} className="inline-flex items-center gap-1 hover:text-blue-500 transition-colors">
                           #{sortKey === "index" && <span>{sortDir === "asc" ? "▲" : "▼"}</span>}
                         </button>
                       </th>
                       <th className="px-2 py-2 text-left">
-                        <button type="button" onClick={() => cycleSort("status")} className="inline-flex items-center gap-1 hover:text-orange-500 transition-colors">
+                        <button type="button" onClick={() => cycleSort("status")} className="inline-flex items-center gap-1 hover:text-blue-500 transition-colors">
                           Status {sortKey === "status" && <span>{sortDir === "asc" ? "▲" : "▼"}</span>}
                         </button>
                       </th>
                       <th className="px-2 py-2 text-left">
-                        <button type="button" onClick={() => cycleSort("title")} className="inline-flex items-center gap-1 hover:text-orange-500 transition-colors">
+                        <button type="button" onClick={() => cycleSort("title")} className="inline-flex items-center gap-1 hover:text-blue-500 transition-colors">
                           Título {sortKey === "title" && <span>{sortDir === "asc" ? "▲" : "▼"}</span>}
                         </button>
                       </th>
                       <th className="px-2 py-2 text-left">
-                        <button type="button" onClick={() => cycleSort("assignee_id")} className="inline-flex items-center gap-1 hover:text-orange-500 transition-colors">
+                        <button type="button" onClick={() => cycleSort("assignee_id")} className="inline-flex items-center gap-1 hover:text-blue-500 transition-colors">
                           Responsável {sortKey === "assignee_id" && <span>{sortDir === "asc" ? "▲" : "▼"}</span>}
                         </button>
                       </th>
                       <th className="px-2 py-2 text-left">
-                        <button type="button" onClick={() => cycleSort("due_date")} className="inline-flex items-center gap-1 hover:text-orange-500 transition-colors">
+                        <button type="button" onClick={() => cycleSort("due_date")} className="inline-flex items-center gap-1 hover:text-blue-500 transition-colors">
                           Prazo {sortKey === "due_date" && <span>{sortDir === "asc" ? "▲" : "▼"}</span>}
                         </button>
                       </th>
                       {preview.hasWBS && (
                         <th className="px-2 py-2 text-left">
-                          <button type="button" onClick={() => cycleSort("level")} className="inline-flex items-center gap-1 hover:text-orange-500 transition-colors">
+                          <button type="button" onClick={() => cycleSort("level")} className="inline-flex items-center gap-1 hover:text-blue-500 transition-colors">
                             Nível {sortKey === "level" && <span>{sortDir === "asc" ? "▲" : "▼"}</span>}
                           </button>
                         </th>
@@ -465,7 +465,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                         <select
                           value={pageSize}
                           onChange={(e) => setPageSize(Number(e.target.value) as (typeof PAGE_SIZE_OPTIONS)[number])}
-                          className="bg-transparent border rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-500"
+                          className="bg-transparent border rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                         >
                           {PAGE_SIZE_OPTIONS.map((s) => (
                             <option key={s} value={s}>{s}</option>
@@ -503,7 +503,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
           {/* Phase: Importing */}
           {phase === "importing" && (
             <div className="text-center py-12 space-y-3">
-              <Loader2 className="h-10 w-10 mx-auto animate-spin text-orange-500" />
+              <Loader2 className="h-10 w-10 mx-auto animate-spin text-blue-500" />
               <p className="text-base font-medium">Importando {preview?.validRows || 0} tarefas...</p>
               <p className="text-xs text-muted-foreground">Isso pode levar alguns segundos</p>
             </div>
@@ -545,7 +545,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                     0
                   ) || 0) === 0
                 }
-                className="bg-orange-500 hover:bg-orange-600"
+                className="bg-blue-500 hover:bg-blue-600"
               >
                 <Download className="h-4 w-4 mr-2" />
                 Importar{" "}
@@ -565,7 +565,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
             </>
           )}
           {phase === "done" && (
-            <Button onClick={() => onOpenChange(false)} className="bg-orange-500 hover:bg-orange-600">
+            <Button onClick={() => onOpenChange(false)} className="bg-blue-500 hover:bg-blue-600">
               Fechar
             </Button>
           )}
@@ -580,11 +580,11 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
   );
 }
 
-function StatBox({ label, value, color }: { label: string; value: number; color: "default" | "green" | "amber" | "red" }) {
+function StatBox({ label, value, color }: { label: string; value: number; color: "default" | "green" | "yellow" | "red" }) {
   const colors = {
     default: "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300",
     green: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300",
-    amber: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300",
+    yellow: "bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-300",
     red: "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300",
   };
   return (
@@ -711,7 +711,7 @@ function PreviewRow({
 
   const icon =
     effectiveStatus === "valid" ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> :
-    effectiveStatus === "warning" ? <AlertTriangle className="h-4 w-4 text-amber-500" /> :
+    effectiveStatus === "warning" ? <AlertTriangle className="h-4 w-4 text-blue-500" /> :
     <X className="h-4 w-4 text-red-500" />;
 
   const hasIssues = effectiveStatus !== "valid";
@@ -728,7 +728,7 @@ function PreviewRow({
             type="checkbox"
             checked={selected}
             onChange={() => onToggleSelect(row.index)}
-            className="h-4 w-4 rounded border-zinc-300 text-orange-500 focus:ring-orange-500 cursor-pointer"
+            className="h-4 w-4 rounded border-zinc-300 text-blue-500 focus:ring-blue-500 cursor-pointer"
             aria-label={`Selecionar linha ${row.index}`}
           />
         </td>
@@ -745,7 +745,7 @@ function PreviewRow({
             value={eff.title}
             placeholder="(sem título)"
             onChange={(e) => onUpdate(row.index, { title: e.target.value })}
-            className={`w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-orange-500 rounded px-1 py-0.5 text-sm ${!eff.title.trim() ? "italic text-red-500 placeholder-red-300" : "font-medium"}`}
+            className={`w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 text-sm ${!eff.title.trim() ? "italic text-red-500 placeholder-red-300" : "font-medium"}`}
           />
         </td>
         <td className="px-2 py-1" onClick={(e) => e.stopPropagation()}>
@@ -754,7 +754,7 @@ function PreviewRow({
             value={eff.assignee_id ?? ""}
             placeholder="—"
             onChange={(e) => onUpdate(row.index, { assignee_id: e.target.value || "" })}
-            className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-orange-500 rounded px-1 py-0.5 text-xs text-muted-foreground"
+            className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 text-xs text-muted-foreground"
           />
         </td>
         <td className="px-2 py-1" onClick={(e) => e.stopPropagation()}>
@@ -762,7 +762,7 @@ function PreviewRow({
             type="date"
             value={dueDate}
             onChange={(e) => onUpdate(row.index, { due_date: e.target.value })}
-            className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-orange-500 rounded px-1 py-0.5 text-xs text-muted-foreground"
+            className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 text-xs text-muted-foreground"
           />
         </td>
         {hasWBS && (
@@ -774,7 +774,7 @@ function PreviewRow({
               value={eff.level ?? ""}
               placeholder="—"
               onChange={(e) => onUpdate(row.index, { level: e.target.value ? Number(e.target.value) : 0 })}
-              className="w-14 bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-orange-500 rounded px-1 py-0.5 text-xs text-muted-foreground"
+              className="w-14 bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 text-xs text-muted-foreground"
             />
           </td>
         )}
@@ -795,8 +795,8 @@ function PreviewRow({
             )}
             {effectiveWarnings.length > 0 && (
               <div>
-                <p className="font-semibold text-amber-600 dark:text-amber-400 mb-1">⚠ Avisos (não bloqueiam import):</p>
-                <ul className="list-disc list-inside space-y-0.5 text-amber-700 dark:text-amber-300">
+                <p className="font-semibold text-blue-600 dark:text-blue-400 mb-1">⚠ Avisos (não bloqueiam import):</p>
+                <ul className="list-disc list-inside space-y-0.5 text-blue-700 dark:text-blue-300">
                   {effectiveWarnings.map((w, i) => (
                     <li key={i}>{w}</li>
                   ))}

@@ -60,7 +60,7 @@ export function taskDueEmailTemplate(params: {
 }): { subject: string; html: string } {
   const { taskTitle, projectName, dueDate, hoursUntil, taskUrl, assigneeName } = params;
 
-  const urgencyColor = hoursUntil <= 0 ? "#ef4444" : hoursUntil <= 24 ? "#f59e0b" : "#3b82f6";
+  const urgencyColor = hoursUntil <= 0 ? "#ef4444" : hoursUntil <= 24 ? "#1e40af" : "#3b82f6";
   const urgencyLabel = hoursUntil <= 0 ? "VENCE HOJE!" : hoursUntil <= 24 ? "Vence em 24h" : `Vence em ${hoursUntil}h`;
 
   const subject = `🕐 CHRONOS — ${urgencyLabel}: ${taskTitle}`;
@@ -75,7 +75,7 @@ export function taskDueEmailTemplate(params: {
 <body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
   <div style="max-width:600px;margin:0 auto;padding:32px 16px">
     <!-- Header -->
-    <div style="background:linear-gradient(135deg,#f97316,#ea580c);border-radius:12px 12px 0 0;padding:32px;color:white">
+    <div style="background:linear-gradient(135deg,#3b82f6,#1e40af);border-radius:12px 12px 0 0;padding:32px;color:white">
       <div style="font-size:14px;opacity:0.9;margin-bottom:8px">🕐 CHRONOS</div>
       <h1 style="margin:0;font-size:24px;font-weight:700">Lembrete de Tarefa</h1>
     </div>
@@ -112,7 +112,7 @@ export function taskDueEmailTemplate(params: {
       </div>
 
       <!-- CTA Button -->
-      <a href="${taskUrl}" style="display:block;background:linear-gradient(135deg,#f97316,#ea580c);color:white;text-align:center;text-decoration:none;padding:16px 32px;border-radius:8px;font-weight:600;font-size:16px;margin-bottom:24px">
+      <a href="${taskUrl}" style="display:block;background:linear-gradient(135deg,#3b82f6,#1e40af);color:white;text-align:center;text-decoration:none;padding:16px 32px;border-radius:8px;font-weight:600;font-size:16px;margin-bottom:24px">
         Ver tarefa no CHRONOS →
       </a>
 

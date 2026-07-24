@@ -17,7 +17,7 @@ import { useData } from "@/lib/context/DataContext";
 
 const PRIORITY_COLORS: Record<string, string> = {
   critical: "border-l-red-500 bg-red-50/50",
-  high: "border-l-orange-500 bg-orange-50/50",
+  high: "border-l-blue-500 bg-blue-50/50",
   medium: "border-l-blue-500 bg-blue-50/50",
   low: "border-l-slate-500 bg-slate-50/30",
 };
@@ -191,7 +191,7 @@ export default function CalendarPage() {
                 <p className="text-xs text-muted-foreground">Pendentes</p>
                 <p className="text-2xl font-bold mt-1">{stats.due}</p>
               </div>
-              <Clock className="h-5 w-5 text-amber-500" />
+              <Clock className="h-5 w-5 text-blue-500" />
             </div>
           </CardContent>
         </Card>

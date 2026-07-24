@@ -10,7 +10,7 @@ export default function Home() {
       icon: Calendar,
       title: "Timeline Gantt",
       description: "Visualize etapas em barras temporais com drag-and-drop e dependências.",
-      color: "text-amber-500",
+      color: "text-blue-500",
     },
     {
       icon: KanbanSquare,
@@ -88,7 +88,7 @@ export default function Home() {
             </div>
             <h1 className="mt-6 text-5xl md:text-6xl font-bold tracking-tight">
               Cronograma{" "}
-              <span className="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-blue-500 via-blue-500 to-rose-500 bg-clip-text text-transparent">
                 visual
               </span>{" "}
               para quem precisa avisar a hora
@@ -151,7 +151,7 @@ export default function Home() {
       {/* CTA */}
       <section className="py-20 md:py-28">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="rounded-2xl bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 p-1">
+          <div className="rounded-2xl bg-gradient-to-br from-blue-500 via-blue-500 to-rose-500 p-1">
             <div className="rounded-2xl bg-background p-12">
               <h2 className="text-3xl md:text-4xl font-bold tracking-tight">
                 Pronto para nunca mais perder um prazo?

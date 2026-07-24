@@ -51,7 +51,7 @@ export function InviteDialog({ open, onOpenChange, onInvite }: InviteDialogProps
       <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <div className="flex items-center gap-2">
-            <Mail className="h-5 w-5 text-orange-500" />
+            <Mail className="h-5 w-5 text-blue-500" />
             <h2 className="text-lg font-semibold">Convidar membro</h2>
           </div>
           <button onClick={() => onOpenChange(false)} className="text-muted-foreground hover:text-foreground">
@@ -87,7 +87,7 @@ export function InviteDialog({ open, onOpenChange, onInvite }: InviteDialogProps
                   disabled={loading}
                   className={`px-3 py-2 rounded-md border text-sm font-medium transition-colors ${
                     role === r
-                      ? "border-orange-500 bg-orange-500/10 text-orange-700 dark:text-orange-300"
+                      ? "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
                       : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300"
                   }`}
                 >
@@ -103,7 +103,7 @@ export function InviteDialog({ open, onOpenChange, onInvite }: InviteDialogProps
               checked={sendEmail}
               onChange={(e) => setSendEmail(e.target.checked)}
               disabled={loading}
-              className="h-4 w-4 rounded border-zinc-300 text-orange-500 focus:ring-orange-500"
+              className="h-4 w-4 rounded border-zinc-300 text-blue-500 focus:ring-blue-500"
             />
             <span>Enviar email de convite (recomendado)</span>
           </label>
@@ -127,7 +127,7 @@ export function InviteDialog({ open, onOpenChange, onInvite }: InviteDialogProps
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading} className="bg-orange-500 hover:bg-orange-600">
+            <Button type="submit" disabled={loading} className="bg-blue-500 hover:bg-blue-600">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enviar convite"}
             </Button>
           </div>

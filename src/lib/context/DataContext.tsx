@@ -121,7 +121,7 @@ function defaultStagesForProject(projectId: string): Stage[] {
   return [
     { id: generateId("stage"), project_id: projectId, name: "Backlog", color: "#94a3b8", position: 0, is_done: false },
     { id: generateId("stage"), project_id: projectId, name: "A Fazer", color: "#3b82f6", position: 1, is_done: false },
-    { id: generateId("stage"), project_id: projectId, name: "Em Progresso", color: "#f59e0b", position: 2, is_done: false },
+    { id: generateId("stage"), project_id: projectId, name: "Em Progresso", color: "#3b82f6", position: 2, is_done: false },
     { id: generateId("stage"), project_id: projectId, name: "Em Revisão", color: "#a855f7", position: 3, is_done: false },
     { id: generateId("stage"), project_id: projectId, name: "Concluído", color: "#10b981", position: 4, is_done: true },
   ];
@@ -141,7 +141,7 @@ function seedMockData(): DataState {
     owner_id: USER_ID,
     name: "CHRONOS MVP",
     description: "Sistema de gestão de cronograma — Sprint 2 em diante",
-    color: "#f97316",
+    color: "#3b82f6",
     status: "active",
     start_date: new Date(now.getTime() - 14 * 86400000).toISOString(),
     target_date: new Date(now.getTime() + 30 * 86400000).toISOString(),
@@ -210,7 +210,7 @@ function seedMockData(): DataState {
       project_id: projectId1,
       stage_id: stagesP1[4].id, // Concluído
       title: "Definir identidade visual",
-      description: "Paleta amber/orange + tipografia + logo conceitual",
+      description: "Paleta azul corporativa + tipografia + logo conceitual",
       priority: "medium",
       status: "done",
       progress: 100,
@@ -375,7 +375,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       owner_id: userId,
       name: data.name ?? "Novo Projeto",
       description: data.description ?? null,
-      color: data.color ?? "#f97316",
+      color: data.color ?? "#3b82f6",
       status: data.status ?? "active",
       start_date: data.start_date ?? null,
       target_date: data.target_date ?? null,

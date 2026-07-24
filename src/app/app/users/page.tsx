@@ -172,7 +172,7 @@ export default function UsersPage() {
         </div>
 
         {isOwner && (
-          <Button onClick={() => setInviteDialogOpen(true)} className="bg-orange-500 hover:bg-orange-600">
+          <Button onClick={() => setInviteDialogOpen(true)} className="bg-blue-500 hover:bg-blue-600">
             <Mail className="h-4 w-4 mr-2" />
             Convidar
           </Button>
@@ -182,8 +182,8 @@ export default function UsersPage() {
       {/* Stats rápidos */}
       <div className="grid grid-cols-3 gap-3">
         <StatBox label="Total de membros" value={memberCount} color="default" />
-        <StatBox label="Convites pendentes" value={pendingCount} color={pendingCount > 0 ? "amber" : "default"} />
-        <StatBox label="Seu papel" value={currentUserRole === "owner" ? "Dono" : currentUserRole === "admin" ? "Admin" : currentUserRole === "member" ? "Membro" : "Visualizador"} color={isOwner ? "orange" : "default"} />
+        <StatBox label="Convites pendentes" value={pendingCount} color={pendingCount > 0 ? "yellow" : "default"} />
+        <StatBox label="Seu papel" value={currentUserRole === "owner" ? "Dono" : currentUserRole === "admin" ? "Admin" : currentUserRole === "member" ? "Membro" : "Visualizador"} color={isOwner ? "yellow" : "default"} />
       </div>
 
       {/* Demo mode alert */}
@@ -220,11 +220,10 @@ export default function UsersPage() {
   );
 }
 
-function StatBox({ label, value, color }: { label: string; value: string | number; color: "default" | "amber" | "orange" }) {
+function StatBox({ label, value, color }: { label: string; value: string | number; color: "default" | "yellow" }) {
   const colors = {
     default: "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300",
-    amber: "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300",
-    orange: "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300",
+    yellow: "bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-300",
   };
   return (
     <div className={`rounded-lg p-4 ${colors[color]}`}>

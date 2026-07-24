@@ -138,7 +138,7 @@ export default function DashboardPage() {
   })();
 
   const healthColor =
-    healthScore >= 80 ? "text-emerald-500" : healthScore >= 50 ? "text-amber-500" : "text-red-500";
+    healthScore >= 80 ? "text-emerald-500" : healthScore >= 50 ? "text-blue-500" : "text-red-500";
 
   function formatDate(iso: string | null) {
     if (!iso) return "";
@@ -200,7 +200,7 @@ export default function DashboardPage() {
                   de {totalProjects} total
                 </p>
               </div>
-              <FolderKanban className="h-8 w-8 text-orange-500" />
+              <FolderKanban className="h-8 w-8 text-blue-500" />
             </div>
           </CardContent>
         </Card>
@@ -294,7 +294,7 @@ export default function DashboardPage() {
                     >
                       <div
                         className="w-1.5 h-12 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: task.projects?.color || "#f97316" }}
+                        style={{ backgroundColor: task.projects?.color || "#3b82f6" }}
                       />
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{task.title}</p>
@@ -315,9 +315,9 @@ export default function DashboardPage() {
                             overdue
                               ? "text-destructive"
                               : dueToday
-                              ? "text-amber-600 dark:text-amber-400"
+                              ? "text-blue-600 dark:text-blue-400"
                               : dueSoon
-                              ? "text-amber-600 dark:text-amber-400"
+                              ? "text-blue-600 dark:text-blue-400"
                               : "text-muted-foreground"
                           }`}
                         >

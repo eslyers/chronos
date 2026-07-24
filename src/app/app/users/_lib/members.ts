@@ -121,7 +121,7 @@ export const demoMembers: {
       full_name: "Owner (demo)",
       role: "owner",
       status: "active",
-      avatar_color: "#f97316",
+      avatar_color: "#3b82f6",
     };
     writeJSON(DEMO_MEMBERS_KEY, [owner]);
   },

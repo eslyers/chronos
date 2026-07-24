@@ -39,7 +39,7 @@ export interface StageDraft {
 const PRESET_COLORS = [
   "#94a3b8", // slate (Backlog)
   "#3b82f6", // blue
-  "#f59e0b", // amber
+  "#3b82f6", // yellow
   "#a855f7", // purple
   "#10b981", // emerald (Concluído)
   "#ec4899", // pink
@@ -285,7 +285,7 @@ export function defaultStagesAsDrafts(): StageDraft[] {
   return [
     { localId: nextLocalId(), name: "Backlog", color: "#94a3b8", is_done: false },
     { localId: nextLocalId(), name: "A Fazer", color: "#3b82f6", is_done: false },
-    { localId: nextLocalId(), name: "Em Progresso", color: "#f59e0b", is_done: false },
+    { localId: nextLocalId(), name: "Em Progresso", color: "#3b82f6", is_done: false },
     { localId: nextLocalId(), name: "Em Revisão", color: "#a855f7", is_done: false },
     { localId: nextLocalId(), name: "Concluído", color: "#10b981", is_done: true },
   ];

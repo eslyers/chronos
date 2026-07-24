@@ -37,7 +37,7 @@ const SAMPLE_TASKS: GanttTask[] = [
     type: "task",
     progress: 60,
     project: "p-1",
-    styles: { backgroundColor: "#60a5fa", backgroundSelectedColor: "#fbbf24", progressColor: "#ffffff", progressSelectedColor: "#ffffff" },
+    styles: { backgroundColor: "#60a5fa", backgroundSelectedColor: "#1e40af", progressColor: "#ffffff", progressSelectedColor: "#ffffff" },
   },
   {
     start: new Date(2026, 6, 19),
@@ -47,7 +47,7 @@ const SAMPLE_TASKS: GanttTask[] = [
     type: "task",
     progress: 30,
     project: "p-1",
-    styles: { backgroundColor: "#fb923c", backgroundSelectedColor: "#f59e0b", progressColor: "#ffffff", progressSelectedColor: "#ffffff" },
+    styles: { backgroundColor: "#fb923c", backgroundSelectedColor: "#3b82f6", progressColor: "#ffffff", progressSelectedColor: "#ffffff" },
   },
   {
     start: new Date(2026, 6, 14),
@@ -105,7 +105,7 @@ export default function DemoGanttDark() {
           Esta página renderiza o Gantt em dark mode SEM precisar de login.
           Use pra validar visualmente as cores do calendário.
           <br />
-          <span className="text-amber-600 dark:text-amber-400 font-semibold">
+          <span className="text-blue-600 dark:text-blue-400 font-semibold">
             ✨ NOVO: Clique em uma task (row ou barra) pra abrir o popup de edição!
           </span>
         </p>

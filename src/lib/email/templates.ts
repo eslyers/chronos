@@ -4,9 +4,9 @@
 // Todos retornam { subject, html } prontos pra sendEmail()
 // ─────────────────────────────────────────────────────────────
 
-const ORANGE_GRADIENT = "linear-gradient(135deg,#f97316,#ea580c)";
+const BRAND_GRADIENT = "linear-gradient(135deg,#3b82f6,#1e40af)";
 const CRITICAL = "#ef4444";
-const HIGH = "#f59e0b";
+const HIGH = "#1e40af";
 const MEDIUM = "#3b82f6";
 const LOW = "#22c55e";
 
@@ -32,7 +32,7 @@ function baseHtml(opts: {
     : "";
 
   const cta = opts.ctaUrl
-    ? `<a href="${opts.ctaUrl}" style="display:block;background:${ORANGE_GRADIENT};color:white;text-align:center;text-decoration:none;padding:16px 32px;border-radius:8px;font-weight:600;font-size:16px;margin-bottom:24px">${opts.ctaLabel ?? "Ver no CHRONOS →"}</a>`
+    ? `<a href="${opts.ctaUrl}" style="display:block;background:${BRAND_GRADIENT};color:white;text-align:center;text-decoration:none;padding:16px 32px;border-radius:8px;font-weight:600;font-size:16px;margin-bottom:24px">${opts.ctaLabel ?? "Ver no CHRONOS →"}</a>`
     : "";
 
   const footer = opts.footer ??
@@ -46,7 +46,7 @@ function baseHtml(opts: {
 </head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
   <div style="max-width:600px;margin:0 auto;padding:32px 16px">
-    <div style="background:${ORANGE_GRADIENT};border-radius:12px 12px 0 0;padding:32px;color:white">
+    <div style="background:${BRAND_GRADIENT};border-radius:12px 12px 0 0;padding:32px;color:white">
       <div style="font-size:14px;opacity:0.9;margin-bottom:8px">🕐 CHRONOS</div>
       <h1 style="margin:0;font-size:24px;font-weight:700">${escapeHtml(opts.title)}</h1>
     </div>
@@ -185,7 +185,7 @@ export function statusChangedEmailTemplate(params: {
         <span style="font-size:14px;color:#1e293b;font-weight:700">${statusEmoji[params.newStatus] ?? "•"} ${escapeHtml(params.newStatus)}</span>
       </div>
       ${params.changedBy ? `<p style="margin:0 0 16px;color:#64748b;font-size:14px">Movido por <strong>${escapeHtml(params.changedBy)}</strong></p>` : ""}
-      ${params.comment ? `<blockquote style="margin:0 0 16px;padding:12px 16px;border-left:3px solid #f97316;background:#fff7ed;color:#1e293b;font-size:14px">${escapeHtml(params.comment)}</blockquote>` : ""}
+      ${params.comment ? `<blockquote style="margin:0 0 16px;padding:12px 16px;border-left:3px solid #3b82f6;background:#eff6ff;color:#1e293b;font-size:14px">${escapeHtml(params.comment)}</blockquote>` : ""}
       <p style="margin:0;color:#64748b;font-size:14px">📁 <strong>${escapeHtml(params.projectName)}</strong></p>
     `,
   });

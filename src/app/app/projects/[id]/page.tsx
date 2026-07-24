@@ -17,7 +17,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 const PRIORITY_COLORS = {
   low: { bg: "bg-slate-500/15", text: "text-slate-600 dark:text-slate-400", label: "Baixa" },
   medium: { bg: "bg-blue-500/15", text: "text-blue-600 dark:text-blue-400", label: "Média" },
-  high: { bg: "bg-amber-500/15", text: "text-amber-600 dark:text-amber-400", label: "Alta" },
+  high: { bg: "bg-blue-500/15", text: "text-blue-600 dark:text-blue-400", label: "Alta" },
   critical: { bg: "bg-red-500/15", text: "text-red-600 dark:text-red-400", label: "Crítica" },
 };
 
@@ -274,7 +274,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                                 overdue
                                   ? "text-destructive font-semibold"
                                   : dueSoon
-                                  ? "text-amber-600 dark:text-amber-400 font-medium"
+                                  ? "text-blue-600 dark:text-blue-400 font-medium"
                                   : "text-muted-foreground"
                               }`}
                             >

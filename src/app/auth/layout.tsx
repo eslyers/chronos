@@ -26,7 +26,7 @@ export default function AuthLayout({
         </div>
       </div>
 
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-500 via-blue-500 to-rose-500 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_white/10_1px,_transparent_1px)] bg-[size:24px_24px]"></div>
         <div className="relative w-full flex items-center justify-center p-12">
           <div className="space-y-8 max-w-lg text-white">

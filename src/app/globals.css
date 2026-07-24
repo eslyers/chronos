@@ -10,7 +10,7 @@
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 24 95% 53%;
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 98%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
@@ -22,9 +22,9 @@
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 24 95% 53%;
+    --ring: 217 91% 60%;
     --radius: 0.5rem;
-    --chart-1: 24 95% 53%;
+    --chart-1: 217 91% 60%;
     --chart-2: 197 37% 24%;
     --chart-3: 173 58% 39%;
     --chart-4: 280 65% 60%;
@@ -38,7 +38,7 @@
     --card-foreground: 210 40% 98%;
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
-    --primary: 24 95% 53%;
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 9%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
@@ -50,7 +50,7 @@
     --destructive-foreground: 210 40% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 24 95% 53%;
+    --ring: 217 91% 60%;
   }
 }
 
@@ -101,16 +101,16 @@
   --gantt-cal-header-bg: hsl(210 40% 98%);
   --gantt-cal-text: hsl(222.2 47.4% 11.2%);
   --gantt-cal-text-muted: hsl(215.4 16.3% 46.9%);
-  --gantt-today-line: hsl(24 95% 53% / 0.6);
+  --gantt-today-line: hsl(217 91% 60% / 0.6);
 
   /* Bars (priority) */
   --gantt-bar-low: hsl(199 89% 48%);        /* sky-500 */
   --gantt-bar-medium: hsl(217 91% 60%);     /* blue-500 */
-  --gantt-bar-high: hsl(38 92% 50%);        /* amber-500 */
+  --gantt-bar-high: hsl(38 92% 50%);        /* blue-500 */
   --gantt-bar-critical: hsl(0 84% 60%);     /* red-500 */
   --gantt-bar-project: hsl(215 16% 47%);    /* slate-500 */
   --gantt-bar-project-selected: hsl(215 19% 35%);
-  --gantt-bar-selected-ring: hsl(24 95% 53%);
+  --gantt-bar-selected-ring: hsl(217 91% 60%);
 
   /* Tooltip */
   --gantt-tooltip-bg: hsl(222.2 47.4% 11.2%);
@@ -191,7 +191,7 @@
 /* Deep-link highlight: quando URL tem ?task=<id>, scroll ate a task e pisca */
 .task-highlight-flash {
   animation: task-flash 2.5s ease-out;
-  border-color: #f97316 !important;
+  border-color: #3b82f6 !important;
   box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.4) !important;
 }
 

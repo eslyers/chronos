@@ -33,7 +33,7 @@ function paletteFor(isDark: boolean) {
     ? {
         // Barras (task bars) — gradient sutil, contrast forte no dark
         barBackground: "#3b82f6",          // blue-500 (default p/ task sem priority)
-        barBackgroundSelected: "#fbbf24",  // amber-400 (laranja-amarelado)
+        barBackgroundSelected: "#3b82f6",  // blue-400 (laranja-amarelado)
         // Project bars (linha pai) — mais neutra
         projectBackground: "#475569",      // slate-600
         projectBackgroundSelected: "#94a3b8", // slate-400
@@ -46,11 +46,11 @@ function paletteFor(isDark: boolean) {
         milestoneBackground: "#f87171",    // red-400
         milestoneSelected: "#ef4444",      // red-500
         // Linha "hoje"
-        todayColor: "rgba(251, 146, 60, 0.7)", // orange-400
+        todayColor: "rgba(251, 146, 60, 0.7)", // blue-400
       }
     : {
         barBackground: "#3b82f6",          // blue-500
-        barBackgroundSelected: "#f59e0b",  // amber-500 (laranja queimado = accent)
+        barBackgroundSelected: "#1e40af",  // blue-500 (laranja queimado = accent)
         projectBackground: "#94a3b8",      // slate-400
         projectBackgroundSelected: "#475569", // slate-600
         projectProgress: "#16a34a",        // green-600
@@ -58,7 +58,7 @@ function paletteFor(isDark: boolean) {
         arrowColor: "#475569",              // slate-600
         milestoneBackground: "#ef4444",     // red-500
         milestoneSelected: "#b91c1c",       // red-700
-        todayColor: "rgba(234, 88, 12, 0.6)", // orange-600
+        todayColor: "rgba(37, 99, 235, 0.6)", // blue-600
       };
 }
 
@@ -66,7 +66,7 @@ function paletteFor(isDark: boolean) {
 const PRIORITY_PALETTE: Record<string, { light: string; dark: string }> = {
   low:      { light: "#0ea5e9", dark: "#38bdf8" },      // sky
   medium:   { light: "#3b82f6", dark: "#60a5fa" },      // blue
-  high:     { light: "#f59e0b", dark: "#fbbf24" },      // amber
+  high:     { light: "#1e40af", dark: "#3b82f6" },      // blue-700/500 (corporativo)
   critical: { light: "#ef4444", dark: "#f87171" },      // red
 };
 
@@ -284,7 +284,7 @@ export default function TimelinePage() {
                 <p className="text-xs text-muted-foreground">Projetos</p>
                 <p className="text-3xl font-bold mt-1">{stats.totalProjects}</p>
               </div>
-              <FolderKanban className="h-8 w-8 text-orange-500" />
+              <FolderKanban className="h-8 w-8 text-blue-500" />
             </div>
           </CardContent>
         </Card>
@@ -505,7 +505,7 @@ export default function TimelinePage() {
               <span>Média</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-6 h-2 rounded bg-amber-500" />
+              <div className="w-6 h-2 rounded bg-blue-500" />
               <span>Alta</span>
             </div>
             <div className="flex items-center gap-2">

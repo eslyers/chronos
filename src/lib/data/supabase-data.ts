@@ -217,7 +217,7 @@ export async function createProject(input: {
       workspace_id: input.workspace_id,
       name: input.name,
       description: input.description ?? null,
-      color: input.color ?? "#f97316",
+      color: input.color ?? "#3b82f6",
       created_by: input.created_by,
     } as any)
     .select()
@@ -234,7 +234,7 @@ export async function createDefaultStages(projectId: string): Promise<Stage[]> {
   const stages = [
     { name: "Backlog", color: "#94a3b8", sort_order: 0, is_done: false },
     { name: "A Fazer", color: "#3b82f6", sort_order: 1, is_done: false },
-    { name: "Em Progresso", color: "#f59e0b", sort_order: 2, is_done: false },
+    { name: "Em Progresso", color: "#3b82f6", sort_order: 2, is_done: false },
     { name: "Em Revisão", color: "#a855f7", sort_order: 3, is_done: false },
     { name: "Concluído", color: "#10b981", sort_order: 4, is_done: true },
   ];
@@ -346,7 +346,7 @@ export async function createStage(input: {
   const payload: any = {
     project_id: input.project_id,
     name: input.name,
-    color: input.color ?? "#f97316",
+    color: input.color ?? "#3b82f6",
     sort_order: input.sort_order,
     wip_limit: input.wip_limit ?? null,
   };

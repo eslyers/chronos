@@ -48,7 +48,7 @@ type StageLike = {
 
 const PRIORITY_COLORS = {
   critical: "border-red-500",
-  high: "border-orange-500",
+  high: "border-blue-500",
   medium: "border-blue-500",
   low: "border-slate-500",
 } as const;
@@ -122,7 +122,7 @@ function TaskCard({
                 task.priority === "critical"
                   ? "#ef4444"
                   : task.priority === "high"
-                    ? "#f97316"
+                    ? "#3b82f6"
                     : task.priority === "medium"
                       ? "#3b82f6"
                       : "#64748b",

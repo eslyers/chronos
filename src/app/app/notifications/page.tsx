@@ -35,7 +35,7 @@ const TYPE_LABELS: Record<
   string,
   { label: string; icon: React.ReactNode; color: string }
 > = {
-  due_soon: { label: "Prazo próximo", icon: <Clock className="h-3 w-3" />, color: "bg-amber-500/10 text-amber-700" },
+  due_soon: { label: "Prazo próximo", icon: <Clock className="h-3 w-3" />, color: "bg-blue-500/10 text-blue-700" },
   overdue: { label: "Tarefa atrasada", icon: <AlertCircle className="h-3 w-3" />, color: "bg-red-500/10 text-red-700" },
   stage_change: { label: "Mudou de etapa", icon: <CheckCircle2 className="h-3 w-3" />, color: "bg-blue-500/10 text-blue-700" },
   assigned: { label: "Tarefa atribuída", icon: <Bell className="h-3 w-3" />, color: "bg-purple-500/10 text-purple-700" },
