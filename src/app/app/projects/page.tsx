@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { useData, type Project } from "@/lib/context/DataContext";
 import { ProjectDialog } from "@/components/ProjectDialog";
 import { ImportProjectButton } from "@/components/ImportProjectButton";
+import { ConfirmDialog, useConfirmDialog } from "@/components/ConfirmDialog";
 
 export default function ProjectsPage() {
   const { projects, tasks, getTasksByProject, deleteProject, loading } = useData();
@@ -28,8 +29,18 @@ export default function ProjectsPage() {
   }
 
   async function handleDelete(project: Project) {
-    if (!confirm(`Excluir o projeto "${project.name}"? Esta ação não pode ser desfeita.`)) return;
     await deleteProject(project.id);
+  }
+
+  const deleteConfirm = useConfirmDialog();
+  function askDelete(project: Project) {
+    deleteConfirm.confirm({
+      title: `Excluir "${project.name}"?`,
+      description: "Esta ação não pode ser desfeita. Todas as tasks, estágios e dependências do projeto serão removidos.",
+      variant: "destructive",
+      confirmText: "Excluir projeto",
+      onConfirm: () => handleDelete(project),
+    });
   }
 
   function formatDate(iso: string | null): string {
@@ -164,7 +175,7 @@ export default function ProjectsPage() {
                         <Edit className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => handleDelete(project)}
+                        onClick={() => askDelete(project)}
                         className="p-1.5 rounded-md hover:bg-destructive/10 text-destructive"
                         title="Excluir"
                       >
@@ -227,6 +238,7 @@ export default function ProjectsPage() {
         onOpenChange={setDialogOpen}
         project={editingProject}
       />
+      {deleteConfirm.dialog}
     </div>
   );
 }

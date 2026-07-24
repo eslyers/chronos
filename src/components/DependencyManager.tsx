@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Link2, Plus, Trash2, Loader2, Info } from "lucide-react";
 import { useData, type Task, type TaskDependency } from "@/lib/context/DataContext";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type DepType = "FS" | "SS" | "FF" | "SF";
 
@@ -54,6 +55,7 @@ export function DependencyManager({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [depToRemove, setDepToRemove] = useState<TaskDependency | null>(null);
 
   const projectTasks = useMemo(
     () => getTasksByProject(projectId),
@@ -110,12 +112,15 @@ export function DependencyManager({
   };
 
   const handleRemove = async (dep: TaskDependency) => {
-    if (!confirm(`Remover essa dependência?`)) return;
     try {
       await removeDependency(dep.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao remover");
     }
+  };
+
+  const askRemove = (dep: TaskDependency) => {
+    setDepToRemove(dep);
   };
 
   return (
@@ -264,7 +269,7 @@ export function DependencyManager({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleRemove(dep)}
+                      onClick={() => askRemove(dep)}
                       className="text-destructive hover:text-destructive h-7 w-7 p-0"
                       title="Remover"
                     >
@@ -277,6 +282,17 @@ export function DependencyManager({
           )}
         </div>
       </DialogContent>
+      <ConfirmDialog
+        open={!!depToRemove}
+        onOpenChange={(o) => !o && setDepToRemove(null)}
+        title="Remover essa dependência?"
+        description="A relação entre as duas tarefas será desfeita."
+        variant="destructive"
+        confirmText="Remover"
+        onConfirm={async () => {
+          if (depToRemove) await handleRemove(depToRemove);
+        }}
+      />
     </Dialog>
   );
 }

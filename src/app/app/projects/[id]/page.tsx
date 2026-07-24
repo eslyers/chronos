@@ -12,6 +12,7 @@ import { ProjectDialog } from "@/components/ProjectDialog";
 import { TaskDialog } from "@/components/TaskDialog";
 import { TaskAssignee } from "@/components/TaskAssignee";
 import { ImportProjectButton } from "@/components/ImportProjectButton";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 const PRIORITY_COLORS = {
   low: { bg: "bg-slate-500/15", text: "text-slate-600 dark:text-slate-400", label: "Baixa" },
@@ -40,6 +41,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [activeStageId, setActiveStageId] = useState<string | null>(null);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [deleteTaskTarget, setDeleteTaskTarget] = useState<Task | null>(null);
 
   // Deep-link: se URL tem ?task=<id>, abre o dialog da task e scrolla ate ela
   useEffect(() => {
@@ -248,7 +250,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (confirm(`Excluir "${task.title}"?`)) deleteTask(task.id);
+                              setDeleteTaskTarget(task);
                             }}
                             className="opacity-0 group-hover:opacity-100 text-destructive p-0.5"
                           >
@@ -331,6 +333,18 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         task={editingTask}
         defaultStageId={activeStageId}
         projectId={project.id}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTaskTarget}
+        onOpenChange={(o) => !o && setDeleteTaskTarget(null)}
+        title={`Excluir "${deleteTaskTarget?.title}"?`}
+        description="Esta ação não pode ser desfeita."
+        variant="destructive"
+        confirmText="Excluir"
+        onConfirm={async () => {
+          if (deleteTaskTarget) await deleteTask(deleteTaskTarget.id);
+        }}
       />
     </div>
   );

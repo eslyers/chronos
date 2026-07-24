@@ -23,6 +23,7 @@ import {
   Info,
 } from "lucide-react";
 import { useData, type Task } from "@/lib/context/DataContext";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type TreeNode = {
   task: Task;
@@ -74,6 +75,7 @@ export function TaskHierarchy({ projectId }: { projectId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
 
   const projectTasks = useMemo(
     () => getTasksByProject(projectId),
@@ -116,13 +118,14 @@ export function TaskHierarchy({ projectId }: { projectId: string }) {
   };
 
   const handleDelete = async (task: Task) => {
-    if (!confirm(`Excluir "${task.title}" e todas as sub-tarefas?`)) return;
     try {
       await deleteTask(task.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao excluir");
     }
   };
+
+  const askDelete = (task: Task) => setDeleteTarget(task);
 
   const toggleCollapse = (id: string) => {
     setCollapsed((prev) => {
@@ -181,7 +184,7 @@ export function TaskHierarchy({ projectId }: { projectId: string }) {
             <Plus className="h-3.5 w-3.5" />
           </button>
           <button
-            onClick={() => handleDelete(node.task)}
+            onClick={() => askDelete(node.task)}
             className="opacity-0 group-hover:opacity-100 transition-opacity text-xs text-destructive hover:underline"
             title="Excluir"
           >
@@ -277,6 +280,17 @@ export function TaskHierarchy({ projectId }: { projectId: string }) {
           </div>
         </div>
       </DialogContent>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={`Excluir "${deleteTarget?.title}" e todas as sub-tarefas?`}
+        description="Todas as sub-tarefas vinculadas também serão removidas. Esta ação não pode ser desfeita."
+        variant="destructive"
+        confirmText="Excluir tudo"
+        onConfirm={async () => {
+          if (deleteTarget) await handleDelete(deleteTarget);
+        }}
+      />
     </Dialog>
   );
 }

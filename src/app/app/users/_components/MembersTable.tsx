@@ -4,6 +4,7 @@ import * as React from "react";
 import { Trash2, Shield, User as UserIcon, Eye, Mail, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { Member, InviteToken, WorkspaceRole } from "../_lib/members";
 
 const ROLE_LABELS: Record<WorkspaceRole, string> = {
@@ -44,6 +45,9 @@ interface MembersTableProps {
 }
 
 export function MembersTable({ members, invites, isOwner, onRemove, onRevokeInvite, onResendInvite }: MembersTableProps) {
+  const [removeTarget, setRemoveTarget] = React.useState<Member | null>(null);
+  const [revokeTarget, setRevokeTarget] = React.useState<InviteToken | null>(null);
+
   if (members.length === 0 && invites.length === 0) {
     return (
       <div className="text-center py-16 text-muted-foreground">
@@ -55,8 +59,9 @@ export function MembersTable({ members, invites, isOwner, onRemove, onRevokeInvi
   }
 
   return (
-    <div className="rounded-lg border overflow-hidden">
-      <table className="w-full text-sm">
+    <>
+      <div className="rounded-lg border overflow-hidden">
+        <table className="w-full text-sm">
         <thead className="bg-zinc-50 dark:bg-zinc-900/50 text-xs uppercase text-muted-foreground">
           <tr>
             <th className="px-4 py-3 text-left">Pessoa</th>
@@ -109,9 +114,7 @@ export function MembersTable({ members, invites, isOwner, onRemove, onRevokeInvi
                       size="sm"
                       variant="ghost"
                       onClick={() => {
-                        if (confirm(`Remover ${m.email} do workspace?`)) {
-                          onRemove(m.id);
-                        }
+                        setRemoveTarget(m);
                       }}
                       className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
                       title="Remover membro"
@@ -167,9 +170,7 @@ export function MembersTable({ members, invites, isOwner, onRemove, onRevokeInvi
                     size="sm"
                     variant="ghost"
                     onClick={() => {
-                      if (confirm(`Revogar convite para ${invite.email}?`)) {
-                        onRevokeInvite(invite.token);
-                      }
+                      setRevokeTarget(invite);
                     }}
                     className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
                     title="Revogar convite"
@@ -183,5 +184,29 @@ export function MembersTable({ members, invites, isOwner, onRemove, onRevokeInvi
         </tbody>
       </table>
     </div>
+
+      <ConfirmDialog
+        open={!!removeTarget}
+        onOpenChange={(o) => !o && setRemoveTarget(null)}
+        title={`Remover ${removeTarget?.email}?`}
+        description="A pessoa perderá acesso ao workspace. Pode ser convidada novamente depois."
+        variant="destructive"
+        confirmText="Remover"
+        onConfirm={() => {
+          if (removeTarget) onRemove(removeTarget.id);
+        }}
+      />
+      <ConfirmDialog
+        open={!!revokeTarget}
+        onOpenChange={(o) => !o && setRevokeTarget(null)}
+        title={`Revogar convite para ${revokeTarget?.email}?`}
+        description="O token de convite será invalidado. A pessoa precisará de um novo convite."
+        variant="destructive"
+        confirmText="Revogar"
+        onConfirm={() => {
+          if (revokeTarget) onRevokeInvite(revokeTarget.token);
+        }}
+      />
+    </>
   );
 }
