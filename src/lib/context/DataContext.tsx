@@ -606,7 +606,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     (projectId: string) =>
       state.tasks
         .filter((t) => t.project_id === projectId)
-        .sort((a, b) => a.created_at.localeCompare(b.created_at)),
+        .sort((a, b) => a.position - b.position),
     [state.tasks]
   );
 
@@ -614,7 +614,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     (stageId: string) =>
       state.tasks
         .filter((t) => t.stage_id === stageId)
-        .sort((a, b) => a.created_at.localeCompare(b.created_at)),
+        .sort((a, b) => a.position - b.position),
     [state.tasks]
   );
 

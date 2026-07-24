@@ -98,11 +98,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Pegar posição inicial (referência só pra log — coluna position não existe ainda no schema)
+    // Pegar posição inicial (count de tasks existentes no projeto)
     const { count: existingCount } = await sb
       .from("tasks")
       .select("*", { count: "exact", head: true })
       .eq("project_id", projectId);
+
+    let position = existingCount || 0;
 
     // ── Inserir tasks válidas ──
     const validRows = preview.rows.filter((r) => r.status !== "error");
@@ -122,6 +124,7 @@ export async function POST(request: NextRequest) {
         start_date: t.start_date || null,
         due_date: t.due_date || null,
         assignee_id: null, // por enquanto string livre — vira FK depois via invite
+        position: position++,
       };
 
       const { data: created_task, error: insertError } = await sb
