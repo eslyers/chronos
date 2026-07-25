@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Users, Mail, Loader2, ArrowLeft, Info } from "lucide-react";
-import Link from "next/link";
+import { Users, Mail, Info, ShieldCheck, UserCheck, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { isSupabaseConfigured } from "@/lib/supabase/mode";
 import { MembersTable } from "./_components/MembersTable";
@@ -53,7 +54,6 @@ export default function UsersPage() {
     reload();
   }, [reload]);
 
-  // Achar workspace_id do user logado via Supabase (modo produção)
   React.useEffect(() => {
     if (!supabaseMode) return;
     (async () => {
@@ -74,7 +74,6 @@ export default function UsersPage() {
     })();
   }, [supabaseMode]);
 
-  // ── Invite handler ─────────────────────────────────────────
   async function handleInvite({ email, role, sendEmail }: { email: string; role: WorkspaceRole; sendEmail: boolean }) {
     const me = getDemoCurrentUser();
     const token = `inv-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
@@ -83,7 +82,6 @@ export default function UsersPage() {
 
     try {
       if (supabaseMode) {
-        // Chamar API de invite (cria token + manda email via Brevo)
         const res = await fetch("/api/users/invite", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -92,7 +90,6 @@ export default function UsersPage() {
         const data = await res.json();
         if (!res.ok) return { success: false, error: data.error || "Erro ao convidar" };
       } else {
-        // Demo: inserir direto no localStorage
         demoInvites.create({
           token,
           workspace_id: workspaceId,
@@ -103,7 +100,6 @@ export default function UsersPage() {
           expires_at: expiresAt,
           created_at: createdAt,
         });
-        // Simular envio de email no demo (log no console)
         if (sendEmail) {
           console.info(`[demo] Email "simulado" enviado pra ${email}: invite url /auth/invite/${token}`);
         }
@@ -121,7 +117,6 @@ export default function UsersPage() {
       demoMembers.remove(id);
       await reload();
     } else {
-      // TODO: API DELETE /api/users/:id
       alert("Remoção via Supabase pendente (precisa de API)");
     }
   }
@@ -141,7 +136,6 @@ export default function UsersPage() {
     const invite = invites.find((i) => i.token === token);
     if (!invite) return;
     if (supabaseMode) {
-      // TODO: chamar API de reenvio
       alert("Reenvio via Supabase pendente");
     } else {
       console.info(`[demo] Reenvio simulado: ${invite.email} → /auth/invite/${token}`);
@@ -153,82 +147,111 @@ export default function UsersPage() {
   const pendingCount = invites.length;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link href="/app" className="text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-              <Users className="h-6 w-6 sm:h-7 sm:w-7" />
-              Equipe
+    <div className="space-y-8 animate-fadeIn pb-12">
+      {/* Executive Header Banner */}
+      <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-r from-card via-card to-blue-500/5 p-6 sm:p-8 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-xs font-semibold">
+                GOVERNANCE & ACCESS CONTROL
+              </Badge>
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2 flex items-center gap-3">
+              <Users className="h-7 w-7 text-blue-500" />
+              Gestão de Equipe & Membros
             </h1>
+            <p className="text-sm text-muted-foreground mt-1 max-w-xl">
+              Gerencie os usuários do workspace, atribua papéis operacionais e envie convites por e-mail.
+            </p>
           </div>
-          <p className="text-sm text-muted-foreground ml-6">
-            Gerencie quem pode acessar este workspace e qual papel cada um tem.
-          </p>
+
+          <div className="flex items-center gap-3 shrink-0">
+            {isOwner && (
+              <Button onClick={() => setInviteDialogOpen(true)} className="h-11 px-5 bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md shadow-blue-500/20">
+                <Mail className="h-4 w-4 mr-2" />
+                Convidar Novo Membro
+              </Button>
+            )}
+          </div>
         </div>
-
-        {isOwner && (
-          <Button onClick={() => setInviteDialogOpen(true)} className="bg-blue-500 hover:bg-blue-600">
-            <Mail className="h-4 w-4 mr-2" />
-            Convidar
-          </Button>
-        )}
       </div>
 
-      {/* Stats rápidos */}
-      <div className="grid grid-cols-3 gap-3">
-        <StatBox label="Total de membros" value={memberCount} color="default" />
-        <StatBox label="Convites pendentes" value={pendingCount} color={pendingCount > 0 ? "yellow" : "default"} />
-        <StatBox label="Seu papel" value={currentUserRole === "owner" ? "Dono" : currentUserRole === "admin" ? "Admin" : currentUserRole === "member" ? "Membro" : "Visualizador"} color={isOwner ? "yellow" : "default"} />
+      {/* KPI Stats Grid */}
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+        <Card className="p-5 border-border/80 bg-card shadow-sm hover:border-blue-500/30 transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Membros Ativos</p>
+              <p className="text-3xl font-extrabold mt-1.5">{memberCount}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500 font-bold">
+              <UserCheck className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-5 border-border/80 bg-card shadow-sm hover:border-amber-500/30 transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Convites Pendentes</p>
+              <p className="text-3xl font-extrabold mt-1.5">{pendingCount}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 font-bold">
+              <Clock className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-5 border-border/80 bg-card shadow-sm hover:border-emerald-500/30 transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Seu Papel no Workspace</p>
+              <p className="text-2xl font-extrabold mt-1.5 capitalize text-emerald-500">
+                {currentUserRole === "owner" ? "Proprietário (Owner)" : currentUserRole === "admin" ? "Administrador" : currentUserRole === "member" ? "Membro Operacional" : "Visualizador"}
+              </p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 font-bold">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
       </div>
 
-      {/* Demo mode alert */}
       {!supabaseMode && (
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertTitle>Modo demonstração</AlertTitle>
-          <AlertDescription>
-            Os dados ficam só no <strong>localStorage</strong> deste navegador. Quando você plugar as chaves do
-            Supabase (anon key + URL), a tela passa a usar a tabela <code>workspace_members</code> +{" "}
-            <code>invite_tokens</code> automaticamente.
+        <Alert className="border-blue-500/30 bg-blue-500/5">
+          <Info className="h-4 w-4 text-blue-500" />
+          <AlertTitle className="font-bold text-foreground">Modo Demonstração Ativo</AlertTitle>
+          <AlertDescription className="text-xs text-muted-foreground mt-1">
+            Os membros e convites estão simulados no <strong>localStorage</strong>. Ao integrar com o Supabase, a gestão utilizará as tabelas <code>workspace_members</code> e <code>invite_tokens</code> em tempo real.
           </AlertDescription>
         </Alert>
       )}
 
-      {/* Tabela */}
+      {/* Main Table */}
       {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div className="flex flex-col items-center justify-center h-80 space-y-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 animate-pulse">
+            <Users className="h-6 w-6" />
+          </div>
+          <p className="text-sm font-semibold text-muted-foreground animate-pulse">
+            Carregando lista de membros da equipe...
+          </p>
         </div>
       ) : (
-        <MembersTable
-          members={members}
-          invites={invites}
-          isOwner={isOwner}
-          onRemove={handleRemove}
-          onRevokeInvite={handleRevokeInvite}
-          onResendInvite={handleResendInvite}
-        />
+        <Card className="border-border/80 bg-card shadow-xl overflow-hidden p-6">
+          <MembersTable
+            members={members}
+            invites={invites}
+            isOwner={isOwner}
+            onRemove={handleRemove}
+            onRevokeInvite={handleRevokeInvite}
+            onResendInvite={handleResendInvite}
+          />
+        </Card>
       )}
 
       <InviteDialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen} onInvite={handleInvite} />
-    </div>
-  );
-}
-
-function StatBox({ label, value, color }: { label: string; value: string | number; color: "default" | "yellow" }) {
-  const colors = {
-    default: "bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300",
-    yellow: "bg-yellow-50 dark:bg-yellow-950/30 text-yellow-700 dark:text-yellow-300",
-  };
-  return (
-    <div className={`rounded-lg p-4 ${colors[color]}`}>
-      <p className="text-xs opacity-80">{label}</p>
-      <p className="text-xl font-semibold capitalize mt-0.5">{value}</p>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { History, ArrowRight, User, Filter, Loader2 } from "lucide-react";
+import { History, ArrowRight, User, Filter, ShieldCheck, Clock } from "lucide-react";
 import { useGlobal } from "@/lib/context/GlobalContext";
 import { createSPAClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -58,14 +58,12 @@ export default function ActivityPage() {
     setLoading(true);
     const supabase = createSPAClient();
 
-    // Buscar projetos do user pra popular o filtro
     const { data: projData } = await supabase
       .from("projects")
       .select("id, name")
       .order("name");
     setProjects(projData || []);
 
-    // Buscar transitions com joins
     let query = supabase
       .from("stage_transitions")
       .select(
@@ -95,7 +93,6 @@ export default function ActivityPage() {
     } else {
       const rawData = (data || []) as RawTransition[];
 
-      // Enriquecer com profiles (movido_por)
       const movedByIds = Array.from(
         new Set(rawData.map((d) => d.moved_by).filter((id): id is string => Boolean(id)))
       );
@@ -150,112 +147,124 @@ export default function ActivityPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <History className="h-6 w-6" />
-            Activity Feed
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Histórico de mudanças em todas as tarefas dos seus projetos
-          </p>
-        </div>
+    <div className="space-y-8 animate-fadeIn pb-12">
+      {/* Executive Header Banner */}
+      <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-r from-card via-card to-blue-500/5 p-6 sm:p-8 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-xs font-semibold">
+                AUDIT & SECURITY TRAIL
+              </Badge>
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2 flex items-center gap-3">
+              <History className="h-7 w-7 text-blue-500" />
+              Feed de Atividades & Trilha de Auditoria
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1 max-w-xl">
+              Registro histórico em tempo real das movimentações de etapas, alterações de responsável e auditoria de fluxo.
+            </p>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <Select
-            value={projectFilter}
-            onChange={(e) => setProjectFilter(e.target.value)}
-            className="w-full sm:w-[200px]"
-          >
-            <option value="all">Todos os projetos</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Select>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2 bg-card p-2 rounded-xl border border-border/80 shadow-sm">
+              <Filter className="h-4 w-4 text-blue-500 ml-1" />
+              <Select
+                value={projectFilter}
+                onChange={(e) => setProjectFilter(e.target.value)}
+                className="w-full sm:w-[220px] h-9 text-xs font-semibold border-none bg-transparent focus:ring-0"
+              >
+                <option value="all">Todos os projetos</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
         </div>
       </div>
 
       {loading ? (
-        <Card>
-          <CardContent className="py-12 flex flex-col items-center justify-center text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin mb-2" />
-            <p className="text-sm">Carregando atividade...</p>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center justify-center h-96 space-y-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 animate-pulse">
+            <History className="h-6 w-6" />
+          </div>
+          <p className="text-sm font-semibold text-muted-foreground animate-pulse">
+            Carregando registros de auditoria...
+          </p>
+        </div>
       ) : activities.length === 0 ? (
-        <Card>
-          <CardContent className="py-16 flex flex-col items-center justify-center text-center">
-            <div className="text-6xl mb-4">📜</div>
-            <h3 className="text-lg font-semibold mb-2">Nenhuma atividade ainda</h3>
+        <Card className="border-dashed border-2 p-8">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center space-y-4">
+            <div className="p-4 rounded-2xl bg-blue-500/10 text-blue-500">
+              <ShieldCheck className="h-10 w-10" />
+            </div>
+            <h3 className="text-2xl font-bold tracking-tight">Nenhuma atividade registrada</h3>
             <p className="text-sm text-muted-foreground max-w-md">
-              Quando alguém mover tarefas entre etapas (ex: Backlog → Em
-              andamento), o evento aparece aqui em tempo real.
+              Quando tarefas forem movidas entre etapas no Kanban, a trilha de auditoria será exibida aqui em tempo real.
             </p>
-            <Link href="/app/projects" className="mt-4">
-              <Button variant="outline" size="sm">
-                Ir para Projetos
-              </Button>
-            </Link>
+            <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">
+              <Link href="/app/projects">Ir para Projetos</Link>
+            </Button>
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="border-border/80 bg-card shadow-xl overflow-hidden">
           <CardContent className="p-0">
-            <ul className="divide-y divide-border">
+            <ul className="divide-y divide-border/60">
               {activities.map((a) => (
                 <li
                   key={a.id}
-                  className="p-4 hover:bg-muted/40 transition-colors"
+                  className="p-5 hover:bg-muted/30 transition-colors group"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                      <User className="h-4 w-4 text-primary" />
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0 mt-0.5 border border-blue-500/20 font-bold">
+                      <User className="h-5 w-5" />
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                        <span className="font-medium text-sm">
-                          {a.moved_by_name || a.moved_by_email || "Sistema"}
+                        <span className="font-bold text-sm text-foreground">
+                          {a.moved_by_name || a.moved_by_email || "Sistema Chronos"}
                         </span>
-                        <span className="text-xs text-muted-foreground">
-                          moveu
+                        <span className="text-xs text-muted-foreground font-medium">
+                          alterou a etapa da tarefa
                         </span>
-                        <span className="font-medium text-sm truncate">
-                          {a.task_title}
+                        <span className="font-bold text-sm text-blue-500 hover:underline cursor-pointer">
+                          &ldquo;{a.task_title}&rdquo;
                         </span>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
                         {a.from_stage_name ? (
                           <>
-                            <Badge variant="outline" className="text-xs">
+                            <Badge variant="outline" className="text-xs font-semibold bg-muted/40">
                               {a.from_stage_name}
                             </Badge>
-                            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
                           </>
                         ) : null}
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="outline" className="text-xs font-semibold bg-blue-500/10 text-blue-500 border-blue-500/30">
                           {a.to_stage_name}
                         </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          · {a.project_name}
+                        <span className="text-xs text-muted-foreground font-mono">
+                          · Projeto: <strong className="text-foreground">{a.project_name}</strong>
                         </span>
                       </div>
 
                       {a.note && (
-                        <p className="text-xs text-muted-foreground italic mt-2 border-l-2 border-border pl-2">
+                        <p className="text-xs text-muted-foreground italic mt-2.5 border-l-2 border-blue-500/40 pl-3 py-0.5">
                           &ldquo;{a.note}&rdquo;
                         </p>
                       )}
                     </div>
 
-                    <time className="text-xs text-muted-foreground shrink-0 mt-1">
-                      {timeAgo(a.moved_at)}
-                    </time>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0 font-mono bg-muted/40 px-2.5 py-1 rounded-lg">
+                      <Clock className="h-3 w-3" />
+                      <span>{timeAgo(a.moved_at)}</span>
+                    </div>
                   </div>
                 </li>
               ))}

@@ -89,14 +89,15 @@ export default function ProjectsPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-row items-center gap-3 shrink-0">
             <ImportProjectButton
               mode="select"
               projects={projects}
               size="lg"
               variant="outline"
+              className="h-11 font-semibold"
             />
-            <Button onClick={openCreate} size="lg" className="bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md shadow-blue-500/20">
+            <Button onClick={openCreate} size="lg" className="h-11 bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md shadow-blue-500/20">
               <Plus className="h-4 w-4 mr-2" />
               Novo Projeto
             </Button>

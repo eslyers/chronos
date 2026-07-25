@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useGlobal } from "@/lib/context/GlobalContext";
 import { createSPAClient } from "@/lib/supabase/client";
-import { User, Key, CheckCircle, Bell, Send, Loader2, Clock, Mail } from "lucide-react";
+import { User, Key, CheckCircle, Bell, Send, Loader2, Clock, Mail, Settings } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface Profile {
   id: string;
@@ -285,10 +286,25 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
-        <p className="text-muted-foreground">Conta, notificações e integrações</p>
+    <div className="space-y-8 max-w-4xl animate-fadeIn pb-12">
+      {/* Executive Header Banner */}
+      <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-r from-card via-card to-blue-500/5 p-6 sm:p-8 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-xs font-semibold">
+                SYSTEM CONFIGURATION & PREFERENCES
+              </Badge>
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2 flex items-center gap-3">
+              <Settings className="h-7 w-7 text-blue-500" />
+              Configurações do Workspace
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1 max-w-xl">
+              Gerencie os dados do seu perfil, preferências globais de notificação por e-mail e regras por projeto.
+            </p>
+          </div>
+        </div>
       </div>
 
       {error && (

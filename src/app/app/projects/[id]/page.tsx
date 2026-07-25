@@ -170,10 +170,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
           </div>
-          <ImportProjectButton mode="single" project={project} />
-          <Button variant="outline" onClick={() => setEditOpen(true)}>
-            Editar projeto
-          </Button>
+          <div className="flex flex-row items-center gap-3 shrink-0">
+            <ImportProjectButton mode="single" project={project} />
+            <Button variant="outline" onClick={() => setEditOpen(true)}>
+              Editar projeto
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}

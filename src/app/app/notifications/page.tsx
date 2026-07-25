@@ -8,12 +8,12 @@ import {
   Clock,
   AlertCircle,
   Settings,
-  Loader2,
   ExternalLink,
   Filter,
   X,
+  ShieldCheck,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { createSPAClient } from "@/lib/supabase/client";
@@ -35,25 +35,25 @@ const TYPE_LABELS: Record<
   string,
   { label: string; icon: React.ReactNode; color: string }
 > = {
-  due_soon: { label: "Prazo próximo", icon: <Clock className="h-3 w-3" />, color: "bg-blue-500/10 text-blue-700" },
-  overdue: { label: "Tarefa atrasada", icon: <AlertCircle className="h-3 w-3" />, color: "bg-red-500/10 text-red-700" },
-  stage_change: { label: "Mudou de etapa", icon: <CheckCircle2 className="h-3 w-3" />, color: "bg-blue-500/10 text-blue-700" },
-  assigned: { label: "Tarefa atribuída", icon: <Bell className="h-3 w-3" />, color: "bg-purple-500/10 text-purple-700" },
-  mention: { label: "Mencionado", icon: <Bell className="h-3 w-3" />, color: "bg-indigo-500/10 text-indigo-700" },
-  stale_task: { label: "Tarefa parada", icon: <Clock className="h-3 w-3" />, color: "bg-slate-500/10 text-slate-700" },
+  due_soon: { label: "Prazo próximo", icon: <Clock className="h-3 w-3" />, color: "bg-blue-500/10 text-blue-500 border-blue-500/30" },
+  overdue: { label: "Tarefa atrasada", icon: <AlertCircle className="h-3 w-3" />, color: "bg-red-500/10 text-red-500 border-red-500/30" },
+  stage_change: { label: "Mudou de etapa", icon: <CheckCircle2 className="h-3 w-3" />, color: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30" },
+  assigned: { label: "Tarefa atribuída", icon: <Bell className="h-3 w-3" />, color: "bg-purple-500/10 text-purple-500 border-purple-500/30" },
+  mention: { label: "Mencionado", icon: <Bell className="h-3 w-3" />, color: "bg-indigo-500/10 text-indigo-500 border-indigo-500/30" },
+  stale_task: { label: "Tarefa parada", icon: <Clock className="h-3 w-3" />, color: "bg-slate-500/10 text-slate-500 border-slate-500/30" },
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  pending: { label: "Pendente", color: "bg-yellow-500/10 text-yellow-700" },
-  sent: { label: "Enviado", color: "bg-emerald-500/10 text-emerald-700" },
-  failed: { label: "Falhou", color: "bg-red-500/10 text-red-700" },
-  read: { label: "Lido", color: "bg-slate-500/10 text-slate-700" },
+  pending: { label: "Pendente", color: "bg-yellow-500/10 text-yellow-500 border-yellow-500/30" },
+  sent: { label: "Enviado", color: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30" },
+  failed: { label: "Falhou", color: "bg-red-500/10 text-red-500 border-red-500/30" },
+  read: { label: "Lido", color: "bg-slate-500/10 text-slate-500 border-slate-500/30" },
 };
 
 const CHANNEL_ICONS: Record<string, string> = {
-  telegram: "📱",
-  email: "📧",
-  push: "🔔",
+  telegram: "📱 Telegram",
+  email: "📧 E-mail (Brevo)",
+  push: "🔔 Push",
 };
 
 function timeAgo(iso: string): string {
@@ -73,7 +73,7 @@ function formatPayload(n: Notification): { title: string; subtitle: string } {
   const baseTitle =
     (p.title as string) ||
     (p.task_title as string) ||
-    "Notificação";
+    "Notificação de Sistema";
 
   const project = (p.project as string) || (p.project_name as string);
   const subtitleParts: string[] = [];
@@ -130,14 +130,12 @@ export default function NotificationsPage() {
     load();
   }, []);
 
-  // Filtrar
   const filtered = notifications.filter((n) => {
     if (filterType && n.type !== filterType) return false;
     if (filterStatus && n.status !== filterStatus) return false;
     return true;
   });
 
-  // Agrupar por status pra ter resumo no topo
   const counts = notifications.reduce(
     (acc, n) => {
       acc[n.status] = (acc[n.status] ?? 0) + 1;
@@ -149,186 +147,209 @@ export default function NotificationsPage() {
   const hasFilters = filterType || filterStatus;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Notificações</h1>
-          <p className="text-muted-foreground">
-            Histórico de alertas e preferências
-          </p>
+    <div className="space-y-8 animate-fadeIn pb-12">
+      {/* Executive Header Banner */}
+      <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-r from-card via-card to-blue-500/5 p-6 sm:p-8 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-xs font-semibold">
+                NOTIFICATION CENTER ENGINE
+              </Badge>
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2 flex items-center gap-3">
+              <Bell className="h-7 w-7 text-blue-500" />
+              Central de Notificações & Alertas
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1 max-w-xl">
+              Acompanhe o histórico de alertas por E-mail (Brevo) e Telegram e gerencie suas regras de notificação.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            <Button asChild variant="outline" className="h-11 border-border/80 font-semibold hover:bg-muted">
+              <Link href="/app/settings">
+                <Settings className="mr-2 h-4 w-4 text-blue-500" />
+                Preferências de Alertas
+              </Link>
+            </Button>
+          </div>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link href="/app/settings">
-            <Settings className="mr-2 h-4 w-4" />
-            Configurar
-          </Link>
-        </Button>
       </div>
 
-      {/* Resumo */}
-      <div className="grid gap-3 md:grid-cols-4">
+      {/* KPI Cards */}
+      <div className="grid gap-4 md:grid-cols-4">
         {Object.entries(STATUS_LABELS).map(([key, info]) => (
           <Card
             key={key}
-            className={filterStatus === key ? "ring-2 ring-primary" : "cursor-pointer hover:bg-muted/30 transition-colors"}
+            className={`p-5 border-border/80 bg-card cursor-pointer transition-all duration-200 ${
+              filterStatus === key ? "ring-2 ring-blue-500 border-blue-500 bg-blue-500/5" : "hover:border-blue-500/30"
+            }`}
             onClick={() => setFilterStatus(filterStatus === key ? null : key)}
           >
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">{info.label}</p>
-                  <p className="text-2xl font-bold mt-1">{counts[key] ?? 0}</p>
-                </div>
-                <div className={`px-2 py-1 rounded-full ${info.color}`}>
-                  <Bell className="h-3 w-3" />
-                </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{info.label}</p>
+                <p className="text-3xl font-extrabold mt-1.5">{counts[key] ?? 0}</p>
               </div>
-            </CardContent>
+              <Badge variant="outline" className={`px-2.5 py-1 text-xs font-semibold ${info.color}`}>
+                <Bell className="h-3 w-3 mr-1 inline" /> {key}
+              </Badge>
+            </div>
           </Card>
         ))}
       </div>
 
-      {/* Filtros por tipo */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Filter className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm text-muted-foreground">Filtrar por tipo:</span>
-        {Object.entries(TYPE_LABELS).map(([key, info]) => (
-          <Badge
-            key={key}
-            variant={filterType === key ? "default" : "outline"}
-            className={`cursor-pointer ${filterType === key ? "" : info.color}`}
-            onClick={() => setFilterType(filterType === key ? null : key)}
-          >
-            {info.icon}
-            <span className="ml-1">{info.label}</span>
-          </Badge>
-        ))}
-        {hasFilters && (
-          <Button variant="ghost" size="sm" onClick={() => { setFilterType(null); setFilterStatus(null); }}>
-            <X className="h-3 w-3 mr-1" />
-            Limpar
-          </Button>
-        )}
-      </div>
+      {error && (
+        <Card className="border-red-500/40 bg-red-500/10 p-4">
+          <p className="text-xs font-bold text-red-500">⚠️ {error}</p>
+        </Card>
+      )}
 
-      {/* Lista de notificações */}
+      {/* Filter Toolbar */}
+      <Card className="p-4 border-border/80 bg-card shadow-sm space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-blue-500" />
+            <span className="text-xs font-bold uppercase tracking-wider text-foreground">Filtrar por Tipo:</span>
+          </div>
+
+          {hasFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                setFilterType(null);
+                setFilterStatus(null);
+              }}
+            >
+              <X className="h-3.5 w-3.5 mr-1" /> Limpar Filtros
+            </Button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {Object.entries(TYPE_LABELS).map(([key, info]) => (
+            <Badge
+              key={key}
+              variant="outline"
+              className={`cursor-pointer px-3 py-1 text-xs font-semibold transition-all ${
+                filterType === key
+                  ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20"
+                  : info.color
+              }`}
+              onClick={() => setFilterType(filterType === key ? null : key)}
+            >
+              <span className="mr-1.5">{info.icon}</span>
+              {info.label}
+            </Badge>
+          ))}
+        </div>
+      </Card>
+
+      {/* Notifications List */}
       {loading ? (
-        <Card>
-          <CardContent className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </CardContent>
-        </Card>
-      ) : error ? (
-        <Card className="border-red-500/50 bg-red-500/5">
-          <CardContent className="py-4 text-sm text-red-600">
-            ⚠️ {error}
-          </CardContent>
-        </Card>
-      ) : notifications.length === 0 ? (
-        <Card className="border-dashed border-2">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="p-4 rounded-full bg-sky-500/10 mb-4">
-              <Bell className="h-10 w-10 text-sky-600" />
-            </div>
-            <h2 className="text-2xl font-semibold">Nenhuma notificação ainda</h2>
-            <p className="text-sm text-muted-foreground mt-2 max-w-md">
-              O backend de envio automático (Telegram + Email via Edge Functions)
-              será ativado quando você tiver tarefas com prazos definidos.
-            </p>
-            <div className="mt-6 text-xs text-muted-foreground max-w-md text-left space-y-2 bg-muted/30 rounded-lg p-4">
-              <p className="font-semibold">Como funciona:</p>
-              <p>• Tarefas com prazo recebem alertas em <strong>3, 1, 0 dias</strong> antes</p>
-              <p>• Tarefas atrasadas recebem alerta <strong>diário às 09:00</strong></p>
-              <p>• Movimentação entre stages gera notificação em tempo real</p>
-              <p>• Configurável por projeto (opt-out individual)</p>
-              <p>• Canais: <strong>Telegram</strong> (bot + chat_id) e <strong>Email</strong> (Resend)</p>
-            </div>
-            <Button asChild className="mt-6">
-              <Link href="/app/projects">
-                Ir para projetos
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center justify-center h-80 space-y-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 animate-pulse">
+            <Bell className="h-6 w-6" />
+          </div>
+          <p className="text-sm font-semibold text-muted-foreground animate-pulse">
+            Carregando central de notificações...
+          </p>
+        </div>
       ) : filtered.length === 0 ? (
-        <Card className="border-dashed border-2">
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <Filter className="h-8 w-8 text-muted-foreground mb-3" />
-            <p className="text-sm text-muted-foreground">
-              Nenhuma notificação corresponde aos filtros
+        <Card className="border-dashed border-2 p-8">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center space-y-4">
+            <div className="p-4 rounded-2xl bg-blue-500/10 text-blue-500">
+              <ShieldCheck className="h-10 w-10" />
+            </div>
+            <h3 className="text-2xl font-bold tracking-tight">Nenhuma notificação encontrada</h3>
+            <p className="text-sm text-muted-foreground max-w-md">
+              Os alertas enviados por e-mail ou disparados pelo sistema aparecerão nesta lista.
             </p>
-            <Button variant="outline" size="sm" className="mt-3" onClick={() => { setFilterType(null); setFilterStatus(null); }}>
-              Limpar filtros
-            </Button>
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Histórico</CardTitle>
-            <CardDescription>
-              {filtered.length} de {notifications.length} notificações
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {filtered.map((n) => {
-              const typeInfo = TYPE_LABELS[n.type] ?? {
-                label: n.type,
-                icon: <Bell className="h-3 w-3" />,
-                color: "bg-slate-500/10 text-slate-700",
-              };
-              const statusInfo = STATUS_LABELS[n.status] ?? {
-                label: n.status,
-                color: "bg-slate-500/10 text-slate-700",
-              };
-              const { title, subtitle } = formatPayload(n);
-              const isClickable = !!n.task_id && !!n.project_id;
+        <Card className="border-border/80 bg-card shadow-xl overflow-hidden">
+          <CardContent className="p-0">
+            <ul className="divide-y divide-border/60">
+              {filtered.map((n) => {
+                const typeInfo = TYPE_LABELS[n.type] ?? {
+                  label: n.type,
+                  icon: <Bell className="h-3 w-3" />,
+                  color: "bg-muted text-muted-foreground",
+                };
+                const statusInfo = STATUS_LABELS[n.status] ?? {
+                  label: n.status,
+                  color: "bg-muted text-muted-foreground",
+                };
+                const { title, subtitle } = formatPayload(n);
 
-              const Content = (
-                <>
-                  <div className={`p-2 rounded-full ${typeInfo.color} flex-shrink-0`}>
-                    {typeInfo.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="font-medium text-sm truncate">{title}</span>
-                      <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${statusInfo.color}`}>
-                        {statusInfo.label}
-                      </Badge>
-                      {n.channels.map((ch) => (
-                        <span key={ch} className="text-xs" title={ch}>
-                          {CHANNEL_ICONS[ch] || ch}
-                        </span>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">{subtitle}</p>
-                    <p className="text-[10px] text-muted-foreground/70 mt-0.5">
-                      {timeAgo(n.created_at)}
-                    </p>
-                  </div>
-                  {isClickable && (
-                    <ExternalLink className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                  )}
-                </>
-              );
-
-              if (isClickable) {
                 return (
-                  <Link
+                  <li
                     key={n.id}
-                    href={`/app/projects/${n.project_id}`}
-                    className="flex items-start gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                    className="p-5 hover:bg-muted/30 transition-colors group flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                   >
-                    {Content}
-                  </Link>
+                    <div className="flex items-start gap-4 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0 mt-0.5 border border-blue-500/20">
+                        {typeInfo.icon}
+                      </div>
+
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-bold text-sm text-foreground leading-tight">
+                            {title}
+                          </h4>
+                          <Badge variant="outline" className={`text-[10px] px-2 py-0.5 font-bold ${typeInfo.color}`}>
+                            {typeInfo.label}
+                          </Badge>
+                          <Badge variant="outline" className={`text-[10px] px-2 py-0.5 font-bold ${statusInfo.color}`}>
+                            {statusInfo.label}
+                          </Badge>
+                        </div>
+
+                        <p className="text-xs text-muted-foreground font-mono">
+                          {subtitle}
+                        </p>
+
+                        {n.channels && n.channels.length > 0 && (
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground pt-1">
+                            <span>Canal:</span>
+                            {n.channels.map((ch) => (
+                              <span key={ch} className="font-medium text-foreground bg-muted/50 px-2 py-0.5 rounded">
+                                {CHANNEL_ICONS[ch] ?? ch}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                      <span className="text-xs text-muted-foreground font-mono">
+                        {timeAgo(n.created_at)}
+                      </span>
+
+                      {n.project_id && (
+                        <Button asChild variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                          <Link
+                            href={
+                              n.task_id
+                                ? `/app/projects/${n.project_id}?task=${n.task_id}`
+                                : `/app/projects/${n.project_id}`
+                            }
+                            title="Ver detalhes"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
+                  </li>
                 );
-              }
-              return (
-                <div key={n.id} className="flex items-start gap-3 p-3 border rounded-lg">
-                  {Content}
-                </div>
-              );
-            })}
+              })}
+            </ul>
           </CardContent>
         </Card>
       )}
