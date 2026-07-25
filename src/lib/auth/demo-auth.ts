@@ -88,14 +88,22 @@ export function demoSignUp(email: string, password: string): DemoSession {
 
 export function demoSignIn(email: string, password: string): DemoSession {
   const users = getUsers();
-  const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+  let user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
 
   if (!user) {
-    throw new Error("Email não cadastrado");
-  }
-
-  if (user.password !== hashPassword(password)) {
-    throw new Error("Senha incorreta");
+    // No modo demo, cria o usuário automaticamente com qualquer e-mail informado
+    user = {
+      id: generateUserId(),
+      email,
+      password: hashPassword(password),
+      created_at: new Date().toISOString(),
+    };
+    users.push(user);
+    saveUsers(users);
+  } else {
+    // Atualiza a senha local no modo demo para garantir acesso sem fricção
+    user.password = hashPassword(password);
+    saveUsers(users);
   }
 
   const session: DemoSession = {
