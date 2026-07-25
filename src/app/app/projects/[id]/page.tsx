@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, use, useEffect } from "react";
+import { useState, use, useEffect, useRef } from "react";
 import Link from "next/link";
 import { ArrowLeft, Plus, Calendar, MoreVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -57,36 +57,39 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [activeStageId, setActiveStageId] = useState<string | null>(null);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [deleteTaskTarget, setDeleteTaskTarget] = useState<Task | null>(null);
+  const processedTaskIdRef = useRef<string | null>(null);
 
-  // Deep-link: se URL tem ?task=<id>, abre o dialog da task e scrolla ate ela
+  // Deep-link: se URL tem ?task=<id>, abre o dialog da task e scrolla ate ela sem travar
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const taskId = params.get("task");
     if (!taskId || loading) return;
 
-    // Espera o DataContext terminar de carregar tasks
-    const timer = setTimeout(() => {
-      const found = allTasks.find((t) => t.id === taskId);
-      if (found) {
-        setEditingTask(found);
-        setActiveStageId(found.stage_id);
-        setTaskDialogOpen(true);
-        // Scroll ate a task depois de o dialog abrir
-        setTimeout(() => {
-          const el = document.getElementById(`task-${taskId}`);
-          if (el) {
-            el.scrollIntoView({ behavior: "smooth", block: "center" });
-            // Adiciona classe de highlight temporaria
-            el.classList.add("task-highlight-flash");
-            setTimeout(() => el.classList.remove("task-highlight-flash"), 2500);
-          }
-        }, 300);
-      }
-    }, 200);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, allTasks, setEditingTask, setActiveStageId, setTaskDialogOpen]);
+    if (processedTaskIdRef.current === taskId) return;
+
+    const found = allTasks.find((t) => t.id === taskId);
+    if (found) {
+      processedTaskIdRef.current = taskId;
+      setEditingTask(found);
+      setActiveStageId(found.stage_id);
+      setTaskDialogOpen(true);
+
+      // Limpa a query string da URL para permitir fechar suavemente
+      const url = new URL(window.location.href);
+      url.searchParams.delete("task");
+      window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+
+      setTimeout(() => {
+        const el = document.getElementById(`task-${taskId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+          el.classList.add("task-highlight-flash");
+          setTimeout(() => el.classList.remove("task-highlight-flash"), 2500);
+        }
+      }, 300);
+    }
+  }, [loading, allTasks]);
 
   if (loading || loadingProject) {
     return <div className="p-8 text-muted-foreground">Carregando...</div>;
@@ -346,7 +349,19 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
       <TaskDialog
         open={taskDialogOpen}
-        onOpenChange={setTaskDialogOpen}
+        onOpenChange={(o) => {
+          setTaskDialogOpen(o);
+          if (!o) {
+            setEditingTask(null);
+            if (typeof window !== "undefined") {
+              const url = new URL(window.location.href);
+              if (url.searchParams.has("task")) {
+                url.searchParams.delete("task");
+                window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+              }
+            }
+          }
+        }}
         task={editingTask}
         defaultStageId={activeStageId}
         projectId={project.id}

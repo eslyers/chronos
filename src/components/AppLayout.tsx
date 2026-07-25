@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -17,16 +17,47 @@ import {
   CalendarDays,
   History,
   Users,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useGlobal } from "@/lib/context/GlobalContext";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [isUserDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { user, signOut } = useGlobal();
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Carregar preferência salva no localStorage
+  useEffect(() => {
+    setMounted(true);
+    const saved = localStorage.getItem("sidebar-collapsed");
+    if (saved !== null) setIsCollapsed(saved === "true");
+  }, []);
+
+  // Fechar dropdown ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setUserDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleCollapse = () => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("sidebar-collapsed", String(next));
+      return next;
+    });
+  };
 
   const handleSettings = () => {
     router.push("/app/settings");
@@ -54,38 +85,58 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "Configurações", href: "/app/settings", icon: Settings },
   ];
 
-  const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
+  const sidebarWidth = isCollapsed ? "w-[60px]" : "w-64";
+  const mainPadding = isCollapsed ? "lg:pl-[60px]" : "lg:pl-64";
 
   return (
     <div className="min-h-screen bg-muted/30">
-      {isSidebarOpen && (
+      {/* Mobile overlay */}
+      {isMobileSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-30 lg:hidden backdrop-blur-sm"
-          onClick={toggleSidebar}
+          onClick={() => setMobileSidebarOpen(false)}
           aria-hidden
         />
       )}
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 w-64 bg-card border-r border-border shadow-sm transform transition-transform duration-200 ease-in-out z-40
-          ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
+        className={`
+          fixed inset-y-0 left-0 bg-card border-r border-border shadow-sm z-40
+          transform transition-all duration-300 ease-in-out
+          ${isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
+          lg:translate-x-0
+          ${mounted ? sidebarWidth : "w-64"}
+          overflow-hidden
+        `}
       >
-        <div className="h-16 flex items-center justify-between px-4 border-b border-border">
-          <Link href="/app" className="flex items-center gap-2">
-            <span className="text-2xl">🕐</span>
-            <span className="text-lg font-bold tracking-tight">{productName}</span>
+        {/* Logo / Header */}
+        <div className="h-16 flex items-center justify-between px-3 border-b border-border shrink-0">
+          <Link
+            href="/app"
+            className="flex items-center gap-2 min-w-0 overflow-hidden"
+            title={productName}
+          >
+            <span className="text-2xl shrink-0">🕐</span>
+            {!isCollapsed && (
+              <span className="text-lg font-bold tracking-tight truncate transition-opacity duration-200">
+                {productName}
+              </span>
+            )}
           </Link>
+
+          {/* Mobile close button */}
           <button
-            onClick={toggleSidebar}
-            className="lg:hidden text-muted-foreground hover:text-foreground"
+            onClick={() => setMobileSidebarOpen(false)}
+            className="lg:hidden text-muted-foreground hover:text-foreground ml-auto shrink-0"
             aria-label="Fechar menu"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <nav className="mt-4 px-2 space-y-0.5">
+        {/* Navigation */}
+        <nav className="mt-3 px-2 space-y-0.5 flex-1">
           {navigation.map((item) => {
             const isActive =
               pathname === item.href || pathname?.startsWith(`${item.href}/`);
@@ -94,65 +145,121 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.name}
                 href={item.href}
-                onClick={() => setSidebarOpen(false)}
-                className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                  isActive
-                    ? "bg-foreground/10 text-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
+                onClick={() => setMobileSidebarOpen(false)}
+                title={isCollapsed ? item.name : undefined}
+                className={`
+                  group relative flex items-center rounded-md transition-all duration-150
+                  ${isCollapsed ? "justify-center px-0 py-2.5" : "px-3 py-2"}
+                  text-sm font-medium
+                  ${
+                    isActive
+                      ? "bg-foreground/10 text-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }
+                `}
               >
                 <Icon
-                  className={`mr-3 h-5 w-5 ${
-                    isActive ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"
-                  }`}
+                  className={`
+                    shrink-0 h-5 w-5
+                    ${isCollapsed ? "" : "mr-3"}
+                    ${isActive ? "text-foreground" : "text-muted-foreground group-hover:text-foreground"}
+                  `}
                 />
-                {item.name}
+                {!isCollapsed && (
+                  <span className="truncate transition-opacity duration-200">
+                    {item.name}
+                  </span>
+                )}
+
+                {/* Tooltip when collapsed */}
+                {isCollapsed && (
+                  <span className="
+                    pointer-events-none absolute left-full ml-2.5 z-50
+                    whitespace-nowrap rounded-md bg-popover border border-border
+                    px-2.5 py-1 text-xs font-medium text-foreground shadow-md
+                    opacity-0 group-hover:opacity-100 transition-opacity duration-150
+                  ">
+                    {item.name}
+                  </span>
+                )}
               </Link>
             );
           })}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border bg-card">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>🕐</span>
-            <span>{productName} v0.1</span>
-          </div>
+        {/* Footer */}
+        <div className="absolute bottom-0 left-0 right-0 border-t border-border bg-card">
+          {/* Collapse toggle button — only on desktop */}
+          <button
+            onClick={toggleCollapse}
+            aria-label={isCollapsed ? "Expandir menu" : "Recolher menu"}
+            className={`
+              hidden lg:flex items-center w-full
+              ${isCollapsed ? "justify-center px-0 py-3" : "gap-2 px-4 py-3"}
+              text-xs text-muted-foreground hover:text-foreground transition-colors
+            `}
+          >
+            {isCollapsed ? (
+              <ChevronRight className="h-4 w-4 shrink-0" />
+            ) : (
+              <>
+                <ChevronLeft className="h-4 w-4 shrink-0" />
+                <span>Recolher</span>
+              </>
+            )}
+          </button>
+
+          {!isCollapsed && (
+            <div className="flex items-center gap-2 px-4 pb-3 text-xs text-muted-foreground">
+              <span>🕐</span>
+              <span>{productName} v0.1</span>
+            </div>
+          )}
         </div>
       </aside>
 
       {/* Main wrapper */}
-      <div className="lg:pl-64">
+      <div className={`transition-all duration-300 ease-in-out ${mounted ? mainPadding : "lg:pl-64"}`}>
         <header className="sticky top-0 z-20 flex items-center justify-between h-16 bg-background/95 backdrop-blur border-b border-border px-4">
+          {/* Mobile hamburger */}
           <button
-            onClick={toggleSidebar}
+            onClick={() => setMobileSidebarOpen(true)}
             className="lg:hidden text-muted-foreground hover:text-foreground"
             aria-label="Abrir menu"
           >
             <Menu className="h-5 w-5" />
           </button>
 
+          {/* Desktop collapse toggle in header (only visible when collapsed, so user can expand from top) */}
+          <button
+            onClick={toggleCollapse}
+            className="hidden lg:flex items-center justify-center w-8 h-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            aria-label={isCollapsed ? "Expandir menu" : "Recolher menu"}
+          >
+            {isCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </button>
+
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
 
-          <div className="relative">
-            <button
-              onClick={() => setUserDropdownOpen(!isUserDropdownOpen)}
-              className="flex items-center gap-2 text-sm rounded-full hover:bg-muted px-2 py-1 transition-colors"
-            >
-              <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center text-xs font-medium">
-                {user ? getInitials(user.email) : "??"}
-              </div>
-              <span className="hidden sm:inline text-foreground/80">
-                {user?.email || "Conectando..."}
-              </span>
-            </button>
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setUserDropdownOpen(!isUserDropdownOpen)}
+                className="flex items-center gap-2 text-sm rounded-full hover:bg-muted px-2 py-1 transition-colors"
+              >
+                <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center text-xs font-medium">
+                  {user ? getInitials(user.email) : "??"}
+                </div>
+                <span className="hidden sm:inline text-foreground/80">
+                  {user?.email || "Conectando..."}
+                </span>
+              </button>
 
-            {isUserDropdownOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-30"
-                  onClick={() => setUserDropdownOpen(false)}
-                />
+              {isUserDropdownOpen && (
                 <div className="absolute right-0 mt-2 w-64 bg-popover rounded-md shadow-lg border border-border z-40">
                   <div className="p-3 border-b border-border">
                     <p className="text-xs text-muted-foreground">Conectado como</p>
@@ -181,9 +288,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </button>
                   </div>
                 </div>
-              </>
-            )}
-          </div>
+              )}
+            </div>
           </div>
         </header>
 
