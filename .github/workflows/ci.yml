@@ -33,6 +33,9 @@ jobs:
       - name: Run Typecheck
         run: npm run type-check
 
+      - name: Run Tests
+        run: npm run test
+
       - name: Run Build Verify
         run: npm run build
         env:
