@@ -194,7 +194,7 @@ export default function DashboardPage() {
               </span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2">
-              Visão Geral Executiva, {assigneeName} 👋
+              Visão Geral, {assigneeName} 👋
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
               Acompanhe a saúde operacional do seu cronograma, monitore prazos e gerencie entregas em tempo real.
