@@ -1,0 +1,40 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    name: Lint, Typecheck and Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Run Linter
+        run: npm run lint
+
+      - name: Run Typecheck
+        run: npm run type-check
+
+      - name: Run Build Verify
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: "https://dummy-supabase-project.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "dummy-anon-key-placeholder"
