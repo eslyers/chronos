@@ -91,12 +91,14 @@ export function GanttTaskListTablePT({
             className={"_34SS0" + (isSelected ? " _3ZbQT-selected" : "")}
             style={{
               ...rowStyle,
-              cursor: t.type === "task" && onTaskClick ? "pointer" : "default",
+              cursor: t.type === "project" || (t.type === "task" && onTaskClick) ? "pointer" : "default",
             }}
             key={t.id + "row"}
             onClick={() => {
               setSelectedTask(t.id);
-              if (t.type === "task" && onTaskClick) {
+              if (t.type === "project") {
+                onExpanderClick(t);
+              } else if (t.type === "task" && onTaskClick) {
                 onTaskClick(t);
               }
             }}
@@ -118,7 +120,17 @@ export function GanttTaskListTablePT({
                 >
                   {expanderSymbol}
                 </div>
-                <div>{t.name}</div>
+                <div
+                  onClick={(e) => {
+                    if (t.type === "project") {
+                      e.stopPropagation();
+                      onExpanderClick(t);
+                    }
+                  }}
+                  className={t.type === "project" ? "font-bold select-none cursor-pointer" : ""}
+                >
+                  {t.name}
+                </div>
               </div>
             </div>
             <div className="_3lLk3" style={dateCellStyle}>

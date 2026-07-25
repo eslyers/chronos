@@ -529,6 +529,19 @@ export default function TimelinePage() {
                   TaskListTable={(props) => (
                     <GanttTaskListTablePT
                       {...props}
+                      onExpanderClick={(ganttTask) => {
+                        if (ganttTask.type === "project") {
+                          const projectId = String(ganttTask.id).replace(/^project-/, "");
+                          setCollapsedProjects((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(projectId)) next.delete(projectId);
+                            else next.add(projectId);
+                            return next;
+                          });
+                        } else {
+                          props.onExpanderClick(ganttTask);
+                        }
+                      }}
                       onTaskClick={(ganttTask) => {
                         if (ganttTask.type === "task") {
                           const realId = String(ganttTask.id).replace(/^task-/, "");
