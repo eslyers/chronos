@@ -10,16 +10,19 @@ import {
   AlertCircle,
   Clock,
   Flag,
+  CheckCircle2,
+  ShieldCheck,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useData } from "@/lib/context/DataContext";
 
 const PRIORITY_COLORS: Record<string, string> = {
-  critical: "border-l-red-500 bg-red-50/50",
-  high: "border-l-blue-500 bg-blue-50/50",
-  medium: "border-l-blue-500 bg-blue-50/50",
-  low: "border-l-slate-500 bg-slate-50/30",
+  critical: "border-l-red-500 bg-red-500/10 text-foreground",
+  high: "border-l-indigo-500 bg-indigo-500/10 text-foreground",
+  medium: "border-l-blue-500 bg-blue-500/10 text-foreground",
+  low: "border-l-slate-400 bg-slate-500/10 text-foreground",
 };
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -28,8 +31,6 @@ const PRIORITY_LABELS: Record<string, string> = {
   medium: "Média",
   low: "Baixa",
 };
-
-const STATUS_DONE_LABEL = "✓";
 
 const MONTH_NAMES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -73,7 +74,6 @@ export default function CalendarPage() {
     fetchDetails();
   }, [loadAllProjectsDetails]);
 
-  // Agrupar tasks por dia (yyyy-mm-dd)
   const tasksByDay = useMemo(() => {
     const map = new Map<string, typeof tasks>();
     for (const task of tasks) {
@@ -86,7 +86,6 @@ export default function CalendarPage() {
     return map;
   }, [tasks]);
 
-  // Stats de resumo do mês
   const stats = useMemo(() => {
     const monthStart = startOfMonth(currentDate);
     const monthEnd = endOfMonth(currentDate);
@@ -106,35 +105,35 @@ export default function CalendarPage() {
 
   if (loading || loadingDetails) {
     return (
-      <div className="flex items-center justify-center h-96 text-muted-foreground">
-        Carregando…
+      <div className="flex flex-col items-center justify-center h-96 space-y-4">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 animate-pulse">
+          <CalendarIcon className="h-6 w-6" />
+        </div>
+        <p className="text-sm font-semibold text-muted-foreground animate-pulse">
+          Carregando calendário corporativo de entregas...
+        </p>
       </div>
     );
   }
 
-  // Construir grid do calendário
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
-  const startWeekday = monthStart.getDay(); // 0=domingo
+  const startWeekday = monthStart.getDay();
   const daysInMonth = monthEnd.getDate();
 
   const calendarDays: Array<{ date: Date | null; tasks: typeof tasks }> = [];
 
-  // Preencher dias vazios antes do início
   for (let i = 0; i < startWeekday; i++) {
     calendarDays.push({ date: null, tasks: [] });
   }
-  // Preencher dias do mês
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
     const key = date.toISOString().slice(0, 10);
     calendarDays.push({ date, tasks: tasksByDay.get(key) ?? [] });
   }
-  // Completar grid pra ter múltiplos de 7
   while (calendarDays.length % 7 !== 0) {
     calendarDays.push({ date: null, tasks: [] });
   }
-  // Completar pra 6 linhas se precisar (visualmente mais consistente)
   while (calendarDays.length < 42) {
     calendarDays.push({ date: null, tasks: [] });
   }
@@ -142,129 +141,150 @@ export default function CalendarPage() {
   const today = new Date();
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Calendário</h1>
-          <p className="text-muted-foreground">
-            Visão mensal das tarefas com prazo definido
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setCurrentDate(addMonths(currentDate, -1))}
-            aria-label="Mês anterior"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="min-w-[180px] text-center font-semibold">
-            {MONTH_NAMES[currentDate.getMonth()]} {currentDate.getFullYear()}
-          </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-            aria-label="Próximo mês"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentDate(new Date())}
-          >
-            Hoje
-          </Button>
-        </div>
-      </div>
-
-      {/* Stats do mês */}
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">No mês</p>
-                <p className="text-2xl font-bold mt-1">{stats.total}</p>
-              </div>
-              <CalendarIcon className="h-5 w-5 text-blue-500" />
+    <div className="space-y-8 animate-fadeIn pb-12">
+      {/* Executive Header Banner */}
+      <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-r from-card via-card to-blue-500/5 p-6 sm:p-8 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-xs font-semibold">
+                MONTHLY CALENDAR ENGINE
+              </Badge>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Pendentes</p>
-                <p className="text-2xl font-bold mt-1">{stats.due}</p>
-              </div>
-              <Clock className="h-5 w-5 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Atrasadas</p>
-                <p className="text-2xl font-bold mt-1 text-red-600">{stats.overdue}</p>
-              </div>
-              <AlertCircle className="h-5 w-5 text-red-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Concluídas</p>
-                <p className="text-2xl font-bold mt-1 text-emerald-600">{stats.done}</p>
-              </div>
-              <Flag className="h-5 w-5 text-emerald-500" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {tasks.length === 0 ? (
-        <Card className="border-dashed border-2">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="p-4 rounded-full bg-purple-500/10 mb-4">
-              <CalendarIcon className="h-10 w-10 text-purple-600" />
-            </div>
-            <h2 className="text-2xl font-semibold">Nenhuma tarefa com prazo</h2>
-            <p className="text-sm text-muted-foreground mt-2 max-w-md">
-              Crie tarefas com `due_date` definido no detalhe do projeto
-              pra elas aparecerem aqui.
+            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2 flex items-center gap-3">
+              <CalendarIcon className="h-7 w-7 text-blue-500" />
+              Calendário de Entregáveis
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1 max-w-xl">
+              Visão mensal consolidada dos prazos e entregas programadas no mapa de execução.
             </p>
-            <Button asChild className="mt-6">
-              <Link href="/app/projects">Ir para projetos</Link>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 border-border/80"
+              onClick={() => setCurrentDate(addMonths(currentDate, -1))}
+              aria-label="Mês anterior"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="min-w-[160px] text-center font-extrabold text-lg text-foreground font-mono">
+              {MONTH_NAMES[currentDate.getMonth()]} {currentDate.getFullYear()}
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-10 w-10 border-border/80"
+              onClick={() => setCurrentDate(addMonths(currentDate, 1))}
+              aria-label="Próximo mês"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-10 px-4 text-xs font-bold border-border/80 hover:bg-muted"
+              onClick={() => setCurrentDate(new Date())}
+            >
+              Hoje
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* KPI Stats Grid */}
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+        <Card className="p-5 border-border/80 bg-card shadow-sm hover:border-blue-500/30 transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Entregas no Mês</p>
+              <p className="text-3xl font-extrabold mt-1.5">{stats.total}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500 font-bold">
+              <CalendarIcon className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-5 border-border/80 bg-card shadow-sm hover:border-indigo-500/30 transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pendentes</p>
+              <p className="text-3xl font-extrabold mt-1.5">{stats.due}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-500 font-bold">
+              <Clock className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-5 border-border/80 bg-card shadow-sm hover:border-red-500/30 transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Atrasadas</p>
+              <p className={`text-3xl font-extrabold mt-1.5 ${stats.overdue > 0 ? "text-destructive" : "text-emerald-500"}`}>
+                {stats.overdue}
+              </p>
+            </div>
+            <div className={`flex h-11 w-11 items-center justify-center rounded-xl font-bold ${
+              stats.overdue > 0 ? "bg-destructive/10 text-destructive" : "bg-emerald-500/10 text-emerald-500"
+            }`}>
+              <AlertCircle className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-5 border-border/80 bg-card shadow-sm hover:border-emerald-500/30 transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Concluídas</p>
+              <p className="text-3xl font-extrabold text-emerald-500 mt-1.5">{stats.done}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 font-bold">
+              <Flag className="h-5 w-5" />
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Main Calendar Card */}
+      {tasks.length === 0 ? (
+        <Card className="border-dashed border-2 p-8">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center space-y-4">
+            <div className="p-4 rounded-2xl bg-blue-500/10 text-blue-500">
+              <CalendarIcon className="h-10 w-10" />
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight">Nenhuma tarefa com prazo definido</h2>
+            <p className="text-sm text-muted-foreground max-w-md">
+              Cadastre tarefas com data de vencimento (due_date) para acompanhá-las no calendário mensal.
+            </p>
+            <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">
+              <Link href="/app/projects">Ir para Projetos</Link>
             </Button>
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="p-4">
-            {/* Header dias da semana */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
+        <Card className="border-border/80 bg-card shadow-xl overflow-hidden">
+          <CardContent className="p-4 sm:p-6 space-y-3">
+            {/* Weekday Header */}
+            <div className="grid grid-cols-7 gap-2 mb-2">
               {WEEKDAY_NAMES.map((day) => (
                 <div
                   key={day}
-                  className="text-center text-xs font-medium text-muted-foreground py-2"
+                  className="text-center text-xs font-bold text-muted-foreground uppercase tracking-wider py-2 bg-muted/40 rounded-lg"
                 >
                   {day}
                 </div>
               ))}
             </div>
 
-            {/* Grid de dias */}
-            <div className="grid grid-cols-7 gap-1">
+            {/* Days Grid */}
+            <div className="grid grid-cols-7 gap-2">
               {calendarDays.map((cell, idx) => {
                 if (!cell.date) {
-                  return <div key={idx} className="min-h-[100px] bg-muted/20 rounded-md" />;
+                  return <div key={idx} className="min-h-[110px] bg-muted/20 rounded-xl border border-border/30" />;
                 }
 
                 const isToday = isSameDay(cell.date, today);
@@ -274,26 +294,35 @@ export default function CalendarPage() {
                 return (
                   <div
                     key={cell.date.toISOString()}
-                    className={`min-h-[100px] border rounded-md p-1.5 ${
+                    className={`min-h-[110px] border rounded-xl p-2 transition-all flex flex-col justify-between ${
                       isToday
-                        ? "border-primary bg-primary/5 ring-1 ring-primary"
+                        ? "border-blue-500 bg-blue-500/5 ring-2 ring-blue-500/30"
                         : isCurrentMonth
-                          ? "border-border bg-background"
-                          : "border-border/50 bg-muted/30"
+                          ? "border-border/80 bg-card hover:border-border"
+                          : "border-border/40 bg-muted/20 opacity-60"
                     }`}
                   >
-                    <div
-                      className={`text-xs font-medium mb-1 ${
-                        isToday
-                          ? "text-primary"
-                          : isCurrentMonth
-                            ? "text-foreground"
-                            : "text-muted-foreground"
-                      }`}
-                    >
-                      {cell.date.getDate()}
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span
+                        className={`text-xs font-bold font-mono px-2 py-0.5 rounded-md ${
+                          isToday
+                            ? "bg-blue-600 text-white"
+                            : isCurrentMonth
+                              ? "text-foreground"
+                              : "text-muted-foreground"
+                        }`}
+                      >
+                        {cell.date.getDate()}
+                      </span>
+
+                      {dayTasks.length > 0 && (
+                        <span className="text-[10px] font-bold text-muted-foreground font-mono">
+                          {dayTasks.length} {dayTasks.length === 1 ? "item" : "itens"}
+                        </span>
+                      )}
                     </div>
-                    <div className="space-y-1">
+
+                    <div className="space-y-1.5 flex-1">
                       {dayTasks.slice(0, 3).map((task) => {
                         const isDone = task.status === "done";
                         const project = projects.find((p) => p.id === task.project_id);
@@ -301,17 +330,17 @@ export default function CalendarPage() {
                           <div
                             key={task.id}
                             onClick={() => router.push(`/app/projects/${task.project_id}?task=${task.id}`)}
-                            className={`text-[10px] px-1.5 py-1 rounded border-l-2 cursor-pointer hover:shadow-sm transition-all ${
-                              PRIORITY_COLORS[task.priority] ?? "border-l-slate-500"
+                            className={`text-[10px] p-1.5 rounded-lg border-l-4 cursor-pointer hover:shadow-md transition-all ${
+                              PRIORITY_COLORS[task.priority] ?? "border-l-slate-400 bg-muted/40"
                             } ${isDone ? "opacity-50 line-through" : ""}`}
                             title={`${task.title}${project ? ` (${project.name})` : ""}`}
                           >
-                            <div className="font-medium leading-tight line-clamp-1">
-                              {isDone && <span className="mr-1">{STATUS_DONE_LABEL}</span>}
-                              {task.title}
+                            <div className="font-semibold leading-tight line-clamp-1 flex items-center gap-1">
+                              {isDone && <CheckCircle2 className="h-3 w-3 text-emerald-500 inline shrink-0" />}
+                              <span>{task.title}</span>
                             </div>
                             {project && (
-                              <div className="text-[9px] text-muted-foreground mt-0.5 line-clamp-1">
+                              <div className="text-[9px] text-muted-foreground mt-0.5 line-clamp-1 font-mono">
                                 {project.name}
                               </div>
                             )}
@@ -319,8 +348,8 @@ export default function CalendarPage() {
                         );
                       })}
                       {dayTasks.length > 3 && (
-                        <div className="text-[10px] text-muted-foreground text-center">
-                          +{dayTasks.length - 3} mais
+                        <div className="text-[10px] font-bold text-blue-500 text-center pt-1 hover:underline cursor-pointer">
+                          +{dayTasks.length - 3} mais tarefas
                         </div>
                       )}
                     </div>
@@ -332,16 +361,24 @@ export default function CalendarPage() {
         </Card>
       )}
 
-      {/* Legenda */}
-      <div className="flex items-center gap-4 flex-wrap text-xs">
-        <span className="text-muted-foreground">Legenda:</span>
-        {Object.entries(PRIORITY_LABELS).map(([key, label]) => (
-          <div key={key} className="flex items-center gap-1.5">
-            <div className={`w-3 h-3 rounded border-l-2 ${PRIORITY_COLORS[key] ?? ""}`} />
-            <span>{label}</span>
+      {/* Legend Footer */}
+      <Card className="p-5 border-border/80 bg-card shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-emerald-500" />
+            <span className="text-xs font-bold uppercase tracking-wider text-foreground">Legenda de Prioridades</span>
           </div>
-        ))}
-      </div>
+
+          <div className="flex flex-wrap items-center gap-6 text-xs text-muted-foreground">
+            {Object.entries(PRIORITY_LABELS).map(([key, label]) => (
+              <div key={key} className="flex items-center gap-2">
+                <div className={`w-3.5 h-3.5 rounded border-l-4 ${PRIORITY_COLORS[key] ?? ""}`} />
+                <span className="font-medium text-foreground">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
