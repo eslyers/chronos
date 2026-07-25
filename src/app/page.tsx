@@ -21,6 +21,8 @@ import {
   Activity,
   FileCheck,
   Lock,
+  Mail,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,7 +31,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Home() {
   const productName = process.env.NEXT_PUBLIC_PRODUCTNAME || "CHRONOS";
-  const [activeTab, setActiveTab] = useState<"gantt" | "kanban" | "telegram" | "audit">("gantt");
+  const [activeTab, setActiveTab] = useState<"gantt" | "kanban" | "email" | "audit">("gantt");
 
   const features = [
     {
@@ -47,11 +49,11 @@ export default function Home() {
       badge: "Produtividade",
     },
     {
-      icon: Bell,
-      title: "Notificações Inteligentes no Telegram",
-      description: "Alertas automáticos disparados antes do vencimento, em mudança de status e em atrasos críticos de entregáveis.",
+      icon: Mail,
+      title: "Alertas Executivos por E-mail (Brevo)",
+      description: "Notificações corporativas diretas na caixa de entrada dos gestores, relatórios diários de status e alertas de risco sem dependência de apps de terceiros.",
       color: "from-sky-400 to-blue-600",
-      badge: "Zero Surpresas",
+      badge: "Governança Exclusiva",
     },
     {
       icon: History,
@@ -182,7 +184,7 @@ export default function Home() {
 
           {/* Subtitle */}
           <p className="mt-6 text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-            Combine a previsibilidade da linha do tempo **Gantt** com a agilidade do **Kanban** e o monitoramento proativo via **Telegram**. Governança em tempo real para sua equipe.
+            Combine a previsibilidade da linha do tempo <strong className="text-foreground">Gantt</strong> com a agilidade do <strong className="text-foreground">Kanban</strong> e o monitoramento corporativo proativo via <strong className="text-foreground">E-mail (Brevo)</strong>. Governança em tempo real para sua equipe.
           </p>
 
           {/* Action Buttons */}
@@ -252,15 +254,15 @@ export default function Home() {
                 Board Kanban
               </button>
               <button
-                onClick={() => setActiveTab("telegram")}
+                onClick={() => setActiveTab("email")}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  activeTab === "telegram"
+                  activeTab === "email"
                     ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Bell className="h-4 w-4" />
-                Alertas Telegram
+                <Mail className="h-4 w-4" />
+                Alertas por E-mail
               </button>
               <button
                 onClick={() => setActiveTab("audit")}
@@ -396,28 +398,57 @@ export default function Home() {
               </div>
             )}
 
-            {/* Tab 3: Telegram Mockup */}
-            {activeTab === "telegram" && (
-              <div className="max-w-md mx-auto p-4 rounded-2xl bg-slate-950 border border-slate-800 text-white font-sans shadow-xl animate-fadeIn">
-                <div className="flex items-center gap-3 border-b border-slate-800 pb-3 mb-3">
-                  <div className="h-8 w-8 rounded-full bg-sky-500 flex items-center justify-center font-bold text-xs">
-                    🤖
+            {/* Tab 3: Corporate Email Mockup */}
+            {activeTab === "email" && (
+              <div className="max-w-lg mx-auto p-5 rounded-2xl bg-card border border-border/80 text-foreground font-sans shadow-xl animate-fadeIn space-y-4">
+                {/* Email Client Header */}
+                <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs shadow-md">
+                      <Mail className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-foreground">Chronos Corporate Mailer (vía Brevo Service)</p>
+                      <p className="text-[10px] text-muted-foreground">alertas@chronos.app • Relatório Executivo Oficial</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs font-bold">Chronos Bot (@ChronosAlertBot)</p>
-                    <p className="text-[10px] text-slate-400">Notificações Automáticas de Prazos</p>
+                  <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-[10px] uppercase font-bold">
+                    Caixa Principal
+                  </Badge>
+                </div>
+
+                {/* Email Content Card 1 */}
+                <div className="p-4 rounded-xl bg-muted/40 border border-blue-500/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-blue-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <AlertCircle className="h-3.5 w-3.5" /> ALERTA EXECUTIVO DE VENCIMENTO
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-mono">Hoje, 08:00 AM</span>
+                  </div>
+                  <p className="text-xs font-semibold text-foreground">
+                    Aviso de Prazo: 2 entregáveis exigem sua atenção nas próximas 24 horas.
+                  </p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    O entregável <strong className="text-foreground">"Homologação do Banco de Dados"</strong> no projeto <strong className="text-foreground">Alfa Corporate</strong> está agendado para ser concluído até às 18:00h de hoje.
+                  </p>
+                  <div className="pt-2 flex items-center gap-2">
+                    <Button size="sm" className="h-7 px-3 text-[11px] bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm">
+                      Abrir Tarefa no Chronos <ArrowRight className="ml-1 h-3 w-3" />
+                    </Button>
                   </div>
                 </div>
-                <div className="space-y-2 text-xs">
-                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                    <p className="font-semibold text-sky-400">⚠️ ALERTA DE VENCIMENTO PRÓXIMO</p>
-                    <p className="mt-1 text-slate-300">A tarefa **"Homologação do Banco de Dados"** vence em 24 horas.</p>
-                    <p className="mt-2 text-[10px] text-slate-500">Projeto: Alfa Corporate • Responsável: Sarah</p>
+
+                {/* Email Content Card 2 */}
+                <div className="p-4 rounded-xl bg-muted/40 border border-emerald-500/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> CONFIRMAÇÃO DE CONCLUSÃO DE ETAPA
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-mono">Ontem, 17:45 PM</span>
                   </div>
-                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                    <p className="font-semibold text-emerald-400">✅ TRANSIÇÃO DE ETAPA</p>
-                    <p className="mt-1 text-slate-300">Etapa **"Testes de Integração CI/CD"** concluída por Esly S.</p>
-                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    A etapa <strong className="text-foreground">"Testes de Integração CI/CD"</strong> foi concluída por <strong className="text-foreground">Esly S.</strong>. O log de alteração foi gravado na trilha de auditoria do workspace.
+                  </p>
                 </div>
               </div>
             )}

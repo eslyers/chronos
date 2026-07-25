@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Clock, Calendar, KanbanSquare, Bell, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Clock, Calendar, KanbanSquare, Bell, ShieldCheck, Mail } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export const dynamic = "force-dynamic";
@@ -79,12 +79,12 @@ export default function AuthLayout({
 
               <div className="flex items-start gap-4 p-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/10 shadow-sm">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-500/30 text-white font-bold">
-                  <Bell className="h-5 w-5" />
+                  <Mail className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="font-bold text-sm">Alertas Proativos no Telegram</p>
+                  <p className="font-bold text-sm">Alertas Executivos por E-mail</p>
                   <p className="text-xs text-white/70">
-                    Notificações instantâneas de prazos prestes a vencer.
+                    Relatórios diários e notificações de prazos na caixa corporativa.
                   </p>
                 </div>
               </div>
