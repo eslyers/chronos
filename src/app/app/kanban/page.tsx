@@ -17,10 +17,21 @@ import {
   useDroppable,
   closestCenter,
 } from "@dnd-kit/core";
-import { KanbanSquare, Clock, Flag, Plus, FolderOpen } from "lucide-react";
+import {
+  KanbanSquare,
+  Clock,
+  Flag,
+  Plus,
+  FolderOpen,
+  ArrowLeft,
+  ShieldCheck,
+  AlertCircle,
+  GripVertical,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { useData } from "@/lib/context/DataContext";
 import { TaskAssignee } from "@/components/TaskAssignee";
 import { TaskDialog } from "@/components/TaskDialog";
@@ -47,10 +58,10 @@ type StageLike = {
 };
 
 const PRIORITY_COLORS = {
-  critical: "border-red-500",
-  high: "border-blue-500",
-  medium: "border-blue-500",
-  low: "border-slate-500",
+  critical: "border-l-red-500",
+  high: "border-l-indigo-500",
+  medium: "border-l-blue-500",
+  low: "border-l-slate-400",
 } as const;
 
 const PRIORITY_LABELS = {
@@ -58,6 +69,13 @@ const PRIORITY_LABELS = {
   high: "Alta",
   medium: "Média",
   low: "Baixa",
+} as const;
+
+const PRIORITY_FLAG_COLORS = {
+  critical: "#ef4444",
+  high: "#6366f1",
+  medium: "#3b82f6",
+  low: "#94a3b8",
 } as const;
 
 function formatDate(iso: string | null): string {
@@ -71,9 +89,6 @@ function daysUntil(iso: string | null): number | null {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Task Card (draggable)
-// ────────────────────────────────────────────────────────────────────────────
 function TaskCard({
   task,
   projectId,
@@ -90,7 +105,7 @@ function TaskCard({
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: task.id,
     data: { type: "task", stageId: task.stage_id, taskId: task.id },
-    disabled: isOverlay, // evita double bind quando em overlay
+    disabled: isOverlay,
   });
 
   const days = daysUntil(task.due_date);
@@ -101,62 +116,73 @@ function TaskCard({
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      className={`border-l-4 ${PRIORITY_COLORS[task.priority as keyof typeof PRIORITY_COLORS]} ${
-        isDragging && !isOverlay ? "opacity-30" : ""
-      } ${isOverlay ? "shadow-2xl rotate-2 cursor-grabbing" : "cursor-grab hover:shadow-md"} transition-shadow`}
+      className={`border-l-4 ${PRIORITY_COLORS[task.priority as keyof typeof PRIORITY_COLORS] || "border-l-blue-500"} bg-card border-border/80 ${
+        isDragging && !isOverlay ? "opacity-30 scale-95" : ""
+      } ${
+        isOverlay
+          ? "shadow-2xl rotate-2 cursor-grabbing ring-2 ring-blue-500/50 scale-105"
+          : "cursor-grab hover:shadow-md hover:border-border"
+      } transition-all duration-200 group`}
       onClick={(e) => {
-        // Só navega se não estiver arrastando
         if (!isDragging) {
           e.stopPropagation();
           router.push(`/app/projects/${projectId}?task=${task.id}`);
         }
       }}
     >
-      <CardContent className="p-3">
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <h4 className="text-sm font-medium leading-tight">{task.title}</h4>
-          <Flag
-            className="h-3 w-3 flex-shrink-0 mt-0.5"
-            style={{
-              color:
-                task.priority === "critical"
-                  ? "#ef4444"
-                  : task.priority === "high"
-                    ? "#3b82f6"
-                    : task.priority === "medium"
-                      ? "#3b82f6"
-                      : "#64748b",
-            }}
-          />
+      <CardContent className="p-3.5 space-y-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <h4 className="text-sm font-semibold leading-tight text-foreground group-hover:text-blue-500 transition-colors">
+            {task.title}
+          </h4>
+          <div className="flex items-center gap-1 shrink-0">
+            <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+            <Flag
+              className="h-3.5 w-3.5"
+              style={{
+                color: PRIORITY_FLAG_COLORS[task.priority as keyof typeof PRIORITY_FLAG_COLORS] || "#3b82f6",
+              }}
+            />
+          </div>
         </div>
 
         {task.description && (
-          <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
             {task.description}
           </p>
         )}
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-            {PRIORITY_LABELS[task.priority as keyof typeof PRIORITY_LABELS]}
-          </Badge>
-          {task.due_date && (
-            <span
-              className={`text-[10px] inline-flex items-center gap-1 ${overdue ? "text-red-600 font-medium" : "text-muted-foreground"}`}
+        <div className="flex items-center justify-between gap-2 flex-wrap text-xs pt-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Badge
+              variant="outline"
+              className="text-[10px] px-2 py-0.5 font-bold uppercase tracking-wider bg-muted/40 border-border/60"
             >
-              <Clock className="h-2.5 w-2.5" />
-              {formatDate(task.due_date)}
-              {overdue && " (atrasado)"}
-            </span>
-          )}
-          {task.progress > 0 && task.progress < 100 && (
-            <span className="text-[10px] text-muted-foreground">
+              {PRIORITY_LABELS[task.priority as keyof typeof PRIORITY_LABELS] || "Média"}
+            </Badge>
+
+            {task.due_date && (
+              <span
+                className={`text-[11px] inline-flex items-center gap-1 font-medium ${
+                  overdue ? "text-red-500 font-bold bg-red-500/10 px-1.5 py-0.5 rounded" : "text-muted-foreground"
+                }`}
+              >
+                <Clock className="h-3 w-3" />
+                {formatDate(task.due_date)}
+                {overdue && " (atrasado)"}
+              </span>
+            )}
+          </div>
+
+          {task.progress > 0 && (
+            <span className="text-[10px] font-bold text-muted-foreground font-mono">
               {task.progress}%
             </span>
           )}
         </div>
+
         {task.assignee_id && (
-          <div className="mt-2 pt-2 border-t border-border/40">
+          <div className="pt-2 border-t border-border/40 flex items-center justify-between">
             <TaskAssignee
               assigneeId={task.assignee_id}
               workspaceId={undefined as unknown as string}
@@ -169,21 +195,20 @@ function TaskCard({
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Stage Column (droppable)
-// ────────────────────────────────────────────────────────────────────────────
 function StageColumn({
   stage,
   tasks,
   projectId,
   isDone,
   router,
+  onAddTask,
 }: {
   stage: StageLike;
   tasks: TaskLike[];
   projectId: string;
   isDone: boolean;
   router: ReturnType<typeof useRouter>;
+  onAddTask: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -193,38 +218,53 @@ function StageColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-shrink-0 w-[85vw] sm:w-80 flex flex-col bg-muted/30 rounded-lg border snap-center transition-colors ${
-        isOver ? "bg-primary/10 border-primary ring-2 ring-primary/30" : ""
+      className={`flex-shrink-0 w-[85vw] sm:w-80 flex flex-col bg-muted/30 rounded-2xl border border-border/80 snap-center transition-all ${
+        isOver ? "bg-blue-500/10 border-blue-500 ring-2 ring-blue-500/30" : ""
       }`}
     >
+      {/* Column Header */}
       <div
-        className="p-3 border-b flex items-center justify-between"
+        className="p-3.5 border-b border-border/60 flex items-center justify-between bg-card/60 rounded-t-2xl backdrop-blur-sm"
         style={{
-          borderTopColor: stage.color,
+          borderTopColor: stage.color || "#3b82f6",
           borderTopWidth: 3,
-          borderTopLeftRadius: 8,
-          borderTopRightRadius: 8,
         }}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <div
-            className="w-2 h-2 rounded-full"
-            style={{ backgroundColor: stage.color }}
+            className="w-3 h-3 rounded-full shadow-sm"
+            style={{ backgroundColor: stage.color || "#3b82f6" }}
           />
-          <h3 className="font-medium text-sm">{stage.name}</h3>
+          <h3 className="font-bold text-sm text-foreground">{stage.name}</h3>
         </div>
-        <Badge variant="secondary" className="text-xs">
-          {tasks.length}
-        </Badge>
+        <div className="flex items-center gap-1.5">
+          <Badge variant="outline" className="text-xs font-mono font-bold bg-background">
+            {tasks.length}
+          </Badge>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7 hover:bg-muted"
+            onClick={onAddTask}
+            title={`Adicionar tarefa em "${stage.name}"`}
+          >
+            <Plus className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+          </Button>
+        </div>
       </div>
 
-      <div className="p-3 space-y-2 flex-1 min-h-[200px] max-h-[600px] overflow-y-auto">
+      {/* Column Content / Droppable Area */}
+      <div className="p-3 space-y-3 flex-1 min-h-[260px] max-h-[640px] overflow-y-auto">
         {tasks.length === 0 ? (
-          <p
-            className={`text-xs text-center py-8 ${isOver ? "text-primary font-medium" : "text-muted-foreground"}`}
+          <div
+            className={`border-2 border-dashed rounded-xl py-12 px-4 text-center transition-colors ${
+              isOver ? "border-blue-500 bg-blue-500/5 text-blue-500" : "border-border/60 text-muted-foreground"
+            }`}
           >
-            {isOver ? "Solte aqui ✨" : "Nenhuma tarefa"}
-          </p>
+            <p className="text-xs font-semibold">
+              {isOver ? "Solte para mover aqui ✨" : "Nenhuma tarefa nesta etapa"}
+            </p>
+          </div>
         ) : (
           tasks.map((task) => (
             <TaskCard
@@ -241,9 +281,6 @@ function StageColumn({
   );
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// Página principal
-// ────────────────────────────────────────────────────────────────────────────
 export default function KanbanPage() {
   const router = useRouter();
   const {
@@ -268,15 +305,15 @@ export default function KanbanPage() {
     }
     fetchDetails();
   }, [selectedProjectId, loadProjectDetails, isProjectLoaded]);
+
   const [activeTask, setActiveTask] = useState<TaskLike | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [defaultStageId, setDefaultStageId] = useState<string | null>(null);
 
-  // Sensors: suportam mouse + touch + teclado (acessibilidade)
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 5 }, // evita clique acidental
+      activationConstraint: { distance: 5 },
     }),
     useSensor(TouchSensor, {
       activationConstraint: { delay: 150, tolerance: 5 },
@@ -284,7 +321,6 @@ export default function KanbanPage() {
     useSensor(KeyboardSensor)
   );
 
-  // Tasks do projeto selecionado, memoizadas por performance
   const projectTasks = useMemo(() => {
     if (!selectedProjectId) return [];
     return tasks.filter((t) => t.project_id === selectedProjectId);
@@ -307,8 +343,6 @@ export default function KanbanPage() {
       | { type: "task"; stageId: string }
       | undefined;
 
-    // Se soltou em outra task, usa o stage da task alvo
-    // Se soltou direto na coluna, usa o stage da coluna
     const targetStageId =
       overData?.type === "task"
         ? overData.stageId
@@ -333,37 +367,43 @@ export default function KanbanPage() {
 
   if (loading || loadingProject) {
     return (
-      <div className="flex items-center justify-center h-96 text-muted-foreground">
-        Carregando kanban…
+      <div className="flex flex-col items-center justify-center h-96 space-y-4">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 animate-pulse">
+          <KanbanSquare className="h-6 w-6" />
+        </div>
+        <p className="text-sm font-semibold text-muted-foreground animate-pulse">
+          Carregando fluxo de execução do Kanban...
+        </p>
       </div>
     );
   }
 
   if (projects.length === 0) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-fadeIn">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Kanban</h1>
-          <p className="text-muted-foreground">
-            Acompanhe o fluxo de execução em colunas
+          <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-3">
+            <KanbanSquare className="h-7 w-7 text-blue-500" />
+            Board Kanban
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Acompanhe o fluxo de execução em colunas interativas
           </p>
         </div>
-        <Card className="border-dashed border-2">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="p-4 rounded-full bg-blue-500/10 mb-4">
-              <KanbanSquare className="h-10 w-10 text-blue-600" />
+        <Card className="border-dashed border-2 p-8">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+            <div className="p-4 rounded-2xl bg-blue-500/10 text-blue-500">
+              <KanbanSquare className="h-10 w-10" />
             </div>
-            <h2 className="text-2xl font-semibold">Nenhum projeto ainda</h2>
-            <p className="text-sm text-muted-foreground mt-2 max-w-md">
-              Crie seu primeiro projeto (com ou sem template) pra ver o Kanban.
+            <h2 className="text-2xl font-bold tracking-tight">Nenhum projeto cadastrado</h2>
+            <p className="text-sm text-muted-foreground max-w-md">
+              Crie seu primeiro projeto no workspace para visualizar e gerenciar o Kanban.
             </p>
-            <Link
-              href="/app/projects"
-              className="mt-6 inline-flex items-center justify-center rounded-md text-sm font-medium h-10 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Ir para projetos
-            </Link>
+            <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">
+              <Link href="/app/projects">
+                <Plus className="mr-2 h-4 w-4" /> Ir para Projetos
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -372,56 +412,74 @@ export default function KanbanPage() {
 
   if (!selectedProjectId) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Kanban</h1>
-          <p className="text-muted-foreground">
-            Escolha um projeto pra ver o board
-          </p>
+      <div className="space-y-8 animate-fadeIn pb-12">
+        {/* Header Banner */}
+        <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-r from-card via-card to-blue-500/5 p-6 sm:p-8 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+            <div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-xs font-semibold">
+                  KANBAN WORKSPACE ENGINE
+                </Badge>
+              </div>
+              <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2 flex items-center gap-3">
+                <KanbanSquare className="h-7 w-7 text-blue-500" />
+                Board Kanban — Seleção de Projeto
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1 max-w-xl">
+                Escolha o projeto corporativo para visualizar e interagir com o quadro de etapas em tempo real.
+              </p>
+            </div>
+          </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
+        {/* Project Selection Grid */}
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => {
             const projectStages = stages.filter((s) => s.project_id === project.id);
             const projectTasksCount = tasks.filter((t) => t.project_id === project.id).length;
             const doneCount = tasks.filter(
               (t) => t.project_id === project.id && t.status === "done"
             ).length;
+            const progress = projectTasksCount ? Math.round((doneCount / projectTasksCount) * 100) : 0;
+
             return (
               <Card
                 key={project.id}
-                className="cursor-pointer hover:border-foreground/30 transition-all"
+                className="cursor-pointer border-border/80 bg-card hover:border-blue-500/40 hover:shadow-lg transition-all duration-200 group"
                 onClick={() => setSelectedProjectId(project.id)}
               >
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between mb-3">
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
                     <div
-                      className="p-2 rounded-lg"
-                      style={{ backgroundColor: `${project.color}20` }}
+                      className="p-3 rounded-xl shadow-sm"
+                      style={{ backgroundColor: `${project.color || "#3b82f6"}20` }}
                     >
                       <FolderOpen
-                        className="h-5 w-5"
-                        style={{ color: project.color }}
+                        className="h-6 w-6"
+                        style={{ color: project.color || "#3b82f6" }}
                       />
                     </div>
-                    <Badge variant="secondary" className="text-xs">
-                      {projectStages.length} etapas
+                    <Badge variant="outline" className="text-xs font-semibold bg-background">
+                      {projectStages.length} Etapas
                     </Badge>
                   </div>
-                  <h3 className="font-semibold text-lg">{project.name}</h3>
-                  <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
-                    <span>{projectTasksCount} tarefas</span>
-                    <span>{doneCount} concluídas</span>
+
+                  <div>
+                    <h3 className="font-bold text-lg text-foreground group-hover:text-blue-500 transition-colors">
+                      {project.name}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      {project.description || "Projeto corporativo sem descrição."}
+                    </p>
                   </div>
-                  <div className="mt-3 h-1.5 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${
-                          projectTasksCount ? (doneCount / projectTasksCount) * 100 : 0
-                        }%`,
-                        backgroundColor: project.color,
-                      }}
-                    />
+
+                  <div className="space-y-2 pt-2 border-t border-border/40">
+                    <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
+                      <span>{projectTasksCount} entregáveis</span>
+                      <span className="text-emerald-500">{progress}% concluído</span>
+                    </div>
+                    <Progress value={progress} className="h-2 bg-emerald-500/20" />
                   </div>
                 </CardContent>
               </Card>
@@ -437,12 +495,9 @@ export default function KanbanPage() {
     return (
       <div className="space-y-6">
         <p className="text-muted-foreground">Projeto não encontrado.</p>
-        <button
-          onClick={() => setSelectedProjectId(null)}
-          className="text-sm text-primary-600 hover:underline"
-        >
-          ← Voltar pra lista
-        </button>
+        <Button variant="outline" onClick={() => setSelectedProjectId(null)}>
+          <ArrowLeft className="h-4 w-4 mr-2" /> Voltar para a Lista
+        </Button>
       </div>
     );
   }
@@ -452,60 +507,70 @@ export default function KanbanPage() {
     .sort((a, b) => a.position - b.position);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <button
-            onClick={() => setSelectedProjectId(null)}
-            className="text-sm text-muted-foreground hover:text-foreground mb-2"
-          >
-            ← Trocar projeto
-          </button>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            {project.name}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {projectTasks.length} tarefas • {projectStages.length} etapas
-          </p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <ImportProjectButton mode="single" project={project} />
-          {projectStages.map((stage) => (
-            <Button
-              key={stage.id}
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setDefaultStageId(stage.id);
-                setCreateOpen(true);
-              }}
-              title={`Adicionar tarefa na etapa "${stage.name}"`}
+    <div className="space-y-8 animate-fadeIn pb-12">
+      {/* Executive Header */}
+      <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-r from-card via-card to-blue-500/5 p-6 sm:p-8 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+          <div>
+            <button
+              onClick={() => setSelectedProjectId(null)}
+              className="inline-flex items-center text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors mb-2"
             >
-              <Plus className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">em </span>
-              {stage.name}
-            </Button>
-          ))}
+              <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Alternar Projeto
+            </button>
+            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight flex items-center gap-3">
+              <KanbanSquare className="h-7 w-7 text-blue-500" />
+              {project.name}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1 max-w-xl">
+              {projectTasks.length} tarefas cadastradas • {projectStages.length} colunas de etapas
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <ImportProjectButton mode="single" project={project} />
+            {projectStages.map((stage) => (
+              <Button
+                key={stage.id}
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setDefaultStageId(stage.id);
+                  setCreateOpen(true);
+                }}
+                className="h-10 px-3 text-xs font-semibold border-border hover:bg-muted gap-1.5"
+                title={`Adicionar tarefa na etapa "${stage.name}"`}
+              >
+                <Plus className="h-3.5 w-3.5 text-blue-500" />
+                <span>+ {stage.name}</span>
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
 
+      {/* Error Banner */}
       {moveError && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-          ❌ {moveError}
+        <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-500 font-semibold flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" />
+            <span>{moveError}</span>
+          </div>
           <button
             onClick={() => setMoveError(null)}
-            className="ml-2 text-xs underline"
+            className="text-xs underline hover:text-foreground"
           >
-            fechar
+            Fechar
           </button>
         </div>
       )}
 
+      {/* Board DnD Columns */}
       {projectStages.length === 0 ? (
-        <Card className="border-dashed border-2">
-          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="text-muted-foreground">
-              Este projeto não tem etapas configuradas.
+        <Card className="border-dashed border-2 p-8">
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <p className="text-muted-foreground font-semibold">
+              Este projeto não tem etapas configuradas no momento.
             </p>
           </CardContent>
         </Card>
@@ -517,7 +582,7 @@ export default function KanbanPage() {
           onDragEnd={handleDragEnd}
           onDragCancel={() => setActiveTask(null)}
         >
-          <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory">
+          <div className="flex gap-4 overflow-x-auto pb-6 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory">
             {projectStages.map((stage) => {
               const stageTasks = projectTasks
                 .filter((t) => t.stage_id === stage.id)
@@ -530,10 +595,15 @@ export default function KanbanPage() {
                   projectId={project.id}
                   isDone={stage.is_done}
                   router={router}
+                  onAddTask={() => {
+                    setDefaultStageId(stage.id);
+                    setCreateOpen(true);
+                  }}
                 />
               );
             })}
           </div>
+
           <DragOverlay dropAnimation={null}>
             {activeTask ? (
               <TaskCard
@@ -550,11 +620,15 @@ export default function KanbanPage() {
         </DndContext>
       )}
 
-      <p className="text-xs text-muted-foreground">
-        💡 <strong>Arraste</strong> tarefas entre colunas pra mudar a etapa. O
-        stage_transitions é gravado automaticamente e dispara notificação pra
-        quem tiver inscrito no projeto.
-      </p>
+      {/* Footer Guidance */}
+      <Card className="p-4 border-border/80 bg-card shadow-sm">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
+          <span>
+            💡 <strong>Interatividade Drag-and-Drop:</strong> Arraste os cards entre as colunas para atualizar a etapa. As transições são gravadas na trilha de auditoria e notificam os membros do projeto em tempo real.
+          </span>
+        </div>
+      </Card>
 
       <TaskDialog
         open={createOpen}
