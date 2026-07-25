@@ -9,42 +9,43 @@ export async function updateSession(request: NextRequest) {
 
     // Sem env vars configuradas (preview sem Supabase), pula auth check
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-        // Permite acesso a /app/* em modo demo (sem login)
         return supabaseResponse
     }
 
-    const supabase = createServerClient<Database>(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-        {
-            cookies: {
-                getAll() {
-                    return request.cookies.getAll()
+    try {
+        const supabase = createServerClient<Database>(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+            {
+                cookies: {
+                    getAll() {
+                        return request.cookies.getAll()
+                    },
+                    setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
+                        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+                        supabaseResponse = NextResponse.next({
+                            request,
+                        })
+                        cookiesToSet.forEach(({ name, value, options }) =>
+                            supabaseResponse.cookies.set(name, value, options)
+                        )
+                    },
                 },
-                setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
-                    cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-                    supabaseResponse = NextResponse.next({
-                        request,
-                    })
-                    cookiesToSet.forEach(({ name, value, options }) =>
-                        supabaseResponse.cookies.set(name, value, options)
-                    )
-                },
-            },
-        }
-    )
+            }
+        )
 
-    const {data: user} = await supabase.auth.getUser()
-    if (
-        (!user || !user.user) && request.nextUrl.pathname.startsWith('/app')
-    ) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/auth/login'
-        // Preserva query params (ex: ?task=<id>) + adiciona ?redirect=<path>
-        // pra que apos o login o user volte pra pagina original com deep-link
-        const returnTo = request.nextUrl.pathname + request.nextUrl.search
-        url.search = `?redirect=${encodeURIComponent(returnTo)}`
-        return NextResponse.redirect(url)
+        const { data: user } = await supabase.auth.getUser()
+        if (
+            (!user || !user.user) && request.nextUrl.pathname.startsWith('/app')
+        ) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/auth/login'
+            const returnTo = request.nextUrl.pathname + request.nextUrl.search
+            url.search = `?redirect=${encodeURIComponent(returnTo)}`
+            return NextResponse.redirect(url)
+        }
+    } catch (error) {
+        console.error('[Middleware] Supabase session check error, bypassing:', error)
     }
 
     return supabaseResponse
