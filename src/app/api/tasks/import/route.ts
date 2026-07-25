@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
       .select("*", { count: "exact", head: true })
       .eq("project_id", projectId);
 
-    let position = existingCount || 0;
+    const position = existingCount || 0;
 
     // Mapa de assignee: nome da planilha (string) → UUID do membro do workspace
     const { data: members } = await sb
@@ -218,9 +218,12 @@ export async function POST(request: NextRequest) {
           }
         }
       } else {
+        type CreatedTaskRecord = { id: string; position: number; title: string };
         // Ordena por posição para alinhar de volta aos índices das linhas enviadas
-        const sortedCreated = [...(createdTasks ?? [])].sort((a: any, b: any) => a.position - b.position);
-        created = sortedCreated.map((ct: any, idx: number) => ({
+        const sortedCreated = [...((createdTasks as CreatedTaskRecord[]) ?? [])].sort(
+          (a: CreatedTaskRecord, b: CreatedTaskRecord) => a.position - b.position
+        );
+        created = sortedCreated.map((ct: CreatedTaskRecord, idx: number) => ({
           id: ct.id,
           rowIndex: validRows[idx].index,
           title: ct.title,
@@ -255,7 +258,7 @@ export async function POST(request: NextRequest) {
             .from("tasks")
             .update({ parent_task_id: parent.id })
             .eq("id", task.id)
-            .then(({ error }: any) => {
+            .then(({ error }: { error: { message: string } | null }) => {
               if (error) {
                 console.warn(`[import] Failed to link WBS for task ${task.id}:`, error);
                 return 0;

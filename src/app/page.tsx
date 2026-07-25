@@ -6,7 +6,6 @@ import {
   ArrowRight,
   Calendar,
   KanbanSquare,
-  Bell,
   History,
   Sparkles,
   Github,
@@ -16,16 +15,14 @@ import {
   CheckCircle2,
   Layers,
   Clock,
-  Users,
   ChevronRight,
   Activity,
   FileCheck,
-  Lock,
   Mail,
   AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -429,7 +426,7 @@ export default function Home() {
                     Aviso de Prazo: 2 entregáveis exigem sua atenção nas próximas 24 horas.
                   </p>
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    O entregável <strong className="text-foreground">"Homologação do Banco de Dados"</strong> no projeto <strong className="text-foreground">Alfa Corporate</strong> está agendado para ser concluído até às 18:00h de hoje.
+                    O entregável <strong className="text-foreground">&quot;Homologação do Banco de Dados&quot;</strong> no projeto <strong className="text-foreground">Alfa Corporate</strong> está agendado para ser concluído até às 18:00h de hoje.
                   </p>
                   <div className="pt-2 flex items-center gap-2">
                     <Button size="sm" className="h-7 px-3 text-[11px] bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm">
@@ -447,7 +444,7 @@ export default function Home() {
                     <span className="text-[10px] text-muted-foreground font-mono">Ontem, 17:45 PM</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    A etapa <strong className="text-foreground">"Testes de Integração CI/CD"</strong> foi concluída por <strong className="text-foreground">Esly S.</strong>. O log de alteração foi gravado na trilha de auditoria do workspace.
+                    A etapa <strong className="text-foreground">&quot;Testes de Integração CI/CD&quot;</strong> foi concluída por <strong className="text-foreground">Esly S.</strong>. O log de alteração foi gravado na trilha de auditoria do workspace.
                   </p>
                 </div>
               </div>
@@ -459,7 +456,7 @@ export default function Home() {
                 <div className="p-3 rounded-xl bg-muted/40 border border-border/40 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <History className="h-4 w-4 text-blue-500" />
-                    <span>Transição: **"Etapa 2 - Validação"** movida de `Em Progresso` para `Concluído`</span>
+                    <span>Transição: &quot;Etapa 2 - Validação&quot; movida de `Em Progresso` para `Concluído`</span>
                   </div>
                   <span className="font-mono text-muted-foreground">Hoje às 18:42:05</span>
                 </div>

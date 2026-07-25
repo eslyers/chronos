@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Clock, Calendar, KanbanSquare, Bell, ShieldCheck, Mail } from "lucide-react";
+import { ArrowLeft, Clock, Calendar, KanbanSquare, ShieldCheck, Mail } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export const dynamic = "force-dynamic";

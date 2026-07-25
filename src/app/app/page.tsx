@@ -9,23 +9,18 @@ import {
   AlertTriangle,
   Calendar,
   Bell,
-  TrendingUp,
   Loader2,
   Plus,
   ArrowUpRight,
-  ShieldCheck,
-  Zap,
   Activity,
-  Layers,
   ChevronRight,
-  KanbanSquare,
 } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { useGlobal } from "@/lib/context/GlobalContext";
-import { useData, type Project, type Task } from "@/lib/context/DataContext";
+import { useData, type Project } from "@/lib/context/DataContext";
 import { createSPAClient } from "@/lib/supabase/client";
 
 type UpcomingTask = {

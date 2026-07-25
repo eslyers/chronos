@@ -4,7 +4,7 @@ import { useState } from "react";
 import { createSPAClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/mode";
 import Link from "next/link";
-import { CheckCircle, AlertCircle, Clock, Mail, ArrowRight } from "lucide-react";
+import { CheckCircle, AlertCircle, Clock, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
