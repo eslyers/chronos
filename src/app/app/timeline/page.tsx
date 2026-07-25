@@ -4,10 +4,23 @@ import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { Gantt, ViewMode, type Task as GanttTask } from "gantt-task-react";
 import "gantt-task-react/dist/index.css";
-import { Calendar, FolderKanban, Layers, Upload } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Calendar,
+  FolderKanban,
+  Layers,
+  Upload,
+  CheckCircle2,
+  AlertTriangle,
+  Filter,
+  Sparkles,
+  ShieldCheck,
+  BarChart3,
+} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
 import { useData, type Project, type Task } from "@/lib/context/DataContext";
 import { DependencyManager } from "@/components/DependencyManager";
@@ -25,49 +38,39 @@ const VIEW_MODES = [
   { value: ViewMode.Year, label: "Ano" },
 ];
 
-// Paleta adaptativa por tema (claro/escuro) — alinhada com o sistema CSS
-// variables definidas em globals.css (--gantt-bar-*). Cores escolhidas
-// para harmonizar com o resto do app (laranja queimado como accent).
 function paletteFor(isDark: boolean) {
   return isDark
     ? {
-        // Barras (task bars) — gradient sutil, contrast forte no dark
-        barBackground: "#3b82f6",          // blue-500 (default p/ task sem priority)
-        barBackgroundSelected: "#3b82f6",  // blue-400 (laranja-amarelado)
-        // Project bars (linha pai) — mais neutra
-        projectBackground: "#475569",      // slate-600
-        projectBackgroundSelected: "#94a3b8", // slate-400
-        // Progresso (parte preenchida da barra)
-        projectProgress: "#22c55e",        // green-500
-        projectProgressSelected: "#4ade80", // green-400
-        // Setas de dependência
-        arrowColor: "#94a3b8",              // slate-400 (visível no dark)
-        // Milestones (diamantes)
-        milestoneBackground: "#f87171",    // red-400
-        milestoneSelected: "#ef4444",      // red-500
-        // Linha "hoje"
-        todayColor: "rgba(251, 146, 60, 0.7)", // blue-400
+        barBackground: "#3b82f6",
+        barBackgroundSelected: "#2563eb",
+        projectBackground: "#475569",
+        projectBackgroundSelected: "#64748b",
+        projectProgress: "#22c55e",
+        projectProgressSelected: "#4ade80",
+        arrowColor: "#94a3b8",
+        milestoneBackground: "#f87171",
+        milestoneSelected: "#ef4444",
+        todayColor: "rgba(59, 130, 246, 0.4)",
       }
     : {
-        barBackground: "#3b82f6",          // blue-500
-        barBackgroundSelected: "#1e40af",  // blue-500 (laranja queimado = accent)
-        projectBackground: "#94a3b8",      // slate-400
-        projectBackgroundSelected: "#475569", // slate-600
-        projectProgress: "#16a34a",        // green-600
-        projectProgressSelected: "#22c55e", // green-500
-        arrowColor: "#475569",              // slate-600
-        milestoneBackground: "#ef4444",     // red-500
-        milestoneSelected: "#b91c1c",       // red-700
-        todayColor: "rgba(37, 99, 235, 0.6)", // blue-600
+        barBackground: "#3b82f6",
+        barBackgroundSelected: "#1d4ed8",
+        projectBackground: "#64748b",
+        projectBackgroundSelected: "#334155",
+        projectProgress: "#16a34a",
+        projectProgressSelected: "#22c55e",
+        arrowColor: "#475569",
+        milestoneBackground: "#ef4444",
+        milestoneSelected: "#b91c1c",
+        todayColor: "rgba(37, 99, 235, 0.4)",
       };
 }
 
-// Cores por prioridade (usado quando task.priority está setada)
 const PRIORITY_PALETTE: Record<string, { light: string; dark: string }> = {
-  low:      { light: "#0ea5e9", dark: "#38bdf8" },      // sky
-  medium:   { light: "#3b82f6", dark: "#60a5fa" },      // blue
-  high:     { light: "#1e40af", dark: "#3b82f6" },      // blue-700/500 (corporativo)
-  critical: { light: "#ef4444", dark: "#f87171" },      // red
+  low: { light: "#0ea5e9", dark: "#38bdf8" },
+  medium: { light: "#3b82f6", dark: "#60a5fa" },
+  high: { light: "#6366f1", dark: "#818cf8" },
+  critical: { light: "#ef4444", dark: "#f87171" },
 };
 
 export default function TimelinePage() {
@@ -96,23 +99,20 @@ export default function TimelinePage() {
     fetchDetails();
   }, [selectedProjectId, loadProjectDetails, loadAllProjectsDetails]);
 
-  // Estado: projetos colapsados (sem drill-down)
-  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(
-    new Set()
-  );
-  // Estado: edicao de task (clique na row ou na bar)
+  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set());
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
   }, []);
   const isDark = mounted && theme === "dark";
-  const palette = paletteFor(isDark);
 
-  // projectTasks: lista plana de tasks dos projetos visíveis
+  const palette = useMemo(() => paletteFor(isDark), [isDark]);
+
   const projectTasks = useMemo(() => {
     const visibleProjectIds =
       selectedProjectId === "all"
@@ -123,8 +123,6 @@ export default function TimelinePage() {
       .flatMap((p) => getTasksByProject(p.id));
   }, [projects, selectedProjectId, getTasksByProject]);
 
-  // Mapa de dependências: task_id → [depends_on_task_ids]
-  // (gantt-task-react usa dependências POR task)
   const dependenciesByTask = useMemo(() => {
     const visibleProjectIds =
       selectedProjectId === "all"
@@ -143,7 +141,6 @@ export default function TimelinePage() {
     return map;
   }, [dependencies, projectTasks, projects, selectedProjectId]);
 
-  // Converte dados do DataContext → formato Gantt
   const ganttTasks: GanttTask[] = useMemo(() => {
     const filteredProjects =
       selectedProjectId === "all"
@@ -162,7 +159,6 @@ export default function TimelinePage() {
 
       const isCollapsed = collapsedProjects.has(project.id);
 
-      // Nível 1: Projeto (parent)
       result.push({
         start: projectStart,
         end: projectEnd,
@@ -171,18 +167,16 @@ export default function TimelinePage() {
         type: "project",
         progress: project.progress,
         styles: {
-          backgroundColor: project.color,
-          backgroundSelectedColor: project.color,
+          backgroundColor: project.color || "#475569",
+          backgroundSelectedColor: project.color || "#334155",
           progressColor: "#ffffff",
           progressSelectedColor: "#ffffff",
         },
         isDisabled: true,
       });
 
-      // Nível 2: Tarefas (escondidas se projeto colapsado)
       if (!isCollapsed) {
         const tasks = getTasksByProject(project.id);
-        // Filtra apenas tasks raiz (sem parent) — sub-tasks são filhas
         const rootTasks = tasks.filter((t) => !t.parent_task_id);
         rootTasks.forEach((task: Task) => {
           const start = task.start_date
@@ -192,8 +186,6 @@ export default function TimelinePage() {
             ? new Date(task.due_date)
             : new Date(start.getTime() + 7 * 86400000);
 
-          // Cor adaptativa ao tema: usa PRIORITY_PALETTE se tem priority setada,
-          // senao cai pro barBackground default da palette
           const priority = task.priority as keyof typeof PRIORITY_PALETTE | undefined;
           const paletteForTask = priority && PRIORITY_PALETTE[priority]
             ? PRIORITY_PALETTE[priority]
@@ -221,7 +213,6 @@ export default function TimelinePage() {
           });
         });
 
-        // Nível 3+: Sub-tasks (filhas das root tasks)
         rootTasks.forEach((parent: Task) => {
           const children = tasks.filter((t) => t.parent_task_id === parent.id);
           children.forEach((subtask: Task) => {
@@ -231,7 +222,6 @@ export default function TimelinePage() {
             const end = subtask.due_date
               ? new Date(subtask.due_date)
               : new Date(start.getTime() + 7 * 86400000);
-            // Mesma lógica de cor adaptativa da root task
             const subPriority = subtask.priority as keyof typeof PRIORITY_PALETTE | undefined;
             const subPalette = subPriority && PRIORITY_PALETTE[subPriority]
               ? PRIORITY_PALETTE[subPriority]
@@ -246,7 +236,7 @@ export default function TimelinePage() {
               id: `task-${subtask.id}`,
               type: "task",
               progress: subtask.progress,
-              project: `task-${parent.id}`, // <- hierarquia: filho do parent
+              project: `task-${parent.id}`,
               dependencies: dependenciesByTask.get(subtask.id),
               hideChildren: false,
               styles: {
@@ -262,9 +252,8 @@ export default function TimelinePage() {
     });
 
     return result;
-  }, [projects, selectedProjectId, getTasksByProject, dependenciesByTask, collapsedProjects]);
+  }, [projects, selectedProjectId, getTasksByProject, dependenciesByTask, collapsedProjects, isDark, palette]);
 
-  // Estatísticas
   const stats = useMemo(() => {
     const totalProjects = projects.length;
     const allTasks = projects.flatMap((p) => getTasksByProject(p.id));
@@ -273,161 +262,236 @@ export default function TimelinePage() {
       (t) => t.due_date && new Date(t.due_date) < new Date() && t.status !== "done"
     ).length;
 
-    return { totalProjects, totalTasks: allTasks.length, completed, overdue };
+    const completionRate = allTasks.length > 0 ? Math.round((completed / allTasks.length) * 100) : 0;
+
+    return { totalProjects, totalTasks: allTasks.length, completed, overdue, completionRate };
   }, [projects, getTasksByProject]);
 
   if (loading || loadingDetails) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-muted-foreground">Carregando timeline...</div>
+      <div className="flex flex-col items-center justify-center h-96 space-y-4">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 animate-pulse">
+          <Calendar className="h-6 w-6" />
+        </div>
+        <p className="text-sm font-semibold text-muted-foreground animate-pulse">
+          Carregando motor visual de cronograma...
+        </p>
       </div>
     );
   }
 
+  const selectedProjectName =
+    selectedProjectId === "all"
+      ? "Todos os Projetos"
+      : projects.find((p) => p.id === selectedProjectId)?.name || "Projeto Selecionado";
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Calendar className="h-6 w-6 sm:h-7 sm:w-7" />
-          Timeline
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Visualize seus cronogramas em barras temporais com drag-and-drop
-        </p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Projetos</p>
-                <p className="text-3xl font-bold mt-1">{stats.totalProjects}</p>
-              </div>
-              <FolderKanban className="h-8 w-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Tarefas</p>
-                <p className="text-3xl font-bold mt-1">{stats.totalTasks}</p>
-              </div>
-              <Layers className="h-8 w-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Concluídas</p>
-                <p className="text-3xl font-bold mt-1 text-emerald-500">
-                  {stats.completed}
-                </p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-emerald-500/15 flex items-center justify-center text-emerald-500">
-                ✓
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Atrasadas</p>
-                <p className="text-3xl font-bold mt-1 text-destructive">
-                  {stats.overdue}
-                </p>
-              </div>
-              <div className="h-8 w-8 rounded-full bg-destructive/15 flex items-center justify-center text-destructive">
-                ⚠
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Controls */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Configurações de Visualização</CardTitle>
-          <CardDescription>
-            Escolha o projeto e a escala temporal
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-end gap-4">
-          <div className="flex-1 min-w-[200px]">
-            <label className="text-sm font-medium mb-2 block">Projeto</label>
-            <Select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-            >
-              <option value="all">📊 Todos os projetos</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </Select>
-          </div>
+    <div className="space-y-8 animate-fadeIn pb-12">
+      {/* Header Banner */}
+      <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-r from-card via-card to-blue-500/5 p-6 sm:p-8 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div>
-            <label className="text-sm font-medium mb-2 block">Escala</label>
-            <div className="flex gap-1">
-              {VIEW_MODES.map((mode) => (
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-xs font-semibold">
+                GANTT TIMELINE ENGINE
+              </Badge>
+              <span className="text-xs text-muted-foreground font-mono">v2.4 Enterprise</span>
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2 flex items-center gap-3">
+              <Calendar className="h-7 w-7 text-blue-500" />
+              Cronograma & Timeline Visual
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1 max-w-xl">
+              Acompanhe a dependência temporal de cada entregável, interaja via drag-and-drop e garanta previsibilidade operacional.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {selectedProjectId !== "all" && (
+              <>
+                <TaskHierarchy projectId={selectedProjectId} />
+                <DependencyManager projectId={selectedProjectId} />
                 <Button
-                  key={mode.value}
-                  variant={viewMode === mode.value ? "default" : "outline"}
+                  variant="outline"
                   size="sm"
+                  onClick={() => setImportDialogOpen(true)}
+                  className="h-10 px-4 text-xs font-semibold border-border hover:bg-muted gap-2"
+                >
+                  <Upload className="h-4 w-4 text-blue-500" />
+                  Importar Planilha
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* KPI Cards Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="p-5 border-border/80 bg-card shadow-sm hover:border-blue-500/30 transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Projetos em Escopo</p>
+              <p className="text-3xl font-extrabold mt-1.5">{stats.totalProjects}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500 font-bold">
+              <FolderKanban className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <Sparkles className="h-3.5 w-3.5 text-blue-500" />
+            <span>Mapeamento Ativo</span>
+          </div>
+        </Card>
+
+        <Card className="p-5 border-border/80 bg-card shadow-sm hover:border-indigo-500/30 transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Entregáveis Totais</p>
+              <p className="text-3xl font-extrabold mt-1.5">{stats.totalTasks}</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-500 font-bold">
+              <Layers className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <BarChart3 className="h-3.5 w-3.5 text-indigo-500" />
+            <span>Tarefas & Subtarefas</span>
+          </div>
+        </Card>
+
+        <Card className="p-5 border-border/80 bg-card shadow-sm hover:border-emerald-500/30 transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Conclusão Global</p>
+              <p className="text-3xl font-extrabold text-emerald-500 mt-1.5">{stats.completionRate}%</p>
+            </div>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 font-bold">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 space-y-1">
+            <Progress value={stats.completionRate} className="h-1.5 bg-emerald-500/20" />
+            <p className="text-[10px] text-muted-foreground text-right">{stats.completed} de {stats.totalTasks} concluídas</p>
+          </div>
+        </Card>
+
+        <Card className="p-5 border-border/80 bg-card shadow-sm hover:border-red-500/30 transition-all">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Atrasos Críticos</p>
+              <p className={`text-3xl font-extrabold mt-1.5 ${stats.overdue > 0 ? "text-destructive" : "text-emerald-500"}`}>
+                {stats.overdue}
+              </p>
+            </div>
+            <div className={`flex h-11 w-11 items-center justify-center rounded-xl font-bold ${
+              stats.overdue > 0 ? "bg-destructive/10 text-destructive" : "bg-emerald-500/10 text-emerald-500"
+            }`}>
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            {stats.overdue > 0 ? (
+              <span className="text-destructive font-semibold">Atenção requerida nos prazos</span>
+            ) : (
+              <span className="text-emerald-500 font-semibold">100% de prazos em dia</span>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Control Bar & Scale Filter */}
+      <Card className="p-4 sm:p-5 border-border/80 bg-card shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          {/* Left: Project Selector */}
+          <div className="flex items-center gap-3 flex-1 min-w-[240px]">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500">
+              <Filter className="h-4 w-4" />
+            </div>
+            <div className="w-full max-w-xs">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
+                Filtrar por Projeto
+              </label>
+              <Select
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                className="h-10 text-sm font-medium bg-background border-border/80"
+              >
+                <option value="all">📊 Todos os Projetos ({projects.length})</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
+
+          {/* Center/Right: View Scale Toggle Buttons */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mr-2 hidden sm:inline">
+              Escala Temporal:
+            </span>
+            <div className="inline-flex p-1 rounded-xl bg-muted/60 border border-border/60">
+              {VIEW_MODES.map((mode) => (
+                <button
+                  key={mode.value}
                   onClick={() => setViewMode(mode.value)}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    viewMode === mode.value
+                      ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
                 >
                   {mode.label}
-                </Button>
+                </button>
               ))}
             </div>
           </div>
-          {selectedProjectId !== "all" && (
-            <>
-              <TaskHierarchy projectId={selectedProjectId} />
-              <DependencyManager projectId={selectedProjectId} />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setImportDialogOpen(true)}
-                className="gap-2"
-                title="Importar planilha Excel/CSV/ODS"
-              >
-                <Upload className="h-4 w-4" />
-                Importar planilha
-              </Button>
-            </>
-          )}
-        </CardContent>
+        </div>
       </Card>
 
-      {/* Gantt Chart */}
-      <Card>
+      {/* Main Gantt Canvas Card */}
+      <Card className="border-border/80 bg-card shadow-xl overflow-hidden">
+        {/* Card Header Bar */}
+        <div className="flex items-center justify-between border-b border-border/60 px-6 py-4 bg-muted/20">
+          <div className="flex items-center gap-3">
+            <div className="flex gap-1.5">
+              <div className="h-3 w-3 rounded-full bg-red-500/80" />
+              <div className="h-3 w-3 rounded-full bg-yellow-500/80" />
+              <div className="h-3 w-3 rounded-full bg-emerald-500/80" />
+            </div>
+            <span className="text-xs font-bold text-foreground font-mono">
+              Chronos Workspace / {selectedProjectName}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-xs">
+              ● Live Sync Active
+            </Badge>
+          </div>
+        </div>
+
+        {/* Gantt Viewport */}
         <CardContent className="p-0">
           {ganttTasks.length === 0 ? (
-            <div className="text-center py-16">
-              <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">
-                Nenhum cronograma ainda
-              </h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Crie projetos com data de início e prazo para visualizar no Gantt
+            <div className="text-center py-20 px-4 space-y-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 mx-auto">
+                <Calendar className="h-8 w-8" />
+              </div>
+              <h3 className="text-xl font-bold tracking-tight">Nenhum cronograma nesta visualização</h3>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                Cadastre tarefas com data de início e prazo ou importe uma planilha para visualizar o mapa temporal no Gantt.
               </p>
-              <Button asChild>
-                <Link href="/app/projects">Ver projetos</Link>
-              </Button>
+              <div className="pt-2">
+                <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">
+                  <Link href="/app/projects">Gerenciar Projetos</Link>
+                </Button>
+              </div>
             </div>
           ) : (
-            <div className="overflow-x-auto gantt-wrapper">
+            <div className="overflow-x-auto gantt-wrapper border-t border-border/40">
               <div className="min-w-[800px]">
                 <Gantt
                   tasks={ganttTasks}
@@ -435,14 +499,14 @@ export default function TimelinePage() {
                   locale="pt-BR"
                   columnWidth={
                     viewMode === ViewMode.Day
-                      ? 50
+                      ? 55
                       : viewMode === ViewMode.Week
-                      ? 120
+                      ? 130
                       : viewMode === ViewMode.Month
-                      ? 200
-                      : 300
+                      ? 210
+                      : 320
                   }
-                  listCellWidth="155px"
+                  listCellWidth="165px"
                   barBackgroundColor={palette.barBackground}
                   barBackgroundSelectedColor={palette.barBackgroundSelected}
                   todayColor={palette.todayColor}
@@ -454,8 +518,8 @@ export default function TimelinePage() {
                   milestoneBackgroundSelectedColor={palette.milestoneSelected}
                   arrowColor={palette.arrowColor}
                   arrowIndent={20}
-                  rowHeight={40}
-                  headerHeight={50}
+                  rowHeight={44}
+                  headerHeight={54}
                   fontFamily="inherit"
                   fontSize="12px"
                   rtl={false}
@@ -479,7 +543,6 @@ export default function TimelinePage() {
                   )}
                   TooltipContent={GanttTooltipPT}
                   onClick={(task) => {
-                    // Drill-down: clicar no projeto expande/colapsa tasks
                     if (task.type === "project") {
                       const projectId = String(task.id).replace(/^project-/, "");
                       setCollapsedProjects((prev) => {
@@ -490,7 +553,6 @@ export default function TimelinePage() {
                       });
                       return;
                     }
-                    // Clique em task/sub-task: abre popup de edicao
                     if (task.type === "task") {
                       const realId = String(task.id).replace(/^task-/, "");
                       const found = projectTasks.find((t) => t.id === realId);
@@ -507,42 +569,44 @@ export default function TimelinePage() {
         </CardContent>
       </Card>
 
-      {/* Legend */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-semibold">Legenda</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4 text-xs">
+      {/* Legend Footer */}
+      <Card className="p-5 border-border/80 bg-card shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-emerald-500" />
+            <span className="text-xs font-bold uppercase tracking-wider text-foreground">Legenda de Prioridades & Governança</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-6 text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-2 rounded bg-slate-400" />
-              <span>Projeto</span>
+              <div className="w-3.5 h-3.5 rounded-full bg-slate-500" />
+              <span>Projeto (Pai)</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-6 h-2 rounded bg-slate-500" />
+              <div className="w-3.5 h-3.5 rounded-full bg-sky-500" />
               <span>Prioridade Baixa</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-6 h-2 rounded bg-blue-500" />
+              <div className="w-3.5 h-3.5 rounded-full bg-blue-500" />
               <span>Média</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-6 h-2 rounded bg-blue-500" />
+              <div className="w-3.5 h-3.5 rounded-full bg-indigo-500" />
               <span>Alta</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-6 h-2 rounded bg-red-500" />
+              <div className="w-3.5 h-3.5 rounded-full bg-red-500" />
               <span>Crítica</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-6 h-0.5 bg-red-500" />
-              <span>Hoje</span>
+              <div className="w-4 h-0.5 bg-blue-500 font-bold" />
+              <span>Linha do Dia Atual</span>
             </div>
           </div>
-        </CardContent>
+        </div>
       </Card>
 
-      {/* Task edit dialog (abre ao clicar em row ou em bar de task) */}
+      {/* Task Edit Dialog */}
       {editingTask && (
         <TaskDialog
           open={taskDialogOpen}
@@ -555,7 +619,7 @@ export default function TimelinePage() {
         />
       )}
 
-      {/* Import dialog de planilha */}
+      {/* Import Dialog */}
       {selectedProjectId !== "all" && (() => {
         const selProject = projects.find((p) => p.id === selectedProjectId);
         return selProject ? (
@@ -565,7 +629,6 @@ export default function TimelinePage() {
             projectId={selectedProjectId}
             workspaceId={selProject.workspace_id}
             onImported={() => {
-              // Forçar reload das tasks via context — DataContext vai refazer fetch
               window.location.reload();
             }}
           />
