@@ -138,8 +138,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Navigation */}
         <nav className="mt-3 px-2 space-y-0.5 flex-1">
           {navigation.map((item) => {
+            // Exact match for /app (dashboard) — avoids matching all /app/* sub-routes.
+            // For all other items, also match sub-routes (e.g. /app/projects/[id]).
             const isActive =
-              pathname === item.href || pathname?.startsWith(`${item.href}/`);
+              item.href === "/app"
+                ? pathname === "/app"
+                : pathname === item.href || pathname?.startsWith(`${item.href}/`);
             const Icon = item.icon;
             return (
               <Link
