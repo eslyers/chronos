@@ -31,7 +31,22 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     moveTask,
     deleteTask,
     loading,
+    loadProjectDetails,
+    isProjectLoaded,
   } = useData();
+
+  const [loadingProject, setLoadingProject] = useState(!isProjectLoaded(id));
+
+  useEffect(() => {
+    async function fetchDetails() {
+      if (id && !isProjectLoaded(id)) {
+        setLoadingProject(true);
+        await loadProjectDetails(id);
+        setLoadingProject(false);
+      }
+    }
+    fetchDetails();
+  }, [id, loadProjectDetails, isProjectLoaded]);
 
   const project = getProject(id);
   const stages = getStagesByProject(id);
@@ -73,7 +88,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, allTasks, setEditingTask, setActiveStageId, setTaskDialogOpen]);
 
-  if (loading) {
+  if (loading || loadingProject) {
     return <div className="p-8 text-muted-foreground">Carregando...</div>;
   }
 

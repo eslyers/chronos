@@ -108,6 +108,9 @@ type DataContextType = DataState & {
   getDependenciesForTask: (taskId: string) => TaskDependency[];
   getReverseDependenciesForTask: (taskId: string) => TaskDependency[];
   refresh: () => Promise<void>;
+  loadProjectDetails: (projectId: string) => Promise<void>;
+  loadAllProjectsDetails: () => Promise<void>;
+  isProjectLoaded: (projectId: string) => boolean;
 };
 
 const STORAGE_KEY = "chronos:data:v1";
@@ -283,6 +286,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   });
   const [userId, setUserId] = useState<string>(USER_ID);
   const [workspaceId, setWorkspaceId] = useState<string>("ws-local");
+  const [loadedProjects, setLoadedProjects] = useState<Record<string, boolean>>({});
 
   // Load inicial — escolhe automaticamente entre Supabase e localStorage
   useEffect(() => {
@@ -294,14 +298,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         setUserId(ctx.userId);
         setWorkspaceId(ctx.workspaceId ?? "ws-local");
-        const data = await dataProvider.load();
+        const data = await dataProvider.loadProjectsOnly();
         if (cancelled) return;
         if (data) {
           setState({
             projects: data.projects,
-            stages: data.stages,
-            tasks: data.tasks,
-            dependencies: data.dependencies,
+            stages: [],
+            tasks: [],
+            dependencies: [],
             loading: false,
           });
         } else {
@@ -310,14 +314,24 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Modo DEMO: localStorage
+      // Modo DEMO: localStorage (carrega tudo imediatamente)
       const stored = loadFromStorage();
       if (stored) {
         setState({ ...stored, loading: false });
+        const loaded: Record<string, boolean> = {};
+        stored.projects.forEach((p) => {
+          loaded[p.id] = true;
+        });
+        setLoadedProjects(loaded);
       } else {
         const seeded = seedMockData();
         saveToStorage(seeded);
         setState({ ...seeded, loading: false });
+        const loaded: Record<string, boolean> = {};
+        seeded.projects.forEach((p) => {
+          loaded[p.id] = true;
+        });
+        setLoadedProjects(loaded);
       }
     }
     init();
@@ -331,21 +345,44 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (getDataLayer() === "supabase") {
-      const data = await dataProvider.load();
+      const data = await dataProvider.loadProjectsOnly();
       if (data) {
-        setState({
+        setState((prev) => ({
+          ...prev,
           projects: data.projects,
-          stages: data.stages,
-          tasks: data.tasks,
-          dependencies: data.dependencies,
-          loading: false,
-        });
+        }));
+
+        const loadedIds = Object.keys(loadedProjects).filter((id) => loadedProjects[id]);
+        if (loadedIds.length > 0) {
+          await Promise.all(
+            loadedIds.map(async (projectId) => {
+              const details = await dataProvider.loadProjectDetails(projectId);
+              if (details) {
+                setState((prev) => {
+                  const filteredStages = prev.stages.filter((s) => s.project_id !== projectId);
+                  const filteredTasks = prev.tasks.filter((t) => t.project_id !== projectId);
+                  const detailTaskIds = details.tasks.map((t) => t.id);
+                  const filteredDeps = prev.dependencies.filter(
+                    (d) => !detailTaskIds.includes(d.task_id)
+                  );
+
+                  return {
+                    ...prev,
+                    stages: [...filteredStages, ...details.stages],
+                    tasks: [...filteredTasks, ...details.tasks],
+                    dependencies: [...filteredDeps, ...details.dependencies],
+                  };
+                });
+              }
+            })
+          );
+        }
       }
       return;
     }
     const stored = loadFromStorage();
     if (stored) setState({ ...stored, loading: false });
-  }, []);
+  }, [loadedProjects]);
 
   // ── Projects ────────────────────────────────────────────────
   const createProject = useCallback(async (data: Partial<Project>): Promise<Project> => {
@@ -363,6 +400,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           projects: [project, ...prev.projects],
           stages: [...prev.stages, ...stages],
         }));
+        setLoadedProjects((prev) => ({ ...prev, [project.id]: true }));
         return project;
       }
     }
@@ -391,7 +429,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       projects: [project, ...prev.projects],
       stages: [...prev.stages, ...stages],
     }));
-
+    setLoadedProjects((prev) => ({ ...prev, [project.id]: true }));
     return project;
   }, [userId, workspaceId]);
 
@@ -635,10 +673,77 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [state.dependencies]
   );
 
-  const getReverseDependenciesForTask = useCallback(
-    (taskId: string) =>
-      state.dependencies.filter((d) => d.depends_on_task_id === taskId),
-    [state.dependencies]
+  const loadProjectDetails = useCallback(async (projectId: string) => {
+    if (getDataLayer() !== "supabase") return;
+    if (loadedProjects[projectId]) return;
+
+    try {
+      const details = await dataProvider.loadProjectDetails(projectId);
+      if (details) {
+        setState((prev) => {
+          const filteredStages = prev.stages.filter((s) => s.project_id !== projectId);
+          const filteredTasks = prev.tasks.filter((t) => t.project_id !== projectId);
+          const detailTaskIds = details.tasks.map((t) => t.id);
+          const filteredDeps = prev.dependencies.filter(
+            (d) => !detailTaskIds.includes(d.task_id)
+          );
+
+          return {
+            ...prev,
+            stages: [...filteredStages, ...details.stages],
+            tasks: [...filteredTasks, ...details.tasks],
+            dependencies: [...filteredDeps, ...details.dependencies],
+          };
+        });
+        setLoadedProjects((prev) => ({ ...prev, [projectId]: true }));
+      }
+    } catch (error) {
+      console.error("[DataContext] Error loading project details:", error);
+    }
+  }, [loadedProjects]);
+
+  const loadAllProjectsDetails = useCallback(async () => {
+    if (getDataLayer() !== "supabase") return;
+    const pendingIds = state.projects
+      .map((p) => p.id)
+      .filter((id) => !loadedProjects[id]);
+
+    if (pendingIds.length === 0) return;
+
+    try {
+      await Promise.all(
+        pendingIds.map(async (projectId) => {
+          const details = await dataProvider.loadProjectDetails(projectId);
+          if (details) {
+            setState((prev) => {
+              const filteredStages = prev.stages.filter((s) => s.project_id !== projectId);
+              const filteredTasks = prev.tasks.filter((t) => t.project_id !== projectId);
+              const detailTaskIds = details.tasks.map((t) => t.id);
+              const filteredDeps = prev.dependencies.filter(
+                (d) => !detailTaskIds.includes(d.task_id)
+              );
+
+              return {
+                ...prev,
+                stages: [...filteredStages, ...details.stages],
+                tasks: [...filteredTasks, ...details.tasks],
+                dependencies: [...filteredDeps, ...details.dependencies],
+              };
+            });
+            setLoadedProjects((prev) => ({ ...prev, [projectId]: true }));
+          }
+        })
+      );
+    } catch (error) {
+      console.error("[DataContext] Error loading all projects details:", error);
+    }
+  }, [state.projects, loadedProjects]);
+
+  const isProjectLoaded = useCallback(
+    (projectId: string) => {
+      return Boolean(loadedProjects[projectId] || getDataLayer() === "local");
+    },
+    [loadedProjects]
   );
 
   return (
@@ -664,6 +769,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         getDependenciesForTask,
         getReverseDependenciesForTask,
         refresh,
+        loadProjectDetails,
+        loadAllProjectsDetails,
+        isProjectLoaded,
       }}
     >
       {children}

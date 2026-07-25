@@ -60,8 +60,18 @@ function addMonths(d: Date, n: number): Date {
 
 export default function CalendarPage() {
   const router = useRouter();
-  const { tasks, projects, loading } = useData();
+  const { tasks, projects, loading, loadAllProjectsDetails } = useData();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  React.useEffect(() => {
+    async function fetchDetails() {
+      setLoadingDetails(true);
+      await loadAllProjectsDetails();
+      setLoadingDetails(false);
+    }
+    fetchDetails();
+  }, [loadAllProjectsDetails]);
 
   // Agrupar tasks por dia (yyyy-mm-dd)
   const tasksByDay = useMemo(() => {
@@ -94,7 +104,7 @@ export default function CalendarPage() {
     return { total: monthTasks.length, overdue, due, done };
   }, [tasks, currentDate]);
 
-  if (loading) {
+  if (loading || loadingDetails) {
     return (
       <div className="flex items-center justify-center h-96 text-muted-foreground">
         Carregando…

@@ -73,6 +73,23 @@ export const dataProvider = {
     return { projects, stages, tasks, dependencies };
   },
 
+  loadProjectsOnly: async () => {
+    if (getDataLayer() !== "supabase") return null;
+    const projects = await fetchAllProjects();
+    return { projects };
+  },
+
+  loadProjectDetails: async (projectId: string) => {
+    if (getDataLayer() !== "supabase") return null;
+    const [stages, tasks] = await Promise.all([
+      fetchAllStages([projectId]),
+      fetchAllTasks([projectId]),
+    ]);
+    const taskIds = tasks.map((t) => t.id);
+    const dependencies = await fetchAllDependencies(taskIds);
+    return { stages, tasks, dependencies };
+  },
+
   createProject: async (input: {
     name: string;
     description?: string;

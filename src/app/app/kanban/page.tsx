@@ -246,8 +246,28 @@ function StageColumn({
 // ────────────────────────────────────────────────────────────────────────────
 export default function KanbanPage() {
   const router = useRouter();
-  const { projects, stages, tasks, loading, updateTask } = useData();
+  const {
+    projects,
+    stages,
+    tasks,
+    loading,
+    updateTask,
+    loadProjectDetails,
+    isProjectLoaded,
+  } = useData();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [loadingProject, setLoadingProject] = useState(false);
+
+  useEffect(() => {
+    async function fetchDetails() {
+      if (selectedProjectId && !isProjectLoaded(selectedProjectId)) {
+        setLoadingProject(true);
+        await loadProjectDetails(selectedProjectId);
+        setLoadingProject(false);
+      }
+    }
+    fetchDetails();
+  }, [selectedProjectId, loadProjectDetails, isProjectLoaded]);
   const [activeTask, setActiveTask] = useState<TaskLike | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -311,7 +331,7 @@ export default function KanbanPage() {
     }
   };
 
-  if (loading) {
+  if (loading || loadingProject) {
     return (
       <div className="flex items-center justify-center h-96 text-muted-foreground">
         Carregando kanban…

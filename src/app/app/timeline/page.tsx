@@ -71,9 +71,31 @@ const PRIORITY_PALETTE: Record<string, { light: string; dark: string }> = {
 };
 
 export default function TimelinePage() {
-  const { projects, getTasksByProject, dependencies, loading } = useData();
+  const {
+    projects,
+    getTasksByProject,
+    dependencies,
+    loading,
+    loadProjectDetails,
+    loadAllProjectsDetails,
+  } = useData();
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.Week);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  useEffect(() => {
+    async function fetchDetails() {
+      setLoadingDetails(true);
+      if (selectedProjectId === "all") {
+        await loadAllProjectsDetails();
+      } else {
+        await loadProjectDetails(selectedProjectId);
+      }
+      setLoadingDetails(false);
+    }
+    fetchDetails();
+  }, [selectedProjectId, loadProjectDetails, loadAllProjectsDetails]);
+
   // Estado: projetos colapsados (sem drill-down)
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(
     new Set()
@@ -254,7 +276,7 @@ export default function TimelinePage() {
     return { totalProjects, totalTasks: allTasks.length, completed, overdue };
   }, [projects, getTasksByProject]);
 
-  if (loading) {
+  if (loading || loadingDetails) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-muted-foreground">Carregando timeline...</div>
