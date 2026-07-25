@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { z } from "zod";
+
+const testSchema = z.object({
+  chatId: z.string().min(1, "chatId é obrigatório"),
+});
 
 export async function POST(req: NextRequest) {
   try {
-    const { chatId } = await req.json();
-
-    if (!chatId || typeof chatId !== "string") {
+    const body = await req.json();
+    const parseResult = testSchema.safeParse(body);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: "chatId é obrigatório" },
+        { error: parseResult.error.errors[0].message },
         { status: 400 }
       );
     }
+    const { chatId } = parseResult.data;
 
     const supabase = await createServerSupabaseClient();
     const {

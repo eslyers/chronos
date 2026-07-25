@@ -9,37 +9,34 @@ import { createServerAdminClient } from "@/lib/supabase/serverAdminClient";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/brevo";
 import { inviteEmailTemplate } from "@/lib/email/templates";
+import { z } from "zod";
 
 export const runtime = "nodejs";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyClient = any;
 
-interface InviteBody {
-  email: string;
-  role: "admin" | "member" | "viewer";
-  workspace_id: string;
-  send_email?: boolean;
-}
+const inviteSchema = z.object({
+  email: z.string().email("Email inválido"),
+  role: z.enum(["admin", "member", "viewer"]),
+  workspace_id: z.string().uuid("workspace_id inválido"),
+  send_email: z.boolean().optional(),
+});
 
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://chronos-temp.vercel.app";
 const INVITE_EXPIRY_HOURS = 168; // 7 dias
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as InviteBody;
-    const { email, role, workspace_id, send_email = true } = body;
-
-    // ── Validação ──
-    if (!email || !email.includes("@")) {
-      return NextResponse.json({ error: "Email inválido" }, { status: 400 });
+    const body = await request.json();
+    const parseResult = inviteSchema.safeParse(body);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: parseResult.error.errors[0].message },
+        { status: 400 }
+      );
     }
-    if (!workspace_id) {
-      return NextResponse.json({ error: "workspace_id é obrigatório" }, { status: 400 });
-    }
-    if (!["admin", "member", "viewer"].includes(role)) {
-      return NextResponse.json({ error: "role deve ser admin/member/viewer" }, { status: 400 });
-    }
+    const { email, role, workspace_id, send_email = true } = parseResult.data;
 
     // ── Auth: pegar user logado (cookies do Next) ──
     const userClient = await createServerSupabaseClient();

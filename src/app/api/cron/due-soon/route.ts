@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Edge Function pode demorar
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const CRON_SECRET = process.env.CRON_SECRET ?? process.env.PRIVATE_SUPABASE_SERVICE_KEY!;
+const CRON_SECRET = process.env.CRON_SECRET;
 
 export async function GET(req: NextRequest) {
   return triggerDueSoon(req, "GET");
@@ -21,17 +21,21 @@ export async function POST(req: NextRequest) {
 
 async function triggerDueSoon(req: NextRequest, method: string) {
   try {
-    // 1) Autenticação: aceitar Bearer token (Vercel Cron envia header Authorization)
-    //    OU query param ?secret=... (pra teste manual no browser)
-    const authHeader = req.headers.get("authorization");
-    const url = new URL(req.url);
-    const querySecret = url.searchParams.get("secret");
+    // 1) Autenticação: exige CRON_SECRET configurada no servidor
+    if (!CRON_SECRET) {
+      return NextResponse.json(
+        { error: "CRON_SECRET não configurada no servidor" },
+        { status: 500 }
+      );
+    }
 
-    const providedSecret = authHeader?.replace(/^Bearer\s+/i, "") ?? querySecret;
+    // Aceita apenas Bearer token (Vercel Cron envia header Authorization)
+    const authHeader = req.headers.get("authorization");
+    const providedSecret = authHeader?.replace(/^Bearer\s+/i, "");
 
     if (!providedSecret || providedSecret !== CRON_SECRET) {
       return NextResponse.json(
-        { error: "Não autorizado. Use header Authorization: Bearer <CRON_SECRET> ou ?secret=<CRON_SECRET>" },
+        { error: "Não autorizado. Use header Authorization: Bearer <CRON_SECRET>" },
         { status: 401 }
       );
     }

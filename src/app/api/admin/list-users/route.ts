@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 // ─────────────────────────────────────────────────────────────
 // CHRONOS — API: Listar usuários (dev only)
@@ -6,8 +6,21 @@ import { NextResponse } from "next/server";
 // ⚠️ Esta rota deve ser protegida em produção.
 // ─────────────────────────────────────────────────────────────
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Proteção: apenas em desenvolvimento ou com ADMIN_SECRET/CRON_SECRET válido
+    const isDev = process.env.NODE_ENV === "development";
+    const adminSecret = process.env.ADMIN_SECRET ?? process.env.CRON_SECRET;
+    const authHeader = request.headers.get("authorization");
+    const providedSecret = authHeader?.replace(/^Bearer\s+/i, "");
+
+    if (!isDev && (!adminSecret || providedSecret !== adminSecret)) {
+      return NextResponse.json(
+        { error: "Não autorizado" },
+        { status: 401 }
+      );
+    }
+
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!serviceKey) {
       return NextResponse.json(

@@ -151,10 +151,15 @@ export async function POST(request: NextRequest) {
       return null;
     };
 
-    for (const row of validRows) {
+    // ── Inserir tasks válidas (Batch Insert) ──
+    const validRows = preview.rows.filter((r) => r.status !== "error");
+    let created: { id: string; rowIndex: number; title: string; level?: number }[] = [];
+    const failed: { row: number; message: string }[] = [];
+
+    const insertPayloads = validRows.map((row, idx) => {
       const t = row.parsed;
       const resolved = resolveAssignee(t.assignee_id);
-      const insertPayload = {
+      return {
         project_id: projectId,
         stage_id: initialStageId,
         title: t.title,
@@ -167,34 +172,73 @@ export async function POST(request: NextRequest) {
         assignee_id: resolved?.uuid ?? null,
         assignee_name: resolved ? null : (t.assignee_id ? String(t.assignee_id).trim() : null),
         assignee_status: resolved ? null : (t.assignee_id ? "pending" : null),
-        position: position++,
+        position: position + idx,
       };
+    });
 
-      const { data: created_task, error: insertError } = await sb
+    if (insertPayloads.length > 0) {
+      const { data: createdTasks, error: batchError } = await sb
         .from("tasks")
-        .insert(insertPayload)
-        .select("id, title")
-        .single();
+        .insert(insertPayloads)
+        .select("id, title, position");
 
-      if (insertError) {
-        failed.push({ row: row.index, message: insertError.message });
+      if (batchError) {
+        console.warn("[import] Batch insert failed, falling back to individual inserts...", batchError);
+        // Fallback: tenta inserir individualmente cada registro para isolar os erros
+        let currentPos = position;
+        for (const row of validRows) {
+          const t = row.parsed;
+          const resolved = resolveAssignee(t.assignee_id);
+          const singlePayload = {
+            project_id: projectId,
+            stage_id: initialStageId,
+            title: t.title,
+            description: t.description || null,
+            priority: t.priority || "medium",
+            status: t.status || "todo",
+            progress: t.progress || 0,
+            start_date: t.start_date || null,
+            due_date: t.due_date || null,
+            assignee_id: resolved?.uuid ?? null,
+            assignee_name: resolved ? null : (t.assignee_id ? String(t.assignee_id).trim() : null),
+            assignee_status: resolved ? null : (t.assignee_id ? "pending" : null),
+            position: currentPos++,
+          };
+
+          const { data: created_task, error: insertError } = await sb
+            .from("tasks")
+            .insert(singlePayload)
+            .select("id, title")
+            .single();
+
+          if (insertError) {
+            failed.push({ row: row.index, message: insertError.message });
+          } else {
+            created.push({
+              id: created_task.id,
+              rowIndex: row.index,
+              title: created_task.title,
+              level: row.level,
+            });
+          }
+        }
       } else {
-        created.push({
-          id: created_task.id,
-          rowIndex: row.index,
-          title: created_task.title,
-          level: row.level,
-        });
+        // Ordena por posição para alinhar de volta aos índices das linhas enviadas
+        const sortedCreated = [...(createdTasks ?? [])].sort((a: any, b: any) => a.position - b.position);
+        created = sortedCreated.map((ct: any, idx: number) => ({
+          id: ct.id,
+          rowIndex: validRows[idx].index,
+          title: ct.title,
+          level: validRows[idx].level,
+        }));
       }
     }
 
-    // ── Segundo pass: WBS (parent_task_id) ──
-    // Algoritmo: pra cada task criada, encontra o pai mais próximo de nível (level - 1)
-    // criado ANTERIORMENTE no mesmo import.
+    // ── Segundo pass: WBS (parent_task_id) com promessas paralelas ──
     let wbsLinked = 0;
-    if (hasWBS) {
-      // Mapa de fallback: se level não definido, considera 1
+    if (hasWBS && created.length > 0) {
       const getLevel = (l?: number) => (l === undefined ? 1 : l);
+      const updatePromises: Promise<number>[] = [];
 
       for (const task of created) {
         const myLevel = getLevel(task.level);
@@ -212,18 +256,26 @@ export async function POST(request: NextRequest) {
         }
 
         if (parent) {
-          const { error: updateErr } = await sb
+          const updatePromise = sb
             .from("tasks")
             .update({ parent_task_id: parent.id })
-            .eq("id", task.id);
-          if (!updateErr) {
-            wbsLinked++;
-          } else {
-            console.warn(`[import] Failed to link WBS for task ${task.id}:`, updateErr);
-          }
+            .eq("id", task.id)
+            .then(({ error }: any) => {
+              if (error) {
+                console.warn(`[import] Failed to link WBS for task ${task.id}:`, error);
+                return 0;
+              }
+              return 1;
+            });
+          updatePromises.push(updatePromise);
         } else {
           console.warn(`[import] Task ${task.id} (level ${myLevel}) não tem pai no nível ${myLevel - 1}`);
         }
+      }
+
+      if (updatePromises.length > 0) {
+        const results = await Promise.all(updatePromises);
+        wbsLinked = results.reduce((acc, val) => acc + val, 0);
       }
     }
 

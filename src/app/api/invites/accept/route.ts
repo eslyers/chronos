@@ -9,27 +9,47 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerAdminClient } from "@/lib/supabase/serverAdminClient";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/mode";
+import { z } from "zod";
 
 export const runtime = "nodejs";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyClient = any;
 
-interface AcceptBody {
-  token: string;
-  user_id: string;
-}
+const acceptInviteSchema = z.object({
+  token: z.string().min(1, "Token é obrigatório"),
+  user_id: z.string().uuid("user_id inválido"),
+});
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as AcceptBody;
-    const { token, user_id } = body;
-
-    if (!token || !user_id) {
+    const body = await request.json();
+    const parseResult = acceptInviteSchema.safeParse(body);
+    if (!parseResult.success) {
       return NextResponse.json(
-        { error: "token e user_id são obrigatórios" },
+        { error: parseResult.error.errors[0].message },
         { status: 400 }
       );
+    }
+    const { token, user_id } = parseResult.data;
+
+    // Se o Supabase estiver configurado, valida o usuário autenticado na sessão do servidor
+    if (isSupabaseConfigured()) {
+      const userClient = await createServerSupabaseClient();
+      const { data: { user }, error: authError } = await userClient.auth.getUser();
+      
+      if (authError || !user) {
+        return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+      }
+      
+      if (user.id !== user_id) {
+        return NextResponse.json(
+          { error: "Não autorizado: ID do usuário inválido" },
+          { status: 403 }
+        );
+      }
     }
 
     const adminClient: AnyClient = await createServerAdminClient();

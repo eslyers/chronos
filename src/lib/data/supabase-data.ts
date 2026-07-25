@@ -364,7 +364,8 @@ export async function updateStage(id: string, patch: Partial<Stage>): Promise<vo
     name: patch.name,
     color: patch.color,
     sort_order: patch.position,
-    wip_limit: patch.is_done ?? undefined,
+    is_done: patch.is_done,
+    wip_limit: (patch as any).wip_limit,
   };
   const { error } = await supabase.from("stages").update(payload).eq("id", id);
   if (error) console.error("[supabase-data] updateStage", error);

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 // ─────────────────────────────────────────────────────────────
 // CHRONOS — API: Confirmar usuário manualmente (dev only)
@@ -7,17 +8,34 @@ import { NextRequest, NextResponse } from "next/server";
 // ⚠️ Esta rota deve ser protegida em produção.
 // ─────────────────────────────────────────────────────────────
 
+const confirmUserSchema = z.object({
+  email: z.string().email("Email inválido"),
+});
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { email } = body;
+    // Proteção: apenas em desenvolvimento ou com ADMIN_SECRET/CRON_SECRET válido
+    const isDev = process.env.NODE_ENV === "development";
+    const adminSecret = process.env.ADMIN_SECRET ?? process.env.CRON_SECRET;
+    const authHeader = request.headers.get("authorization");
+    const providedSecret = authHeader?.replace(/^Bearer\s+/i, "");
 
-    if (!email) {
+    if (!isDev && (!adminSecret || providedSecret !== adminSecret)) {
       return NextResponse.json(
-        { error: "Email é obrigatório" },
+        { error: "Não autorizado" },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const parseResult = confirmUserSchema.safeParse(body);
+    if (!parseResult.success) {
+      return NextResponse.json(
+        { error: parseResult.error.errors[0].message },
         { status: 400 }
       );
     }
+    const { email } = parseResult.data;
 
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!serviceKey) {

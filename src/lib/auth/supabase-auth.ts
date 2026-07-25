@@ -37,9 +37,9 @@ export async function getSession(): Promise<{
   user: { id: string; email: string; name?: string } | null;
 }> {
   const supabase = createSPAClient();
-  const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session) return { user: null };
-  const user = data.session.user;
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return { user: null };
+  const user = data.user;
   return {
     user: {
       id: user.id,
