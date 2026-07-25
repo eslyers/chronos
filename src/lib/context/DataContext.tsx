@@ -673,6 +673,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [state.dependencies]
   );
 
+  const getReverseDependenciesForTask = useCallback(
+    (taskId: string) =>
+      state.dependencies.filter((d) => d.depends_on_task_id === taskId),
+    [state.dependencies]
+  );
+
   const loadProjectDetails = useCallback(async (projectId: string) => {
     if (getDataLayer() !== "supabase") return;
     if (loadedProjects[projectId]) return;

@@ -106,11 +106,6 @@ export async function POST(request: NextRequest) {
 
     let position = existingCount || 0;
 
-    // ── Inserir tasks válidas ──
-    const validRows = preview.rows.filter((r) => r.status !== "error");
-    const created: { id: string; rowIndex: number; title: string; level?: number }[] = [];
-    const failed: { row: number; message: string }[] = [];
-
     // Mapa de assignee: nome da planilha (string) → UUID do membro do workspace
     const { data: members } = await sb
       .from("workspace_members")
