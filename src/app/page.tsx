@@ -25,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Home() {
   const productName = process.env.NEXT_PUBLIC_PRODUCTNAME || "CHRONOS";
@@ -146,6 +147,7 @@ export default function Home() {
             </nav>
 
             <div className="flex items-center gap-3">
+              <ThemeToggle />
               <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
                 <Link href="/auth/login">Entrar</Link>
               </Button>
