@@ -127,7 +127,10 @@ export function TaskDialog({
   const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
   const [attachName, setAttachName] = useState("");
   const [attachUrl, setAttachUrl] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [addingAttach, setAddingAttach] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open && task?.id) {
@@ -571,45 +574,115 @@ export function TaskDialog({
             <div className="p-4 rounded-xl border border-border/80 bg-muted/20 space-y-3">
               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 <Upload className="h-3.5 w-3.5 text-blue-500" />
-                Anexar Novo Arquivo / Link
+                Anexar Arquivo ou Link
               </span>
+
+              {/* Input Nativo de Arquivo Escondido */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setSelectedFile(file);
+                    if (!attachName) {
+                      setAttachName(file.name);
+                    }
+                  }
+                }}
+                className="hidden"
+              />
+
+              {/* Botão de Escolher Arquivo do PC */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 h-9 px-3 rounded-xl border border-dashed border-blue-500/50 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Paperclip className="h-3.5 w-3.5" />
+                  {selectedFile ? `📁 ${selectedFile.name}` : "📁 Escolher Arquivo do Computador"}
+                </button>
+
+                {selectedFile && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                    className="p-1.5 text-muted-foreground hover:text-rose-500 rounded-lg text-xs"
+                    title="Remover arquivo selecionado"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input
                   type="text"
-                  placeholder="Nome do Arquivo ex: Especificacao.pdf"
+                  placeholder="Nome de exibição (ex: Relatório.pdf)"
                   value={attachName}
                   onChange={(e) => setAttachName(e.target.value)}
                   className="flex h-9 w-full rounded-xl border border-input bg-background px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium"
                 />
                 <input
                   type="url"
-                  placeholder="URL do Arquivo / Drive / Figma"
+                  placeholder="Ou URL Externa (Drive, Figma, Web)"
                   value={attachUrl}
                   onChange={(e) => setAttachUrl(e.target.value)}
                   className="flex h-9 w-full rounded-xl border border-input bg-background px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium"
                 />
               </div>
+
               <div className="flex justify-end">
                 <button
                   type="button"
-                  disabled={addingAttach || !attachName.trim() || !attachUrl.trim() || !task}
+                  disabled={
+                    addingAttach ||
+                    (!selectedFile && !attachName.trim() && !attachUrl.trim()) ||
+                    !task
+                  }
                   onClick={async () => {
-                    if (!attachName.trim() || !attachUrl.trim() || !task) return;
+                    if (!task) return;
                     setAddingAttach(true);
-                    await addTaskAttachment(task.id, {
-                      name: attachName.trim(),
-                      url: attachUrl.trim(),
-                      size: 204800,
-                      type: "application/pdf",
-                    });
-                    setAttachName("");
-                    setAttachUrl("");
-                    setAttachments(await getTaskAttachments(task.id));
-                    setAddingAttach(false);
+                    try {
+                      let fileUrl = attachUrl.trim();
+                      let fileName = attachName.trim();
+                      let fileSize = 204800; // 200 KB default
+                      let fileType = "application/octet-stream";
+
+                      if (selectedFile) {
+                        fileName = fileName || selectedFile.name;
+                        fileSize = selectedFile.size;
+                        fileType = selectedFile.type || "application/octet-stream";
+                        fileUrl = fileUrl || URL.createObjectURL(selectedFile);
+                      } else if (!fileUrl) {
+                        fileUrl = "#";
+                      }
+
+                      await addTaskAttachment(task.id, {
+                        name: fileName || "Anexo sem nome",
+                        url: fileUrl,
+                        size: fileSize,
+                        type: fileType,
+                      });
+
+                      setAttachName("");
+                      setAttachUrl("");
+                      setSelectedFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                      setAttachments(await getTaskAttachments(task.id));
+                    } catch (err) {
+                      console.error("[Attachment] add error:", err);
+                    } finally {
+                      setAddingAttach(false);
+                    }
                   }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold gap-1.5 h-8 px-3 rounded-lg flex items-center justify-center disabled:opacity-50 transition-colors"
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold gap-1.5 h-9 px-4 rounded-xl flex items-center justify-center disabled:opacity-50 transition-colors shadow-md shadow-blue-500/20"
                 >
-                  {addingAttach ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                  {addingAttach ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                   Adicionar Anexo
                 </button>
               </div>
