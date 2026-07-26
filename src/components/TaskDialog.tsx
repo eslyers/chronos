@@ -126,7 +126,6 @@ export function TaskDialog({
 
   const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
   const [attachName, setAttachName] = useState("");
-  const [attachUrl, setAttachUrl] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [addingAttach, setAddingAttach] = useState(false);
 
@@ -574,7 +573,7 @@ export function TaskDialog({
             <div className="p-4 rounded-xl border border-border/80 bg-muted/20 space-y-3">
               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 <Upload className="h-3.5 w-3.5 text-blue-500" />
-                Anexar Arquivo ou Link
+                Anexar Arquivo do Computador
               </span>
 
               {/* Input Nativo de Arquivo Escondido */}
@@ -585,9 +584,7 @@ export function TaskDialog({
                   const file = e.target.files?.[0];
                   if (file) {
                     setSelectedFile(file);
-                    if (!attachName) {
-                      setAttachName(file.name);
-                    }
+                    setAttachName(file.name);
                   }
                 }}
                 className="hidden"
@@ -598,10 +595,10 @@ export function TaskDialog({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex-1 h-9 px-3 rounded-xl border border-dashed border-blue-500/50 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                  className="flex-1 h-10 px-3.5 rounded-xl border border-dashed border-blue-500/50 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold flex items-center justify-center gap-2 transition-colors"
                 >
-                  <Paperclip className="h-3.5 w-3.5" />
-                  {selectedFile ? `📁 ${selectedFile.name}` : "📁 Escolher Arquivo do Computador"}
+                  <Paperclip className="h-4 w-4" />
+                  {selectedFile ? `📁 ${selectedFile.name}` : "📁 Selecionar Arquivo do Computador"}
                 </button>
 
                 {selectedFile && (
@@ -609,9 +606,10 @@ export function TaskDialog({
                     type="button"
                     onClick={() => {
                       setSelectedFile(null);
+                      setAttachName("");
                       if (fileInputRef.current) fileInputRef.current.value = "";
                     }}
-                    className="p-1.5 text-muted-foreground hover:text-rose-500 rounded-lg text-xs"
+                    className="p-2 text-muted-foreground hover:text-rose-500 rounded-lg text-xs"
                     title="Remover arquivo selecionado"
                   >
                     <X className="h-4 w-4" />
@@ -619,58 +617,42 @@ export function TaskDialog({
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <input
-                  type="text"
-                  placeholder="Nome de exibição (ex: Relatório.pdf)"
-                  value={attachName}
-                  onChange={(e) => setAttachName(e.target.value)}
-                  className="flex h-9 w-full rounded-xl border border-input bg-background px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium"
-                />
-                <input
-                  type="url"
-                  placeholder="Ou URL Externa (Drive, Figma, Web)"
-                  value={attachUrl}
-                  onChange={(e) => setAttachUrl(e.target.value)}
-                  className="flex h-9 w-full rounded-xl border border-input bg-background px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium"
-                />
-              </div>
+              {selectedFile && (
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-muted-foreground">
+                    Nome de Exibição do Anexo:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Nome do arquivo"
+                    value={attachName}
+                    onChange={(e) => setAttachName(e.target.value)}
+                    className="flex h-9 w-full rounded-xl border border-input bg-background px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium"
+                  />
+                </div>
+              )}
 
-              <div className="flex justify-end">
+              <div className="flex justify-end pt-1">
                 <button
                   type="button"
-                  disabled={
-                    addingAttach ||
-                    (!selectedFile && !attachName.trim() && !attachUrl.trim()) ||
-                    !task
-                  }
+                  disabled={addingAttach || !selectedFile || !task}
                   onClick={async () => {
-                    if (!task) return;
+                    if (!task || !selectedFile) return;
                     setAddingAttach(true);
                     try {
-                      let fileUrl = attachUrl.trim();
-                      let fileName = attachName.trim();
-                      let fileSize = 204800; // 200 KB default
-                      let fileType = "application/octet-stream";
-
-                      if (selectedFile) {
-                        fileName = fileName || selectedFile.name;
-                        fileSize = selectedFile.size;
-                        fileType = selectedFile.type || "application/octet-stream";
-                        fileUrl = fileUrl || URL.createObjectURL(selectedFile);
-                      } else if (!fileUrl) {
-                        fileUrl = "#";
-                      }
+                      const fileName = attachName.trim() || selectedFile.name;
+                      const fileSize = selectedFile.size;
+                      const fileType = selectedFile.type || "application/octet-stream";
+                      const fileUrl = URL.createObjectURL(selectedFile);
 
                       await addTaskAttachment(task.id, {
-                        name: fileName || "Anexo sem nome",
+                        name: fileName,
                         url: fileUrl,
                         size: fileSize,
                         type: fileType,
                       });
 
                       setAttachName("");
-                      setAttachUrl("");
                       setSelectedFile(null);
                       if (fileInputRef.current) fileInputRef.current.value = "";
                       setAttachments(await getTaskAttachments(task.id));
