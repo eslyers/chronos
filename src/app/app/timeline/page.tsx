@@ -538,6 +538,27 @@ export default function TimelinePage() {
                         if (ganttTask.type === "task") {
                           const realId = String(ganttTask.id).replace(/^task-/, "");
                           const allTasks = projects.flatMap((p) => getTasksByProject(p.id));
+                          const hasChildren = allTasks.some((t) => t.parent_task_id === realId);
+                          if (hasChildren) {
+                            setCollapsedTasks((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(realId)) next.delete(realId);
+                              else next.add(realId);
+                              return next;
+                            });
+                          } else {
+                            const found = allTasks.find((t) => t.id === realId);
+                            if (found) {
+                              setEditingTask(found);
+                              setTaskDialogOpen(true);
+                            }
+                          }
+                        }
+                      }}
+                      onTaskEditClick={(ganttTask) => {
+                        if (ganttTask.type === "task") {
+                          const realId = String(ganttTask.id).replace(/^task-/, "");
+                          const allTasks = projects.flatMap((p) => getTasksByProject(p.id));
                           const found = allTasks.find((t) => t.id === realId);
                           if (found) {
                             setEditingTask(found);
@@ -559,6 +580,27 @@ export default function TimelinePage() {
                       });
                       return;
                     }
+                    if (ganttTask.type === "task") {
+                      const realId = String(ganttTask.id).replace(/^task-/, "");
+                      const allTasks = projects.flatMap((p) => getTasksByProject(p.id));
+                      const hasChildren = allTasks.some((t) => t.parent_task_id === realId);
+                      if (hasChildren) {
+                        setCollapsedTasks((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(realId)) next.delete(realId);
+                          else next.add(realId);
+                          return next;
+                        });
+                      } else {
+                        const found = allTasks.find((t) => t.id === realId);
+                        if (found) {
+                          setEditingTask(found);
+                          setTaskDialogOpen(true);
+                        }
+                      }
+                    }
+                  }}
+                  onDoubleClick={(ganttTask) => {
                     if (ganttTask.type === "task") {
                       const realId = String(ganttTask.id).replace(/^task-/, "");
                       const allTasks = projects.flatMap((p) => getTasksByProject(p.id));

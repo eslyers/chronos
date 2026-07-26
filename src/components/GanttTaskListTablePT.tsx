@@ -13,19 +13,12 @@ interface TaskListTableProps {
   selectedTaskId: string;
   setSelectedTask: (taskId: string) => void;
   onExpanderClick: (task: GanttTask) => void;
-  // NOVO: callback opcional para click no corpo da row (abre dialog de edicao)
+  // Callback para clique simples na row
   onTaskClick?: (task: GanttTask) => void;
+  // Callback para edição direta da tarefa (ícone de lápis ou duplo clique)
+  onTaskEditClick?: (task: GanttTask) => void;
 }
 
-// Classes hasheadas do gantt-task-react (Emotion):
-//   _3ZbQT → taskListWrapper
-//   _34SS0 → taskListTableRow
-//   _3lLk3 → taskListCell
-//   _nI1Xw → taskListNameWrapper
-//   _2QjE6 → taskListExpander (com icone)
-//   _2TfEi → taskListEmptyExpander (sem icone)
-
-// Formato curto BR: DD/MM/YY (ex: 17/07/26)
 function formatDateBR(date: Date): string {
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
@@ -33,17 +26,9 @@ function formatDateBR(date: Date): string {
   return `${dd}/${mm}/${yy}`;
 }
 
-// Larguras independentes por coluna (customizacao do design CHRONOS)
-// "Projetos" precisa de mais espaco para nao cortar nomes longos
 const COL_WIDTH_NAME = "240px";
 const COL_WIDTH_DATE = "90px";
 
-/**
- * TaskListTable PT-BR com datas abreviadas.
- * Substitui o default que vinha com "sex., 17 de julho de 2026".
- *
- * Uso: <Gantt TaskListTable={GanttTaskListTablePT} ... />
- */
 export function GanttTaskListTablePT({
   rowHeight,
   tasks,
@@ -53,6 +38,7 @@ export function GanttTaskListTablePT({
   setSelectedTask,
   onExpanderClick,
   onTaskClick,
+  onTaskEditClick,
 }: TaskListTableProps) {
   const nameCellStyle: CSSProperties = {
     minWidth: COL_WIDTH_NAME,
@@ -88,7 +74,7 @@ export function GanttTaskListTablePT({
 
         return (
           <div
-            className={"_34SS0" + (isSelected ? " _3ZbQT-selected" : "")}
+            className={"_34SS0 group" + (isSelected ? " _3ZbQT-selected" : "")}
             style={{
               ...rowStyle,
               cursor: t.type === "project" || (t.type === "task" && onTaskClick) ? "pointer" : "default",
@@ -102,35 +88,47 @@ export function GanttTaskListTablePT({
                 onTaskClick(t);
               }
             }}
+            onDoubleClick={() => {
+              if (t.type === "task" && onTaskEditClick) {
+                onTaskEditClick(t);
+              }
+            }}
           >
             <div
               className="_3lLk3"
               style={nameCellStyle}
               title={t.name}
             >
-              <div className="_nI1Xw">
-                <div
-                  className={
-                    expanderSymbol ? "_2QjE6" : "_2TfEi"
-                  }
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onExpanderClick(t);
-                  }}
-                >
-                  {expanderSymbol}
-                </div>
-                <div
-                  onClick={(e) => {
-                    if (t.type === "project") {
+              <div className="_nI1Xw flex items-center justify-between pr-1">
+                <div className="flex items-center gap-1 min-w-0">
+                  <div
+                    className={expanderSymbol ? "_2QjE6 cursor-pointer" : "_2TfEi"}
+                    onClick={(e) => {
                       e.stopPropagation();
                       onExpanderClick(t);
-                    }
-                  }}
-                  className={t.type === "project" ? "font-bold select-none cursor-pointer" : ""}
-                >
-                  {t.name}
+                    }}
+                  >
+                    {expanderSymbol}
+                  </div>
+                  <span className={`truncate ${t.type === "project" ? "font-bold select-none" : ""}`}>
+                    {t.name}
+                  </span>
                 </div>
+
+                {/* Ícone de edição rápida de tarefa no hover */}
+                {t.type === "task" && onTaskEditClick && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTaskEditClick(t);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-muted text-muted-foreground hover:text-blue-500 rounded text-[11px] shrink-0"
+                    title="Editar dados desta tarefa"
+                  >
+                    ✏️
+                  </button>
+                )}
               </div>
             </div>
             <div className="_3lLk3" style={dateCellStyle}>
