@@ -1,7 +1,21 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { X, UserCircle2, AlertTriangle } from "lucide-react";
+import {
+  X,
+  UserCircle2,
+  AlertTriangle,
+  FileText,
+  AlignLeft,
+  KanbanSquare,
+  Flag,
+  Calendar,
+  BarChart3,
+  CheckCircle2,
+  Send,
+  Loader2,
+  Sparkles,
+} from "lucide-react";
 import { useData, type Task } from "@/lib/context/DataContext";
 import { createSPAClient } from "@/lib/supabase/client";
 
@@ -12,6 +26,37 @@ interface TaskDialogProps {
   defaultStageId?: string | null;
   projectId: string;
 }
+
+const PRIORITIES = [
+  {
+    value: "low",
+    label: "Baixa",
+    icon: "⬇️",
+    activeClass: "bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-400/40 ring-1 ring-slate-400/50",
+    hoverClass: "hover:bg-slate-500/10 hover:border-slate-300",
+  },
+  {
+    value: "medium",
+    label: "Média",
+    icon: "➡️",
+    activeClass: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-400/40 ring-1 ring-blue-400/50",
+    hoverClass: "hover:bg-blue-500/10 hover:border-blue-300",
+  },
+  {
+    value: "high",
+    label: "Alta",
+    icon: "⬆️",
+    activeClass: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/40 ring-1 ring-amber-400/50",
+    hoverClass: "hover:bg-amber-500/10 hover:border-amber-300",
+  },
+  {
+    value: "critical",
+    label: "Crítica",
+    icon: "🔥",
+    activeClass: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-400/40 ring-1 ring-red-400/50",
+    hoverClass: "hover:bg-red-500/10 hover:border-red-300",
+  },
+] as const;
 
 export function TaskDialog({
   open,
@@ -40,13 +85,14 @@ export function TaskDialog({
   const [error, setError] = useState("");
   const [inviting, setInviting] = useState(false);
 
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
   // Convidar responsável pendente por email
   async function handleInvite() {
     if (!assigneeName || !workspaceId) return;
     setInviting(true);
     try {
       const emailOrName = assigneeName.trim();
-      // Tenta descobrir se é email ou nome
       const isEmail = emailOrName.includes("@");
       const res = await fetch("/api/users/invite", {
         method: "POST",
@@ -61,7 +107,6 @@ export function TaskDialog({
       });
       if (res.ok) {
         setAssigneeStatus("invited");
-        // Atualiza no banco também
         if (task?.id && updateTask) {
           updateTask(task.id, { assignee_status: "invited" } as Record<string, unknown>).catch(console.error);
         }
@@ -75,7 +120,6 @@ export function TaskDialog({
       setInviting(false);
     }
   }
-  const titleInputRef = useRef<HTMLInputElement>(null);
 
   // Reset state quando abrir/fechar ou trocar task
   useEffect(() => {
@@ -146,7 +190,6 @@ export function TaskDialog({
       })
       .catch(() => setAssignees([]));
 
-    // Foco no título após abrir (timeout pra garantir que DOM renderizou)
     setTimeout(() => {
       titleInputRef.current?.focus();
     }, 100);
@@ -209,10 +252,9 @@ export function TaskDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
-      style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6"
+      style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
       onClick={(e) => {
-        // Fecha só se clicou no overlay (não no conteúdo)
         if (e.target === e.currentTarget) onOpenChange(false);
       }}
     >
@@ -220,76 +262,92 @@ export function TaskDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="task-dialog-title"
-        className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl p-6 max-h-[90vh] overflow-y-auto"
+        className="relative w-full max-w-lg bg-card border border-border rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-fadeIn"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          type="button"
-          onClick={() => onOpenChange(false)}
-          aria-label="Fechar"
-          className="absolute right-4 top-4 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        {/* Header estilo executivo */}
+        <div className="bg-gradient-to-r from-blue-600/10 via-blue-500/5 to-transparent border-b border-border p-6 shrink-0 relative">
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            aria-label="Fechar"
+            className="absolute right-4 top-4 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
 
-        <div className="mb-4">
-          <h2 id="task-dialog-title" className="text-lg font-semibold">
-            {isEdit ? "Editar Tarefa" : "Nova Tarefa"}
-          </h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-            {isEdit
-              ? "Atualize os detalhes da tarefa."
-              : "Adicione uma nova tarefa ao projeto."}
-          </p>
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-500 shadow-sm shrink-0">
+              <KanbanSquare className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-blue-500 uppercase tracking-wide">
+                  {isEdit ? "Edição de Entregável" : "Novo Entregável"}
+                </span>
+              </div>
+              <h2 id="task-dialog-title" className="text-xl font-bold leading-tight mt-0.5">
+                {isEdit ? "Editar Tarefa" : "Criar Nova Tarefa"}
+              </h2>
+            </div>
+          </div>
         </div>
 
+        {/* Scrollable Form Body */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
             handleSubmit();
           }}
-          className="space-y-4"
+          className="p-6 space-y-5 overflow-y-auto flex-1"
         >
-          <div className="space-y-2">
-            <label htmlFor="task-title" className="text-sm font-medium">
-              Título *
+          {/* Título */}
+          <div className="space-y-1.5">
+            <label htmlFor="task-title" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5 text-blue-500" />
+              Título <span className="text-destructive">*</span>
             </label>
             <input
               ref={titleInputRef}
               id="task-title"
               type="text"
-              placeholder="Ex: Implementar autenticação"
+              placeholder="Ex: Desenvolver fluxo de relatórios financeiros"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               autoComplete="off"
-              className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-base ring-offset-background placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+              className="flex h-11 w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-all font-medium"
             />
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="task-desc" className="text-sm font-medium">
+          {/* Descrição */}
+          <div className="space-y-1.5">
+            <label htmlFor="task-desc" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <AlignLeft className="h-3.5 w-3.5 text-blue-500" />
               Descrição
             </label>
             <textarea
               id="task-desc"
-              placeholder="Detalhes, critérios de aceite, links úteis..."
+              placeholder="Detalhes operacionais, critérios de aceite, links de apoio..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="flex min-h-[80px] w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-base ring-offset-background placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+              className="flex min-h-[90px] w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-all resize-none leading-relaxed"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <label htmlFor="task-stage" className="text-sm font-medium">
-                Etapa
+          {/* Etapa & Responsável Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Etapa */}
+            <div className="space-y-1.5">
+              <label htmlFor="task-stage" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <KanbanSquare className="h-3.5 w-3.5 text-blue-500" />
+                Etapa do Kanban
               </label>
               <select
                 id="task-stage"
                 value={stageId}
                 onChange={(e) => setStageId(e.target.value)}
-                className="flex h-10 w-full items-center justify-between rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all"
               >
                 {stages.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -299,9 +357,10 @@ export function TaskDialog({
               </select>
             </div>
 
-            <div className="space-y-2 col-span-2">
-              <label htmlFor="task-assignee" className="text-sm font-medium flex items-center gap-1.5">
-                <UserCircle2 className="h-3.5 w-3.5" />
+            {/* Responsável */}
+            <div className="space-y-1.5">
+              <label htmlFor="task-assignee" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <UserCircle2 className="h-3.5 w-3.5 text-blue-500" />
                 Responsável
               </label>
               <select
@@ -309,7 +368,7 @@ export function TaskDialog({
                 value={assigneeId}
                 onChange={(e) => setAssigneeId(e.target.value)}
                 disabled={assignees.length === 0}
-                className="flex h-10 w-full items-center justify-between rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
+                className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium disabled:opacity-50 transition-all"
               >
                 <option value="">— Sem responsável —</option>
                 {assignees.map((a) => (
@@ -318,85 +377,124 @@ export function TaskDialog({
                   </option>
                 ))}
               </select>
-              {assignees.length === 0 && (
-                <p className="text-xs text-slate-500">Nenhum membro encontrado neste workspace.</p>
-              )}
-              {/* Badge pendente: responsável não-cadastrado no workspace */}
-              {assigneeStatus === "pending" && assigneeName && (
-                <div className="mt-2 flex items-center gap-2 flex-wrap">
-                  <span className="inline-flex items-center gap-1 rounded-md border border-blue-500/50 bg-blue-500/10 px-2 py-1 text-xs text-blue-600 dark:text-blue-400">
-                    <AlertTriangle className="h-3 w-3" />
-                    Pendente: <strong>{assigneeName}</strong>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleInvite}
-                    disabled={inviting}
-                    className="inline-flex items-center gap-1 rounded-md border border-blue-500/50 bg-blue-500/10 px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 disabled:opacity-50 transition-colors"
-                  >
-                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg>
-                    {inviting ? "Enviando..." : `Convidar ${assigneeName.split(" ")[0]}`}
-                  </button>
-                </div>
-              )}
-              {assigneeStatus === "invited" && (
-                <div className="mt-1 flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13"/><path d="M22 2L15 22l-4-9-9-4 20-7z"/></svg>
-                  Convite pendente de aceite
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="task-priority" className="text-sm font-medium">
-                Prioridade
-              </label>
-              <select
-                id="task-priority"
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as typeof priority)}
-                className="flex h-10 w-full items-center justify-between rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              >
-                <option value="low">⬇️ Baixa</option>
-                <option value="medium">➡️ Média</option>
-                <option value="high">⬆️ Alta</option>
-                <option value="critical">🔥 Crítica</option>
-              </select>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <label htmlFor="task-start" className="text-sm font-medium">
-                Início
+          {/* Badge de Responsável Pendente de Convite */}
+          {assigneeStatus === "pending" && assigneeName && (
+            <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>
+                  Responsável externo: <strong>{assigneeName}</strong>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleInvite}
+                disabled={inviting}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 px-3 py-1.5 font-semibold text-amber-700 dark:text-amber-300 disabled:opacity-50 transition-colors shrink-0"
+              >
+                {inviting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
+                {inviting ? "Enviando..." : "Convidar"}
+              </button>
+            </div>
+          )}
+          {assigneeStatus === "invited" && (
+            <div className="p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+              <CheckCircle2 className="h-4 w-4" />
+              <span>Convite enviado por e-mail (aguardando aceite)</span>
+            </div>
+          )}
+
+          {/* Prioridade — Seletor Visual com Pills */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Flag className="h-3.5 w-3.5 text-blue-500" />
+              Nível de Prioridade
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {PRIORITIES.map((p) => {
+                const isSelected = priority === p.value;
+                return (
+                  <button
+                    key={p.value}
+                    type="button"
+                    onClick={() => setPriority(p.value as typeof priority)}
+                    className={`
+                      flex items-center justify-center gap-1.5 h-10 px-2 rounded-xl text-xs font-semibold
+                      border transition-all duration-150
+                      ${isSelected ? p.activeClass : `border-input bg-background text-muted-foreground ${p.hoverClass}`}
+                    `}
+                  >
+                    <span>{p.icon}</span>
+                    <span>{p.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Datas Grid */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label htmlFor="task-start" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 text-blue-500" />
+                Data de Início
               </label>
               <input
                 id="task-start"
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all"
               />
             </div>
-            <div className="space-y-2">
-              <label htmlFor="task-due" className="text-sm font-medium">
-                Prazo
+            <div className="space-y-1.5">
+              <label htmlFor="task-due" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Calendar className="h-3.5 w-3.5 text-blue-500" />
+                Data Limite (Prazo)
               </label>
               <input
                 id="task-due"
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium flex justify-between">
-              <span>Progresso</span>
-              <span className="text-blue-600 font-semibold">{progress}%</span>
-            </label>
+          {/* Slider de Progresso */}
+          <div className="space-y-2.5 p-3.5 rounded-xl border border-border/70 bg-muted/20">
+            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <BarChart3 className="h-3.5 w-3.5 text-blue-500" />
+                Progresso da Tarefa
+              </span>
+              <span className="text-sm font-extrabold text-blue-600 dark:text-blue-400 font-mono">
+                {progress}%
+              </span>
+            </div>
+
+            {/* Barra visual de preenchimento */}
+            <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all duration-300 ${
+                  progress === 100
+                    ? "bg-emerald-500"
+                    : progress > 50
+                    ? "bg-blue-500"
+                    : "bg-blue-400"
+                }`}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+
             <input
               type="range"
               min="0"
@@ -404,35 +502,55 @@ export function TaskDialog({
               step="5"
               value={progress}
               onChange={(e) => setProgress(Number(e.target.value))}
-              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-blue-600"
             />
             {progress === 100 && (
-              <p className="text-xs text-emerald-600">✅ Tarefa será marcada como concluída</p>
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Concluída — ao salvar a tarefa será marcada como entregue
+              </p>
             )}
           </div>
 
+          {/* Erro */}
           {error && (
-            <div className="flex items-start gap-2 p-3 rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800">
-              <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-xs font-medium text-destructive">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <p>{error}</p>
             </div>
           )}
 
-          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2 border-t">
+          {/* Footer Actions */}
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-3 border-t border-border">
             <button
               type="button"
               onClick={() => onOpenChange(false)}
               disabled={loading}
-              className="h-10 px-4 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 text-sm font-medium"
+              className="h-11 px-5 rounded-xl border border-border text-sm font-semibold hover:bg-muted transition-colors disabled:opacity-50"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={loading}
-              className="h-10 px-4 rounded-md bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50 text-sm font-medium"
+              disabled={loading || !title.trim()}
+              className="h-11 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-md shadow-blue-500/20"
             >
-              {loading ? "Salvando..." : isEdit ? "Salvar" : "Criar tarefa"}
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : isEdit ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4" />
+                  Salvar Alterações
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Criar Tarefa
+                </>
+              )}
             </button>
           </div>
         </form>
