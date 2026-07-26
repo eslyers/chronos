@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { createSPAClient } from "@/lib/supabase/client";
-import { dataProvider } from "@/lib/data/data-provider";
+import { useData } from "@/lib/context/DataContext";
 import { isSupabaseConfigured } from "@/lib/supabase/mode";
 
 type Template = {
@@ -20,22 +20,21 @@ type Template = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  // Categorias originais
-  Fitness:    "bg-rose-500/10 text-rose-500 border-rose-500/30",
   Produto:    "bg-purple-500/10 text-purple-500 border-purple-500/30",
   Engenharia: "bg-indigo-500/10 text-indigo-500 border-indigo-500/30",
   Agile:      "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
-  // Novas categorias corporativas
   RH:         "bg-violet-500/10 text-violet-500 border-violet-500/30",
   Governanca: "bg-red-500/10 text-red-500 border-red-500/30",
   Comercial:  "bg-green-500/10 text-green-500 border-green-500/30",
   TI:         "bg-blue-500/10 text-blue-500 border-blue-500/30",
-  Estrategia: "bg-purple-500/10 text-purple-500 border-purple-500/30",
+  Estrategia: "bg-amber-500/10 text-amber-600 border-amber-500/30",
   Eventos:    "bg-pink-500/10 text-pink-500 border-pink-500/30",
+  Mudanca:    "bg-orange-500/10 text-orange-500 border-orange-500/30",
 };
 
 export default function TemplatesPage() {
   const router = useRouter();
+  const { createProject } = useData();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [cloningId, setCloningId] = useState<string | null>(null);
@@ -67,46 +66,44 @@ export default function TemplatesPage() {
         return;
       }
 
-      const result = await dataProvider.createProject({
+      // Usa DataContext para que o projeto entre no estado global imediatamente,
+      // evitando "Projeto não encontrado" ao redirecionar
+      const project = await createProject({
         name: tpl.name,
         description: tpl.description ?? undefined,
         templateId: tpl.id,
       });
 
-      if (!result) {
+      if (!project) {
         throw new Error("Falha ao criar projeto a partir do template");
       }
 
       setSuccessId(tpl.id);
-      await new Promise((r) => setTimeout(r, 800));
-
-      router.refresh();
-      router.push(`/app/projects/${result.project.id}`);
+      await new Promise((r) => setTimeout(r, 700));
+      router.push(`/app/projects/${project.id}`);
     } catch (err) {
-      setErrorMsg(
-        err instanceof Error ? err.message : "Erro ao usar template"
-      );
+      setErrorMsg(err instanceof Error ? err.message : "Erro ao usar template");
       setCloningId(null);
     }
   }
 
   return (
     <div className="space-y-8 animate-fadeIn pb-12">
-      {/* Executive Header Banner */}
+      {/* Header Banner */}
       <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-r from-card via-card to-blue-500/5 p-6 sm:p-8 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-xs font-semibold">
-                STARTKIT TEMPLATE LIBRARY
+                CORPORATE TEMPLATE LIBRARY
               </Badge>
             </div>
             <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2 flex items-center gap-3">
               <Library className="h-7 w-7 text-blue-500" />
-              Galeria de Templates & Modelos
+              Galeria de Templates Corporativos
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-              Inicie novos projetos instantaneamente com 1 clique utilizando estruturas de etapas já prontas e otimizadas.
+              Inicie novos projetos instantaneamente com estruturas de etapas prontas e otimizadas para o ambiente corporativo.
             </p>
           </div>
         </div>

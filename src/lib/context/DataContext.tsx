@@ -81,7 +81,7 @@ type DataState = {
 
 type DataContextType = DataState & {
   // Projects
-  createProject: (data: Partial<Project>) => Promise<Project>;
+  createProject: (data: Partial<Project> & { templateId?: string; customStages?: Array<{ name: string; color: string; sort_order: number; wip_limit?: number | null; is_done?: boolean }> }) => Promise<Project>;
   updateProject: (id: string, data: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   // Stages
@@ -385,13 +385,20 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, [loadedProjects]);
 
   // ── Projects ────────────────────────────────────────────────
-  const createProject = useCallback(async (data: Partial<Project>): Promise<Project> => {
+  const createProject = useCallback(async (
+    data: Partial<Project> & {
+      templateId?: string;
+      customStages?: Array<{ name: string; color: string; sort_order: number; wip_limit?: number | null; is_done?: boolean }>;
+    }
+  ): Promise<Project> => {
     // Modo PRODUÇÃO: Supabase real
     if (getDataLayer() === "supabase") {
       const result = await dataProvider.createProject({
         name: data.name ?? "Novo Projeto",
         description: data.description ?? undefined,
         color: data.color,
+        templateId: data.templateId,
+        customStages: data.customStages,
       });
       if (result) {
         const { project, stages } = result;
