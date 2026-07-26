@@ -27,6 +27,8 @@ import {
   ShieldCheck,
   AlertCircle,
   GripVertical,
+  CornerDownRight,
+  FolderTree,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +48,7 @@ type TaskLike = {
   due_date: string | null;
   progress: number;
   assignee_id: string | null;
+  parent_task_id?: string | null;
 };
 
 type StageLike = {
@@ -145,6 +148,14 @@ function TaskCard({
             />
           </div>
         </div>
+
+        {/* Sub-tarefa badge (se for filha) */}
+        {task.parent_task_id && (
+          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-[11px] font-medium text-blue-600 dark:text-blue-400">
+            <CornerDownRight className="h-3 w-3 shrink-0" />
+            <span>Sub-tarefa</span>
+          </div>
+        )}
 
         {task.description && (
           <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">

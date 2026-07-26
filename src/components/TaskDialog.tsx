@@ -15,6 +15,7 @@ import {
   Send,
   Loader2,
   Sparkles,
+  CornerDownRight,
 } from "lucide-react";
 import { useData, type Task } from "@/lib/context/DataContext";
 import { createSPAClient } from "@/lib/supabase/client";
@@ -66,13 +67,20 @@ export function TaskDialog({
   defaultStageId,
   projectId,
 }: TaskDialogProps) {
-  const { createTask, updateTask, getStagesByProject } = useData();
+  const { createTask, updateTask, getStagesByProject, getTasksByProject } = useData();
   const stages = getStagesByProject(projectId);
+  const projectTasks = getTasksByProject(projectId);
   const isEdit = !!task;
+
+  // Evita auto-referência na lista de tarefas pai
+  const parentTaskOptions = projectTasks.filter(
+    (t) => !isEdit || (t.id !== task?.id && t.parent_task_id !== task?.id)
+  );
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [stageId, setStageId] = useState<string>("");
+  const [parentTaskId, setParentTaskId] = useState<string>("");
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "critical">("medium");
   const [progress, setProgress] = useState(0);
   const [startDate, setStartDate] = useState("");
@@ -130,6 +138,7 @@ export function TaskDialog({
       setTitle(task.title ?? "");
       setDescription(task.description ?? "");
       setStageId(task.stage_id ?? "");
+      setParentTaskId(task.parent_task_id ?? "");
       setPriority(task.priority ?? "medium");
       setProgress(task.progress ?? 0);
       setStartDate(task.start_date ? task.start_date.split("T")[0] : "");
@@ -141,6 +150,7 @@ export function TaskDialog({
       setTitle("");
       setDescription("");
       setStageId(defaultStageId ?? stages[0]?.id ?? "");
+      setParentTaskId("");
       setPriority("medium");
       setProgress(0);
       setStartDate(new Date().toISOString().split("T")[0]);
@@ -229,6 +239,7 @@ export function TaskDialog({
         title: title.trim(),
         description: description.trim() || null,
         stage_id: stageId || null,
+        parent_task_id: parentTaskId || null,
         priority,
         progress,
         start_date: startDate ? new Date(startDate).toISOString() : null,
@@ -375,6 +386,27 @@ export function TaskDialog({
                 {assignees.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.full_name || a.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Vinculação de Sub-tarefa (Tarefa Pai) */}
+            <div className="space-y-1.5 col-span-1 sm:col-span-2">
+              <label htmlFor="task-parent" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <CornerDownRight className="h-3.5 w-3.5 text-blue-500" />
+                Estrutura WBS: Vincular como Sub-tarefa de
+              </label>
+              <select
+                id="task-parent"
+                value={parentTaskId}
+                onChange={(e) => setParentTaskId(e.target.value)}
+                className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all"
+              >
+                <option value="">— Nenhuma (Tarefa Principal / Raiz) —</option>
+                {parentTaskOptions.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    📋 {t.title}
                   </option>
                 ))}
               </select>

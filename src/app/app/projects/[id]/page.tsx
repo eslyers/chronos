@@ -2,7 +2,7 @@
 
 import { useState, use, useEffect, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Calendar, MoreVertical } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, MoreVertical, CornerDownRight, FolderTree } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -277,6 +277,35 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                             <MoreVertical className="h-3.5 w-3.5" />
                           </button>
                         </div>
+
+                        {/* Sub-tarefa badge (se for filha) */}
+                        {task.parent_task_id && (
+                          (() => {
+                            const parentTask = allTasks.find((t) => t.id === task.parent_task_id);
+                            return parentTask ? (
+                              <div className="mb-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-[11px] font-medium text-blue-600 dark:text-blue-400">
+                                <CornerDownRight className="h-3 w-3 shrink-0" />
+                                <span className="truncate max-w-[180px]">Sub-tarefa de: {parentTask.title}</span>
+                              </div>
+                            ) : null;
+                          })()
+                        )}
+
+                        {/* Contagem de sub-tarefas filhas */}
+                        {(() => {
+                          const subtasks = allTasks.filter((t) => t.parent_task_id === task.id);
+                          if (subtasks.length === 0) return null;
+                          const completed = subtasks.filter((s) => s.status === "done" || s.progress === 100).length;
+                          return (
+                            <div className="mb-2 flex items-center justify-between px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                              <span className="flex items-center gap-1">
+                                <FolderTree className="h-3 w-3" />
+                                Sub-tarefas
+                              </span>
+                              <span>{completed}/{subtasks.length} ({Math.round((completed / subtasks.length) * 100)}%)</span>
+                            </div>
+                          );
+                        })()}
 
                         {task.description && (
                           <p className="text-xs text-muted-foreground line-clamp-2 mb-2">

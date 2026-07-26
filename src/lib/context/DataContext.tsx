@@ -532,6 +532,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         priority: data.priority ?? "medium",
         due_date: data.due_date ?? undefined,
         start_date: data.start_date ?? undefined,
+        parent_task_id: data.parent_task_id ?? undefined,
         created_by: userId,
       });
       if (task) {
