@@ -98,8 +98,8 @@ export default function TimelinePage() {
     }
     fetchDetails();
   }, [selectedProjectId, loadProjectDetails, loadAllProjectsDetails]);
-
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set());
+  const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set());
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -113,23 +113,15 @@ export default function TimelinePage() {
 
   const palette = useMemo(() => paletteFor(isDark), [isDark]);
 
-  const projectTasks = useMemo(() => {
-    const visibleProjectIds =
-      selectedProjectId === "all"
-        ? new Set(projects.map((p) => p.id))
-        : new Set([selectedProjectId]);
-    return projects
-      .filter((p) => visibleProjectIds.has(p.id))
-      .flatMap((p) => getTasksByProject(p.id));
-  }, [projects, selectedProjectId, getTasksByProject]);
-
   const dependenciesByTask = useMemo(() => {
     const visibleProjectIds =
       selectedProjectId === "all"
         ? new Set(projects.map((p) => p.id))
         : new Set([selectedProjectId]);
     const projectIdByTaskId = new Map<string, string>();
-    for (const t of projectTasks) projectIdByTaskId.set(t.id, t.project_id);
+    for (const t of projects.flatMap((p) => getTasksByProject(p.id))) {
+      projectIdByTaskId.set(t.id, t.project_id);
+    }
 
     const map = new Map<string, string[]>();
     for (const d of dependencies) {
@@ -139,7 +131,7 @@ export default function TimelinePage() {
       map.get(d.task_id)!.push(d.depends_on_task_id);
     }
     return map;
-  }, [dependencies, projectTasks, projects, selectedProjectId]);
+  }, [dependencies, projects, getTasksByProject, selectedProjectId]);
 
   const ganttTasks: GanttTask[] = useMemo(() => {
     const filteredProjects =
@@ -177,7 +169,7 @@ export default function TimelinePage() {
 
       if (!isCollapsed) {
         const tasks = getTasksByProject(project.id);
-        // Renderiza hierarquia N-níveis de forma recursiva (preserva níveis 1, 2, 3, 4+)
+        // Renderiza hierarquia N-níveis com Drill-down (Expandir/Recolher sub-tarefas)
         const addTasksRecursively = (
           parentList: Task[],
           depth: number,
@@ -186,6 +178,10 @@ export default function TimelinePage() {
         ) => {
           const sorted = [...parentList].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
           sorted.forEach((task: Task) => {
+            const children = tasks.filter((t) => t.parent_task_id === task.id);
+            const hasChildren = children.length > 0;
+            const isTaskCollapsed = collapsedTasks.has(task.id);
+
             const start = task.start_date
               ? new Date(task.start_date)
               : pStart;
@@ -201,20 +197,27 @@ export default function TimelinePage() {
               ? (isDark ? paletteForTask.dark : paletteForTask.light)
               : (depth > 0 ? palette.projectBackground : palette.barBackground);
 
-            // Indentação visual proporcional ao nível (Nível 1: Nome, Nível 2: ↳ Nome, Nível 3:   ↳ Nome)
-            const indent = depth > 1 ? "  ".repeat(depth - 1) : "";
-            const prefix = depth === 0 ? "" : `${indent}↳ `;
+            // Indentação e indicador de Drill-down (▶ se fechado, ▼ se aberto, ↳ se filha final)
+            const indent = depth > 0 ? "  ".repeat(depth) : "";
+            const expandIcon = hasChildren
+              ? isTaskCollapsed
+                ? "▶ "
+                : "▼ "
+              : depth > 0
+              ? "↳ "
+              : "";
+            const nameStr = `${indent}${expandIcon}${task.title}`;
 
             result.push({
               start,
               end,
-              name: `${prefix}${task.title}`,
+              name: nameStr,
               id: `task-${task.id}`,
               type: "task",
               progress: task.progress,
               project: task.parent_task_id ? `task-${task.parent_task_id}` : `project-${pId}`,
               dependencies: dependenciesByTask.get(task.id),
-              hideChildren: false,
+              hideChildren: isTaskCollapsed,
               styles: {
                 backgroundColor: barColor,
                 backgroundSelectedColor: barColor,
@@ -223,9 +226,8 @@ export default function TimelinePage() {
               },
             });
 
-            // Processa filhas de nível N+1
-            const children = tasks.filter((t) => t.parent_task_id === task.id);
-            if (children.length > 0) {
+            // Se a tarefa não estiver recolhida, renderiza as filhas de nível N+1 (drill-down)
+            if (hasChildren && !isTaskCollapsed) {
               addTasksRecursively(children, depth + 1, pId, pStart);
             }
           });
@@ -237,7 +239,7 @@ export default function TimelinePage() {
     });
 
     return result;
-  }, [projects, selectedProjectId, getTasksByProject, dependenciesByTask, collapsedProjects, isDark, palette]);
+  }, [projects, selectedProjectId, getTasksByProject, dependenciesByTask, collapsedProjects, collapsedTasks, isDark, palette]);
 
   const stats = useMemo(() => {
     const totalProjects = projects.length;
@@ -522,26 +524,49 @@ export default function TimelinePage() {
                             else next.add(projectId);
                             return next;
                           });
-                        } else {
-                          props.onExpanderClick(ganttTask);
+                        } else if (ganttTask.type === "task") {
+                          const realId = String(ganttTask.id).replace(/^task-/, "");
+                          const allTasks = projects.flatMap((p) => getTasksByProject(p.id));
+                          const hasChildren = allTasks.some((t) => t.parent_task_id === realId);
+                          if (hasChildren) {
+                            setCollapsedTasks((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(realId)) next.delete(realId);
+                              else next.add(realId);
+                              return next;
+                            });
+                          } else {
+                            props.onExpanderClick(ganttTask);
+                          }
                         }
                       }}
                       onTaskClick={(ganttTask) => {
                         if (ganttTask.type === "task") {
                           const realId = String(ganttTask.id).replace(/^task-/, "");
-                          const found = projectTasks.find((t) => t.id === realId);
-                          if (found) {
-                            setEditingTask(found);
-                            setTaskDialogOpen(true);
+                          const allTasks = projects.flatMap((p) => getTasksByProject(p.id));
+                          const hasChildren = allTasks.some((t) => t.parent_task_id === realId);
+                          if (hasChildren) {
+                            setCollapsedTasks((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(realId)) next.delete(realId);
+                              else next.add(realId);
+                              return next;
+                            });
+                          } else {
+                            const found = allTasks.find((t) => t.id === realId);
+                            if (found) {
+                              setEditingTask(found);
+                              setTaskDialogOpen(true);
+                            }
                           }
                         }
                       }}
                     />
                   )}
                   TooltipContent={GanttTooltipPT}
-                  onClick={(task) => {
-                    if (task.type === "project") {
-                      const projectId = String(task.id).replace(/^project-/, "");
+                  onClick={(ganttTask) => {
+                    if (ganttTask.type === "project") {
+                      const projectId = String(ganttTask.id).replace(/^project-/, "");
                       setCollapsedProjects((prev) => {
                         const next = new Set(prev);
                         if (next.has(projectId)) next.delete(projectId);
@@ -550,12 +575,23 @@ export default function TimelinePage() {
                       });
                       return;
                     }
-                    if (task.type === "task") {
-                      const realId = String(task.id).replace(/^task-/, "");
-                      const found = projectTasks.find((t) => t.id === realId);
-                      if (found) {
-                        setEditingTask(found);
-                        setTaskDialogOpen(true);
+                    if (ganttTask.type === "task") {
+                      const realId = String(ganttTask.id).replace(/^task-/, "");
+                      const allTasks = projects.flatMap((p) => getTasksByProject(p.id));
+                      const hasChildren = allTasks.some((t) => t.parent_task_id === realId);
+                      if (hasChildren) {
+                        setCollapsedTasks((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(realId)) next.delete(realId);
+                          else next.add(realId);
+                          return next;
+                        });
+                      } else {
+                        const found = allTasks.find((t) => t.id === realId);
+                        if (found) {
+                          setEditingTask(found);
+                          setTaskDialogOpen(true);
+                        }
                       }
                     }
                   }}
