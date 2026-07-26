@@ -47,6 +47,7 @@ type TaskLike = {
   due_date: string | null;
   progress: number;
   assignee_id: string | null;
+  assignee_name?: string | null;
   parent_task_id?: string | null;
 };
 
@@ -191,10 +192,11 @@ function TaskCard({
           )}
         </div>
 
-        {task.assignee_id && (
+        {(task.assignee_id || task.assignee_name) && (
           <div className="pt-2 border-t border-border/40 flex items-center justify-between">
             <TaskAssignee
               assigneeId={task.assignee_id}
+              assigneeName={task.assignee_name}
               workspaceId={undefined as unknown as string}
               variant="badge"
             />

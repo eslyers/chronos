@@ -342,10 +342,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                           </div>
                         )}
 
-                        {task.assignee_id && (
+                        {(task.assignee_id || task.assignee_name) && (
                           <div className="mt-2 pt-2 border-t border-border/40">
                             <TaskAssignee
                               assigneeId={task.assignee_id}
+                              assigneeName={task.assignee_name}
                               workspaceId={project.workspace_id}
                               variant="full"
                             />

@@ -78,10 +78,12 @@ async function fetchWorkspaceProfiles(
 
 export function TaskAssignee({
   assigneeId,
+  assigneeName,
   workspaceId,
   variant = "badge",
 }: {
   assigneeId: string | null | undefined;
+  assigneeName?: string | null | undefined;
   workspaceId: string | null | undefined;
   variant?: "badge" | "avatar" | "full";
 }) {
@@ -130,6 +132,45 @@ export function TaskAssignee({
     };
   }, [assigneeId, workspaceId]);
 
+  // Sem assigneeId, mas possui assigneeName (Responsável externo/convidado sem conta)
+  if (!assigneeId && assigneeName) {
+    const guestInitials = assigneeName.trim().slice(0, 2).toUpperCase();
+    if (variant === "badge") {
+      return (
+        <span
+          title={`Responsável sem cadastro: ${assigneeName}`}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+        >
+          <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-amber-500/30 text-[9px] font-bold">
+            {guestInitials.charAt(0)}
+          </span>
+          <span className="max-w-[80px] truncate">{assigneeName}</span>
+        </span>
+      );
+    }
+    if (variant === "avatar") {
+      return (
+        <span
+          title={`Responsável sem cadastro: ${assigneeName}`}
+          className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+        >
+          {guestInitials}
+        </span>
+      );
+    }
+    return (
+      <div className="flex items-center gap-2 text-xs">
+        <span className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+          {guestInitials}
+        </span>
+        <div className="flex flex-col leading-tight">
+          <span className="font-semibold text-amber-800 dark:text-amber-200">{assigneeName}</span>
+          <span className="text-amber-600 dark:text-amber-400 text-[10px]">Responsável sem cadastro</span>
+        </div>
+      </div>
+    );
+  }
+
   // Sem assignee
   if (!assigneeId) {
     if (variant === "full") {
@@ -162,8 +203,19 @@ export function TaskAssignee({
     );
   }
 
-  // Profile não encontrado (ex: deletado)
+  // Profile não encontrado
   if (!profile) {
+    if (assigneeName) {
+      const guestInitials = assigneeName.trim().slice(0, 2).toUpperCase();
+      return (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">
+            {guestInitials}
+          </span>
+          <span className="font-medium text-foreground">{assigneeName}</span>
+        </div>
+      );
+    }
     if (variant === "full") {
       return (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground italic">

@@ -16,6 +16,7 @@ import {
   Loader2,
   Sparkles,
   CornerDownRight,
+  UserPlus,
 } from "lucide-react";
 import { useData, type Task } from "@/lib/context/DataContext";
 import { createSPAClient } from "@/lib/supabase/client";
@@ -85,6 +86,7 @@ export function TaskDialog({
   const [progress, setProgress] = useState(0);
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [assigneeMode, setAssigneeMode] = useState<"member" | "custom">("member");
   const [assigneeId, setAssigneeId] = useState<string>("");
   const [assigneeName, setAssigneeName] = useState<string | null>(null);
   const [assigneeStatus, setAssigneeStatus] = useState<string | null>(null);
@@ -143,8 +145,24 @@ export function TaskDialog({
       setProgress(task.progress ?? 0);
       setStartDate(task.start_date ? task.start_date.split("T")[0] : "");
       setDueDate(task.due_date ? task.due_date.split("T")[0] : "");
-      setAssigneeId((task as unknown as { assignee_id?: string | null }).assignee_id ?? "");
-      setAssigneeName(task.assignee_name ?? null);
+      
+      const currentAssigneeId = (task as unknown as { assignee_id?: string | null }).assignee_id ?? "";
+      const currentAssigneeName = task.assignee_name ?? null;
+
+      if (currentAssigneeId) {
+        setAssigneeMode("member");
+        setAssigneeId(currentAssigneeId);
+        setAssigneeName(currentAssigneeName);
+      } else if (currentAssigneeName) {
+        setAssigneeMode("custom");
+        setAssigneeId("");
+        setAssigneeName(currentAssigneeName);
+      } else {
+        setAssigneeMode("member");
+        setAssigneeId("");
+        setAssigneeName(null);
+      }
+
       setAssigneeStatus(task.assignee_status ?? null);
     } else {
       setTitle("");
@@ -155,6 +173,7 @@ export function TaskDialog({
       setProgress(0);
       setStartDate(new Date().toISOString().split("T")[0]);
       setDueDate("");
+      setAssigneeMode("member");
       setAssigneeId("");
       setAssigneeName(null);
       setAssigneeStatus(null);
@@ -234,6 +253,14 @@ export function TaskDialog({
     setLoading(true);
     setError("");
     try {
+      const selectedMember = assignees.find((a) => a.id === assigneeId);
+      const finalAssigneeName =
+        assigneeMode === "custom"
+          ? assigneeName?.trim() || null
+          : selectedMember
+          ? selectedMember.full_name || selectedMember.email
+          : assigneeName || null;
+
       const data = {
         project_id: projectId,
         title: title.trim(),
@@ -244,7 +271,9 @@ export function TaskDialog({
         progress,
         start_date: startDate ? new Date(startDate).toISOString() : null,
         due_date: dueDate ? new Date(dueDate).toISOString() : null,
-        assignee_id: assigneeId || null,
+        assignee_id: assigneeMode === "member" ? assigneeId || null : null,
+        assignee_name: finalAssigneeName,
+        assignee_status: assigneeMode === "custom" && finalAssigneeName ? ((assigneeStatus as "invited" | "pending") || "pending") : null,
       };
 
       if (isEdit && task) {
@@ -369,26 +398,77 @@ export function TaskDialog({
               </select>
             </div>
 
-            {/* Responsável */}
-            <div className="space-y-1.5">
-              <label htmlFor="task-assignee" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <UserCircle2 className="h-3.5 w-3.5 text-blue-500" />
-                Responsável
-              </label>
-              <select
-                id="task-assignee"
-                value={assigneeId}
-                onChange={(e) => setAssigneeId(e.target.value)}
-                disabled={assignees.length === 0}
-                className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium disabled:opacity-50 transition-all"
-              >
-                <option value="">— Sem responsável —</option>
-                {assignees.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.full_name || a.email}
-                  </option>
-                ))}
-              </select>
+            {/* Responsável Híbrido (Membro Cadastrado ou Externo sem Cadastro) */}
+            <div className="space-y-2 col-span-1 sm:col-span-2 border border-border/60 p-3.5 rounded-2xl bg-muted/20">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <UserCircle2 className="h-3.5 w-3.5 text-blue-500" />
+                  Responsável pela Tarefa
+                </label>
+
+                {/* Alternador de Modo: Cadastrado x Sem Cadastro */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssigneeMode((prev) => (prev === "member" ? "custom" : "member"));
+                    if (assigneeMode === "member") {
+                      setAssigneeId("");
+                    }
+                  }}
+                  className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 transition-colors"
+                >
+                  {assigneeMode === "member" ? (
+                    <>
+                      <UserPlus className="h-3.5 w-3.5" />
+                      Sem cadastro? Digitar nome / e-mail
+                    </>
+                  ) : (
+                    <>
+                      <UserCircle2 className="h-3.5 w-3.5" />
+                      Escolher membro do Workspace
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {assigneeMode === "member" ? (
+                <select
+                  id="task-assignee"
+                  value={assigneeId}
+                  onChange={(e) => {
+                    const selectedId = e.target.value;
+                    setAssigneeId(selectedId);
+                    const member = assignees.find((a) => a.id === selectedId);
+                    setAssigneeName(member ? (member.full_name || member.email) : null);
+                    setAssigneeStatus(null);
+                  }}
+                  className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all"
+                >
+                  <option value="">— Sem responsável atribuído —</option>
+                  {assignees.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      👤 {a.full_name ? `${a.full_name} (${a.email})` : a.email}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="space-y-1.5">
+                  <input
+                    type="text"
+                    value={assigneeName || ""}
+                    onChange={(e) => {
+                      setAssigneeName(e.target.value);
+                      setAssigneeId("");
+                      setAssigneeStatus("pending");
+                    }}
+                    placeholder="Digite o nome ou e-mail ex: Roberto de Oliveira ou roberto@empresa.com"
+                    className="flex h-10 w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    💡 Atribua a tarefa imediatamente a qualquer pessoa. O nome aparecerá no Kanban e no Cronograma.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Vinculação de Sub-tarefa (Tarefa Pai) */}
