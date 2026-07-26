@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { useData, type Project } from "@/lib/context/DataContext";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   StageEditor,
   defaultStagesAsDrafts,
@@ -340,12 +341,11 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
                 <Calendar className="h-3.5 w-3.5 text-blue-500" />
                 Data de Início
               </label>
-              <input
+              <DatePicker
                 id="project-start"
-                type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all"
+                onChange={(val) => setStartDate(val)}
+                placeholder="Selecione início"
               />
             </div>
             <div className="space-y-1.5">
@@ -353,12 +353,11 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
                 <Calendar className="h-3.5 w-3.5 text-blue-500" />
                 Previsão de Término
               </label>
-              <input
+              <DatePicker
                 id="project-target"
-                type="date"
                 value={targetDate}
-                onChange={(e) => setTargetDate(e.target.value)}
-                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all"
+                onChange={(val) => setTargetDate(val)}
+                placeholder="Selecione previsão"
               />
             </div>
           </div>

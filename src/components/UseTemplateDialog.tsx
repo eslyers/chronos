@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, X, Sparkles, Palette } from "lucide-react";
 import { useData } from "@/lib/context/DataContext";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface Template {
   id: string;
@@ -170,24 +171,22 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
               <label htmlFor="tpl-start-date" className="text-sm font-semibold">
                 Data de início
               </label>
-              <input
+              <DatePicker
                 id="tpl-start-date"
-                type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                onChange={(val) => setStartDate(val)}
+                placeholder="Selecione início"
               />
             </div>
             <div className="space-y-1.5">
               <label htmlFor="tpl-target-date" className="text-sm font-semibold">
                 Previsão de término
               </label>
-              <input
+              <DatePicker
                 id="tpl-target-date"
-                type="date"
                 value={targetDate}
-                onChange={(e) => setTargetDate(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                onChange={(val) => setTargetDate(val)}
+                placeholder="Selecione previsão"
               />
             </div>
           </div>

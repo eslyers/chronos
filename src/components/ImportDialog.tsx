@@ -7,6 +7,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import type { ImportPreview, ImportRow, ImportRowStatus } from "@/lib/excel-parser";
 import type { Task } from "@/lib/context/DataContext";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface ImportDialogProps {
   open: boolean;
@@ -757,12 +758,12 @@ function PreviewRow({
             className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 text-xs text-muted-foreground"
           />
         </td>
-        <td className="px-2 py-1" onClick={(e) => e.stopPropagation()}>
-          <input
-            type="date"
+        <td className="px-2 py-1 min-w-[140px]" onClick={(e) => e.stopPropagation()}>
+          <DatePicker
             value={dueDate}
-            onChange={(e) => onUpdate(row.index, { due_date: e.target.value })}
-            className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 text-xs text-muted-foreground"
+            onChange={(val) => onUpdate(row.index, { due_date: val })}
+            placeholder="Prazo"
+            className="h-8 text-xs border-0 bg-transparent hover:bg-muted/40"
           />
         </td>
         {hasWBS && (

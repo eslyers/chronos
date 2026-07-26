@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useData, type Task } from "@/lib/context/DataContext";
 import { createSPAClient } from "@/lib/supabase/client";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface TaskDialogProps {
   open: boolean;
@@ -446,12 +447,11 @@ export function TaskDialog({
                 <Calendar className="h-3.5 w-3.5 text-blue-500" />
                 Data de Início
               </label>
-              <input
+              <DatePicker
                 id="task-start"
-                type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all"
+                onChange={(val) => setStartDate(val)}
+                placeholder="Selecione início"
               />
             </div>
             <div className="space-y-1.5">
@@ -459,12 +459,11 @@ export function TaskDialog({
                 <Calendar className="h-3.5 w-3.5 text-blue-500" />
                 Data Limite (Prazo)
               </label>
-              <input
+              <DatePicker
                 id="task-due"
-                type="date"
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all"
+                onChange={(val) => setDueDate(val)}
+                placeholder="Selecione prazo"
               />
             </div>
           </div>
