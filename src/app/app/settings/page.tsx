@@ -293,7 +293,7 @@ export default function SettingsPage() {
           <div>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-xs font-semibold">
-                SYSTEM CONFIGURATION & PREFERENCES
+                CONFIGURAÇÕES DO SISTEMA
               </Badge>
             </div>
             <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2 flex items-center gap-3">

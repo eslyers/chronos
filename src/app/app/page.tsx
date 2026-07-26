@@ -187,7 +187,7 @@ export default function DashboardPage() {
           <div>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-xs font-semibold">
-                CHRONOS WORKSPACE
+                PAINEL DE CONTROLE CHRONOS
               </Badge>
               <span className="text-xs text-muted-foreground">
                 {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}

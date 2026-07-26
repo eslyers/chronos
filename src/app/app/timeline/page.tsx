@@ -293,9 +293,8 @@ export default function TimelinePage() {
           <div>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-xs font-semibold">
-                GANTT TIMELINE ENGINE
+                CRONOGRAMA & TIMELINE
               </Badge>
-              <span className="text-xs text-muted-foreground font-mono">v2.4 Enterprise</span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2 flex items-center gap-3">
               <Calendar className="h-7 w-7 text-blue-500" />
