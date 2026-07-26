@@ -425,24 +425,60 @@ body .gantt-wrapper svg line[stroke="#ebeff2"] {
 }
 
 
-/* Scrollbar elegante */
+/* ============================================================== */
+/* ELEGANT CUSTOM SCROLLBARS (GLOBAL: VERTICAL & HORIZONTAL)      */
+/* ============================================================== */
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(215 16% 47% / 0.25) transparent;
+}
+
+.dark * {
+  scrollbar-color: hsl(215 20% 65% / 0.25) transparent;
+}
+
+/* Webkit browsers (Chrome, Edge, Safari, Opera, Brave) */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(215 16% 47% / 0.3);
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(217 91% 60% / 0.75);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: hsl(215 20% 65% / 0.3);
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: hsl(217 91% 60% / 0.85);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
-  }
-  .scrollbar-thin::-webkit-scrollbar {
-    height: 8px;
-    width: 8px;
-  }
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--muted-foreground) / 0.3);
-    border-radius: 4px;
-  }
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: hsl(var(--muted-foreground) / 0.5);
   }
 }
