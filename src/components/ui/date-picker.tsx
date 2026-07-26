@@ -65,23 +65,30 @@ export function DatePicker({
     if (selectedDate) setViewDate(selectedDate);
   }, [selectedDate]);
 
-  // Posicionamento inteligente (evita sair da tela ou ser cortado por overflow)
+  // Posicionamento inteligente com trava absoluta dentro do Viewport
   const updatePosition = useCallback(() => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    const popoverWidth = 320;
-    const popoverHeight = 350;
+    const popoverWidth = 310;
+    const popoverHeight = 330;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
     let top = rect.bottom + 6;
-    // Se estourar a parte inferior da janela, abre para cima do input
-    if (top + popoverHeight > viewportHeight && rect.top - popoverHeight > 0) {
-      top = rect.top - popoverHeight - 6;
+
+    // Se o calendário estouraria o final da tela ao abrir abaixo...
+    if (top + popoverHeight > viewportHeight - 12) {
+      const topAbove = rect.top - popoverHeight - 6;
+      // Tenta abrir acima do campo
+      if (topAbove >= 12) {
+        top = topAbove;
+      } else {
+        // Se a tela for pequena, fixa dentro dos limites visíveis do viewport
+        top = Math.max(12, viewportHeight - popoverHeight - 12);
+      }
     }
 
     let left = rect.left;
-    // Se estourar a lateral direita, alinha à direita da tela
     if (left + popoverWidth > viewportWidth - 12) {
       left = Math.max(12, viewportWidth - popoverWidth - 12);
     }
@@ -89,8 +96,12 @@ export function DatePicker({
     setPopoverPos({ top, left });
   }, []);
 
+  // Rola o campo para visualização e calcula posição ao abrir
   useEffect(() => {
     if (!open) return;
+    if (triggerRef.current) {
+      triggerRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
     updatePosition();
 
     const handleScrollOrResize = () => {
@@ -105,17 +116,26 @@ export function DatePicker({
     };
   }, [open, updatePosition]);
 
-  // Click outside listener (considera trigger + popover no Portal)
+  // Click outside protegido contra cliques em scrollbars de modals
   useEffect(() => {
     if (!open) return;
     function handleClickOutside(e: MouseEvent) {
-      const target = e.target as Node;
+      const target = e.target as Element;
+      if (!target) return;
+
+      // Se o clique foi no gatilho ou dentro do calendário popover, ignora
       if (
-        triggerRef.current && !triggerRef.current.contains(target) &&
-        popoverRef.current && !popoverRef.current.contains(target)
+        triggerRef.current?.contains(target) ||
+        popoverRef.current?.contains(target)
       ) {
-        setOpen(false);
+        return;
       }
+
+      // Se o clique foi em uma barra de rolagem (ex: da modal), ignora para não fechar
+      const isWindowScrollbar = e.clientX >= document.documentElement.clientWidth || e.clientY >= document.documentElement.clientHeight;
+      if (isWindowScrollbar) return;
+
+      setOpen(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -269,7 +289,7 @@ export function DatePicker({
         )}
       </div>
 
-      {/* Popover Calendar em Portal no Body (não sofre com overflow de modal) */}
+      {/* Popover Calendar em Portal no Body (com trava estrita de tela) */}
       {open && mounted && typeof document !== "undefined" && createPortal(
         <div
           ref={popoverRef}
@@ -279,7 +299,7 @@ export function DatePicker({
             left: `${popoverPos.left}px`,
             zIndex: 99999,
           }}
-          className="w-[310px] sm:w-[320px] rounded-2xl border border-border bg-card p-4 shadow-2xl animate-fadeIn"
+          className="w-[310px] sm:w-[320px] rounded-2xl border border-border bg-card p-4 shadow-2xl animate-fadeIn select-none"
         >
           {/* Header Mês / Ano */}
           <div className="flex items-center justify-between pb-3 border-b border-border">
