@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -34,7 +35,14 @@ export function DatePicker({
   className = "",
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Parsed selected date
   const selectedDate = useMemo(() => {
@@ -57,11 +65,55 @@ export function DatePicker({
     if (selectedDate) setViewDate(selectedDate);
   }, [selectedDate]);
 
-  // Click outside listener
+  // Posicionamento inteligente (evita sair da tela ou ser cortado por overflow)
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const popoverWidth = 320;
+    const popoverHeight = 350;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let top = rect.bottom + 6;
+    // Se estourar a parte inferior da janela, abre para cima do input
+    if (top + popoverHeight > viewportHeight && rect.top - popoverHeight > 0) {
+      top = rect.top - popoverHeight - 6;
+    }
+
+    let left = rect.left;
+    // Se estourar a lateral direita, alinha à direita da tela
+    if (left + popoverWidth > viewportWidth - 12) {
+      left = Math.max(12, viewportWidth - popoverWidth - 12);
+    }
+
+    setPopoverPos({ top, left });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    updatePosition();
+
+    const handleScrollOrResize = () => {
+      updatePosition();
+    };
+
+    window.addEventListener("scroll", handleScrollOrResize, true);
+    window.addEventListener("resize", handleScrollOrResize);
+    return () => {
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
+    };
+  }, [open, updatePosition]);
+
+  // Click outside listener (considera trigger + popover no Portal)
   useEffect(() => {
     if (!open) return;
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        triggerRef.current && !triggerRef.current.contains(target) &&
+        popoverRef.current && !popoverRef.current.contains(target)
+      ) {
         setOpen(false);
       }
     }
@@ -69,7 +121,7 @@ export function DatePicker({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
-  // Key listener for Escape
+  // Key listener para Escape
   useEffect(() => {
     if (!open) return;
     function handleKeyDown(e: KeyboardEvent) {
@@ -79,7 +131,7 @@ export function DatePicker({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open]);
 
-  // Display text formatted (dd/mm/yyyy)
+  // Formatação de exibição (dd/mm/yyyy)
   const displayText = useMemo(() => {
     if (!selectedDate) return "";
     const d = String(selectedDate.getDate()).padStart(2, "0");
@@ -88,7 +140,7 @@ export function DatePicker({
     return `${d}/${m}/${y}`;
   }, [selectedDate]);
 
-  // Helper date math
+  // NAVEGAÇÃO DE DATA
   const viewYear = viewDate.getFullYear();
   const viewMonth = viewDate.getMonth();
 
@@ -119,7 +171,7 @@ export function DatePicker({
     setOpen(false);
   };
 
-  // Calendar grid days construction
+  // Grade de dias do calendário
   const calendarDays = useMemo(() => {
     const firstDayOfMonth = new Date(viewYear, viewMonth, 1);
     const lastDayOfMonth = new Date(viewYear, viewMonth + 1, 0);
@@ -136,7 +188,6 @@ export function DatePicker({
 
     const today = new Date();
 
-    // Previous month filler days
     const prevMonthLastDay = new Date(viewYear, viewMonth, 0).getDate();
     for (let i = startWeekday - 1; i >= 0; i--) {
       const d = new Date(viewYear, viewMonth - 1, prevMonthLastDay - i);
@@ -148,7 +199,6 @@ export function DatePicker({
       });
     }
 
-    // Current month days
     for (let day = 1; day <= totalDaysInMonth; day++) {
       const d = new Date(viewYear, viewMonth, day);
       days.push({
@@ -159,7 +209,6 @@ export function DatePicker({
       });
     }
 
-    // Next month filler days to complete grid (42 cells: 6 rows)
     const nextDaysNeeded = 42 - days.length;
     for (let day = 1; day <= nextDaysNeeded; day++) {
       const d = new Date(viewYear, viewMonth + 1, day);
@@ -175,9 +224,10 @@ export function DatePicker({
   }, [viewYear, viewMonth, selectedDate]);
 
   return (
-    <div ref={containerRef} className="relative inline-block w-full">
+    <div className="relative inline-block w-full">
       {/* Trigger Input / Button */}
       <div
+        ref={triggerRef}
         id={id}
         tabIndex={disabled ? -1 : 0}
         role="button"
@@ -219,10 +269,19 @@ export function DatePicker({
         )}
       </div>
 
-      {/* Popover Calendar */}
-      {open && (
-        <div className="absolute left-0 top-full mt-2 z-[10000] w-[310px] sm:w-[330px] rounded-2xl border border-border bg-card p-4 shadow-2xl animate-fadeIn">
-          {/* Header Month / Year Navigation */}
+      {/* Popover Calendar em Portal no Body (não sofre com overflow de modal) */}
+      {open && mounted && typeof document !== "undefined" && createPortal(
+        <div
+          ref={popoverRef}
+          style={{
+            position: "fixed",
+            top: `${popoverPos.top}px`,
+            left: `${popoverPos.left}px`,
+            zIndex: 99999,
+          }}
+          className="w-[310px] sm:w-[320px] rounded-2xl border border-border bg-card p-4 shadow-2xl animate-fadeIn"
+        >
+          {/* Header Mês / Ano */}
           <div className="flex items-center justify-between pb-3 border-b border-border">
             <button
               type="button"
@@ -247,7 +306,7 @@ export function DatePicker({
             </button>
           </div>
 
-          {/* Weekday Labels */}
+          {/* Cabeçalho dos dias da semana */}
           <div className="grid grid-cols-7 gap-1 pt-3 pb-1 text-center">
             {WEEKDAY_NAMES.map((name) => (
               <span key={name} className="text-[11px] font-bold text-muted-foreground/70 uppercase">
@@ -256,7 +315,7 @@ export function DatePicker({
             ))}
           </div>
 
-          {/* Days Grid */}
+          {/* Grade de dias */}
           <div className="grid grid-cols-7 gap-1 text-center">
             {calendarDays.map((item, index) => {
               const dayNumber = item.date.getDate();
@@ -288,7 +347,7 @@ export function DatePicker({
             })}
           </div>
 
-          {/* Quick Footer Action Bar */}
+          {/* Rodapé de ações rápidas */}
           <div className="flex items-center justify-between pt-3 mt-2 border-t border-border text-xs font-medium">
             <button
               type="button"
@@ -306,7 +365,8 @@ export function DatePicker({
               Hoje
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
