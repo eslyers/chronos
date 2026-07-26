@@ -14,11 +14,22 @@ import {
   CheckCircle2,
   Send,
   Loader2,
-  Sparkles,
   CornerDownRight,
   UserPlus,
+  MessageSquare,
+  Paperclip,
+  Trash2,
+  Upload,
+  Plus,
+  ExternalLink,
+  Sparkles,
 } from "lucide-react";
-import { useData, type Task } from "@/lib/context/DataContext";
+import {
+  useData,
+  type Task,
+  type TaskComment,
+  type TaskAttachment,
+} from "@/lib/context/DataContext";
 import { createSPAClient } from "@/lib/supabase/client";
 import { DatePicker } from "@/components/ui/date-picker";
 
@@ -68,7 +79,18 @@ export function TaskDialog({
   defaultStageId,
   projectId,
 }: TaskDialogProps) {
-  const { createTask, updateTask, getStagesByProject, getTasksByProject } = useData();
+  const {
+    createTask,
+    updateTask,
+    getStagesByProject,
+    getTasksByProject,
+    getTaskComments,
+    addTaskComment,
+    deleteTaskComment,
+    getTaskAttachments,
+    addTaskAttachment,
+    deleteTaskAttachment,
+  } = useData();
   const stages = getStagesByProject(projectId);
   const projectTasks = getTasksByProject(projectId);
   const isEdit = !!task;
@@ -95,6 +117,28 @@ export function TaskDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [inviting, setInviting] = useState(false);
+
+  // Estados das Abas de Comentários & Anexos
+  const [activeTab, setActiveTab] = useState<"details" | "comments" | "attachments">("details");
+  const [comments, setComments] = useState<TaskComment[]>([]);
+  const [newCommentText, setNewCommentText] = useState("");
+  const [postingComment, setPostingComment] = useState(false);
+
+  const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
+  const [attachName, setAttachName] = useState("");
+  const [attachUrl, setAttachUrl] = useState("");
+  const [addingAttach, setAddingAttach] = useState(false);
+
+  useEffect(() => {
+    if (open && task?.id) {
+      getTaskComments(task.id).then(setComments);
+      getTaskAttachments(task.id).then(setAttachments);
+    } else {
+      setActiveTab("details");
+      setComments([]);
+      setAttachments([]);
+    }
+  }, [open, task?.id, getTaskComments, getTaskAttachments]);
 
   const titleInputRef = useRef<HTMLInputElement>(null);
 
@@ -334,14 +378,254 @@ export function TaskDialog({
           </div>
         </div>
 
-        {/* Scrollable Form Body */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSubmit();
-          }}
-          className="p-6 space-y-5 overflow-y-auto flex-1"
-        >
+        {/* Tab Navigation (Apenas em Edição) */}
+        {isEdit && (
+          <div className="flex items-center gap-2 px-6 pt-2 border-b border-border bg-muted/20 shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab("details")}
+              className={`px-3.5 py-2 text-xs font-bold transition-all border-b-2 flex items-center gap-1.5 ${
+                activeTab === "details"
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-background rounded-t-lg shadow-sm"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Dados da Tarefa
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("comments")}
+              className={`px-3.5 py-2 text-xs font-bold transition-all border-b-2 flex items-center gap-1.5 ${
+                activeTab === "comments"
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-background rounded-t-lg shadow-sm"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              Comentários ({comments.length})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("attachments")}
+              className={`px-3.5 py-2 text-xs font-bold transition-all border-b-2 flex items-center gap-1.5 ${
+                activeTab === "attachments"
+                  ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-background rounded-t-lg shadow-sm"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Paperclip className="h-3.5 w-3.5" />
+              Anexos ({attachments.length})
+            </button>
+          </div>
+        )}
+
+        {/* ABA 💬 COMENTÁRIOS */}
+        {activeTab === "comments" && (
+          <div className="p-6 space-y-5 overflow-y-auto flex-1 flex flex-col justify-between">
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <MessageSquare className="h-4 w-4 text-blue-500" />
+                Discussão Interna ({comments.length})
+              </h3>
+
+              {comments.length === 0 ? (
+                <div className="p-8 text-center border-2 border-dashed rounded-2xl bg-muted/10 space-y-2">
+                  <p className="text-sm font-semibold text-muted-foreground">Nenhum comentário registrado nesta tarefa.</p>
+                  <p className="text-xs text-muted-foreground">Seja o primeiro a deixar uma nota, instrução ou atualização.</p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1">
+                  {comments.map((c) => (
+                    <div key={c.id} className="p-3.5 rounded-xl border border-border/70 bg-card space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-xs flex items-center gap-1.5 text-foreground">
+                          <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-blue-500/20 text-blue-600 text-[10px]">
+                            {c.user_name.charAt(0).toUpperCase()}
+                          </span>
+                          {c.user_name}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {new Date(c.created_at).toLocaleString("pt-BR")}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await deleteTaskComment(c.id);
+                              if (task?.id) setComments(await getTaskComments(task.id));
+                            }}
+                            className="text-muted-foreground hover:text-rose-500 text-xs transition-colors p-1"
+                            title="Excluir comentário"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">{c.content}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Form de Envio de Comentário */}
+            <div className="space-y-2 pt-3 border-t">
+              <textarea
+                value={newCommentText}
+                onChange={(e) => setNewCommentText(e.target.value)}
+                placeholder="Escreva um comentário ou atualização..."
+                rows={2}
+                className="flex w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-all resize-none"
+              />
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  disabled={postingComment || !newCommentText.trim() || !task}
+                  onClick={async () => {
+                    if (!newCommentText.trim() || !task) return;
+                    setPostingComment(true);
+                    await addTaskComment(task.id, newCommentText.trim());
+                    setNewCommentText("");
+                    setComments(await getTaskComments(task.id));
+                    setPostingComment(false);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold gap-1.5 h-9 px-4 rounded-xl flex items-center justify-center disabled:opacity-50 transition-colors"
+                >
+                  {postingComment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  Comentar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ABA 📎 ANEXOS */}
+        {activeTab === "attachments" && (
+          <div className="p-6 space-y-5 overflow-y-auto flex-1 flex flex-col justify-between">
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Paperclip className="h-4 w-4 text-blue-500" />
+                Arquivos & Documentos Anexos ({attachments.length})
+              </h3>
+
+              {attachments.length === 0 ? (
+                <div className="p-8 text-center border-2 border-dashed rounded-2xl bg-muted/10 space-y-2">
+                  <p className="text-sm font-semibold text-muted-foreground">Nenhum anexo adicionado a esta tarefa.</p>
+                  <p className="text-xs text-muted-foreground">Anexe briefings, PDFs de especificação, mockups ou planilhas.</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+                  {attachments.map((a) => (
+                    <div key={a.id} className="p-3 rounded-xl border border-border/70 bg-card flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="h-8 w-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0 font-bold text-xs uppercase">
+                          📎
+                        </div>
+                        <div className="min-w-0">
+                          <a
+                            href={a.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-bold text-xs hover:underline truncate block text-foreground"
+                          >
+                            {a.file_name}
+                          </a>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {(a.file_size / 1024).toFixed(1)} KB • {new Date(a.uploaded_at).toLocaleDateString("pt-BR")}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <a
+                          href={a.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 text-blue-500 hover:bg-muted rounded-lg text-xs"
+                          title="Abrir anexo"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await deleteTaskAttachment(a.id);
+                            if (task?.id) setAttachments(await getTaskAttachments(task.id));
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-rose-500 rounded-lg text-xs"
+                          title="Excluir anexo"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Form de Inclusão de Anexo */}
+            <div className="p-4 rounded-xl border border-border/80 bg-muted/20 space-y-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Upload className="h-3.5 w-3.5 text-blue-500" />
+                Anexar Novo Arquivo / Link
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  placeholder="Nome do Arquivo ex: Especificacao.pdf"
+                  value={attachName}
+                  onChange={(e) => setAttachName(e.target.value)}
+                  className="flex h-9 w-full rounded-xl border border-input bg-background px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium"
+                />
+                <input
+                  type="url"
+                  placeholder="URL do Arquivo / Drive / Figma"
+                  value={attachUrl}
+                  onChange={(e) => setAttachUrl(e.target.value)}
+                  className="flex h-9 w-full rounded-xl border border-input bg-background px-3 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium"
+                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  disabled={addingAttach || !attachName.trim() || !attachUrl.trim() || !task}
+                  onClick={async () => {
+                    if (!attachName.trim() || !attachUrl.trim() || !task) return;
+                    setAddingAttach(true);
+                    await addTaskAttachment(task.id, {
+                      name: attachName.trim(),
+                      url: attachUrl.trim(),
+                      size: 204800,
+                      type: "application/pdf",
+                    });
+                    setAttachName("");
+                    setAttachUrl("");
+                    setAttachments(await getTaskAttachments(task.id));
+                    setAddingAttach(false);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold gap-1.5 h-8 px-3 rounded-lg flex items-center justify-center disabled:opacity-50 transition-colors"
+                >
+                  {addingAttach ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                  Adicionar Anexo
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ABA 📋 DADOS DA TAREFA */}
+        {activeTab === "details" && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSubmit();
+            }}
+            className="p-6 space-y-5 overflow-y-auto flex-1"
+          >
           {/* Título */}
           <div className="space-y-1.5">
             <label htmlFor="task-title" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -665,6 +949,7 @@ export function TaskDialog({
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

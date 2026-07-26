@@ -71,6 +71,26 @@ export type TaskDependency = {
   type: "FS" | "SS" | "FF" | "SF"; // Finish-to-Start, Start-to-Start, Finish-to-Finish, Start-to-Finish
 };
 
+export type TaskComment = {
+  id: string;
+  task_id: string;
+  user_id: string | null;
+  user_name: string;
+  content: string;
+  created_at: string;
+};
+
+export type TaskAttachment = {
+  id: string;
+  task_id: string;
+  user_id: string | null;
+  file_name: string;
+  file_size: number;
+  file_type: string;
+  file_url: string;
+  uploaded_at: string;
+};
+
 type DataState = {
   projects: Project[];
   stages: Stage[];
@@ -100,6 +120,13 @@ type DataContextType = DataState & {
     type?: "FS" | "SS" | "FF" | "SF"
   ) => Promise<TaskDependency>;
   removeDependency: (id: string) => Promise<void>;
+  // Comments & Attachments (Proposta 4)
+  getTaskComments: (taskId: string) => Promise<TaskComment[]>;
+  addTaskComment: (taskId: string, content: string, userName?: string) => Promise<TaskComment>;
+  deleteTaskComment: (commentId: string) => Promise<void>;
+  getTaskAttachments: (taskId: string) => Promise<TaskAttachment[]>;
+  addTaskAttachment: (taskId: string, file: { name: string; size: number; type: string; url: string }) => Promise<TaskAttachment>;
+  deleteTaskAttachment: (attachmentId: string) => Promise<void>;
   // Helpers
   getProject: (id: string) => Project | undefined;
   getStagesByProject: (projectId: string) => Stage[];
@@ -760,6 +787,168 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [loadedProjects]
   );
 
+  // ── Comments & Attachments (Proposta 4) ─────────────────────
+  const getTaskComments = useCallback(async (taskId: string): Promise<TaskComment[]> => {
+    if (getDataLayer() === "supabase") {
+      try {
+        const { createSPAClient } = await import("@/lib/supabase/client");
+        const supabase = createSPAClient();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const client = supabase.from("task_comments") as any;
+        const { data, error } = await client
+          .select("*")
+          .eq("task_id", taskId)
+          .order("created_at", { ascending: true });
+        if (!error && data) return data as TaskComment[];
+      } catch (err) {
+        console.error("[DataContext] getTaskComments error:", err);
+      }
+    }
+    const raw = typeof window !== "undefined" ? localStorage.getItem(`chronos:comments:${taskId}`) : null;
+    return raw ? JSON.parse(raw) : [];
+  }, []);
+
+  const addTaskComment = useCallback(
+    async (taskId: string, content: string, userName?: string): Promise<TaskComment> => {
+      const now = new Date().toISOString();
+      const commentObj: TaskComment = {
+        id: generateId("comment"),
+        task_id: taskId,
+        user_id: userId || null,
+        user_name: userName || "Usuário",
+        content,
+        created_at: now,
+      };
+
+      if (getDataLayer() === "supabase") {
+        try {
+          const { createSPAClient } = await import("@/lib/supabase/client");
+          const supabase = createSPAClient();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const client = supabase.from("task_comments") as any;
+          const { data, error } = await client
+            .insert({
+              task_id: taskId,
+              user_id: userId || null,
+              user_name: userName || "Usuário",
+              content,
+            })
+            .select()
+            .single();
+          if (!error && data) return data as TaskComment;
+        } catch (err) {
+          console.error("[DataContext] addTaskComment error:", err);
+        }
+      }
+
+      const current = await getTaskComments(taskId);
+      const updated = [...current, commentObj];
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`chronos:comments:${taskId}`, JSON.stringify(updated));
+      }
+      return commentObj;
+    },
+    [userId, getTaskComments]
+  );
+
+  const deleteTaskComment = useCallback(async (commentId: string) => {
+    if (getDataLayer() === "supabase") {
+      try {
+        const { createSPAClient } = await import("@/lib/supabase/client");
+        const supabase = createSPAClient();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const client = supabase.from("task_comments") as any;
+        await client.delete().eq("id", commentId);
+      } catch (err) {
+        console.error("[DataContext] deleteTaskComment error:", err);
+      }
+    }
+  }, []);
+
+  const getTaskAttachments = useCallback(async (taskId: string): Promise<TaskAttachment[]> => {
+    if (getDataLayer() === "supabase") {
+      try {
+        const { createSPAClient } = await import("@/lib/supabase/client");
+        const supabase = createSPAClient();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const client = supabase.from("task_attachments") as any;
+        const { data, error } = await client
+          .select("*")
+          .eq("task_id", taskId)
+          .order("uploaded_at", { ascending: false });
+        if (!error && data) return data as TaskAttachment[];
+      } catch (err) {
+        console.error("[DataContext] getTaskAttachments error:", err);
+      }
+    }
+    const raw = typeof window !== "undefined" ? localStorage.getItem(`chronos:attachments:${taskId}`) : null;
+    return raw ? JSON.parse(raw) : [];
+  }, []);
+
+  const addTaskAttachment = useCallback(
+    async (
+      taskId: string,
+      file: { name: string; size: number; type: string; url: string }
+    ): Promise<TaskAttachment> => {
+      const now = new Date().toISOString();
+      const attachmentObj: TaskAttachment = {
+        id: generateId("attach"),
+        task_id: taskId,
+        user_id: userId || null,
+        file_name: file.name,
+        file_size: file.size,
+        file_type: file.type,
+        file_url: file.url,
+        uploaded_at: now,
+      };
+
+      if (getDataLayer() === "supabase") {
+        try {
+          const { createSPAClient } = await import("@/lib/supabase/client");
+          const supabase = createSPAClient();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const client = supabase.from("task_attachments") as any;
+          const { data, error } = await client
+            .insert({
+              task_id: taskId,
+              user_id: userId || null,
+              file_name: file.name,
+              file_size: file.size,
+              file_type: file.type,
+              file_url: file.url,
+            })
+            .select()
+            .single();
+          if (!error && data) return data as TaskAttachment;
+        } catch (err) {
+          console.error("[DataContext] addTaskAttachment error:", err);
+        }
+      }
+
+      const current = await getTaskAttachments(taskId);
+      const updated = [attachmentObj, ...current];
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`chronos:attachments:${taskId}`, JSON.stringify(updated));
+      }
+      return attachmentObj;
+    },
+    [userId, getTaskAttachments]
+  );
+
+  const deleteTaskAttachment = useCallback(async (attachmentId: string) => {
+    if (getDataLayer() === "supabase") {
+      try {
+        const { createSPAClient } = await import("@/lib/supabase/client");
+        const supabase = createSPAClient();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const client = supabase.from("task_attachments") as any;
+        await client.delete().eq("id", attachmentId);
+      } catch (err) {
+        console.error("[DataContext] deleteTaskAttachment error:", err);
+      }
+    }
+  }, []);
+
   return (
     <DataContext.Provider
       value={{
@@ -776,6 +965,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         moveTask,
         addDependency,
         removeDependency,
+        getTaskComments,
+        addTaskComment,
+        deleteTaskComment,
+        getTaskAttachments,
+        addTaskAttachment,
+        deleteTaskAttachment,
         getProject,
         getStagesByProject,
         getTasksByProject,

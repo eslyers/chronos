@@ -15,6 +15,7 @@ import {
   Sparkles,
   ShieldCheck,
   BarChart3,
+  Printer,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -296,6 +297,15 @@ export default function TimelinePage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.print()}
+              className="h-10 px-4 text-xs font-bold border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 gap-2"
+            >
+              <Printer className="h-4 w-4" />
+              Exportar Gantt (PDF)
+            </Button>
             {selectedProjectId !== "all" && (
               <>
                 <TaskHierarchy projectId={selectedProjectId} />
