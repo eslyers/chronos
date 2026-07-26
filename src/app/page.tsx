@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -29,6 +29,17 @@ import { ThemeToggle } from "@/components/theme-toggle";
 export default function Home() {
   const productName = process.env.NEXT_PUBLIC_PRODUCTNAME || "CHRONOS";
   const [activeTab, setActiveTab] = useState<"gantt" | "kanban" | "email" | "audit">("gantt");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get("code");
+      const hash = window.location.hash;
+      if (code || hash.includes("access_token") || hash.includes("type=invite") || hash.includes("type=recovery")) {
+        window.location.href = `/auth/callback${window.location.search}${window.location.hash}`;
+      }
+    }
+  }, []);
 
   const features = [
     {
