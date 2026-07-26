@@ -12,6 +12,9 @@ import {
   ShieldCheck,
   Printer,
   X,
+  PieChart,
+  BarChart3,
+  Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +46,7 @@ export function ProjectStatusReportPDF({
   const totalTasks = tasks.length;
   const doneTasks = tasks.filter((t) => t.status === "done").length;
   const inProgressTasks = tasks.filter((t) => t.status === "in_progress").length;
+  const todoTasks = tasks.filter((t) => t.status === "todo" || t.status === "blocked" || !t.status).length;
   const overdueTasks = tasks.filter((t) => {
     if (!t.due_date || t.status === "done") return false;
     return new Date(t.due_date).getTime() < Date.now();
@@ -59,6 +63,12 @@ export function ProjectStatusReportPDF({
     year: "numeric",
   });
 
+  // Cálculos para o Gráfico Donut em SVG
+  const pctDone = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+  const pctInProgress = totalTasks > 0 ? Math.round((inProgressTasks / totalTasks) * 100) : 0;
+  const pctTodo = totalTasks > 0 ? Math.round((todoTasks / totalTasks) * 100) : 0;
+  const pctOverdue = totalTasks > 0 ? Math.round((overdueTasks / totalTasks) * 100) : 0;
+
   const handlePrint = () => {
     window.print();
   };
@@ -71,7 +81,7 @@ export function ProjectStatusReportPDF({
         <div className="flex items-center justify-between px-6 py-4 border-b border-border/80 bg-muted/30 print:hidden shrink-0">
           <div className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-blue-500" />
-            <h2 className="text-base font-bold">Relatório Executivo de Status Report</h2>
+            <h2 className="text-base font-bold">Relatório Executivo de Status Report com Gráficos</h2>
           </div>
 
           <div className="flex items-center gap-3">
@@ -108,7 +118,7 @@ export function ProjectStatusReportPDF({
                 {project.name}
               </h1>
               <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-                {project.description || "Relatório consolidado de acompanhamento do plano de execução e entregáveis."}
+                {project.description || "Relatório executivo com curva de evolução, KPIs e status dos entregáveis."}
               </p>
             </div>
 
@@ -167,7 +177,155 @@ export function ProjectStatusReportPDF({
             </div>
           </div>
 
-          {/* Informações de Cronograma */}
+          {/* 📊 SEÇÃO DE GRÁFICOS VISUAIS DE EVOLUÇÃO (NOVO) */}
+          <div className="space-y-4 pt-2">
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-2 border-b pb-2">
+              <BarChart3 className="h-4 w-4 text-blue-500" />
+              Gráficos de Evolução & Distribuição Visual do Projeto
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Gráfico 1: Evolução por Etapa do Kanban / WBS */}
+              <div className="p-5 rounded-2xl border border-border/80 bg-card space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                    <Layers className="h-4 w-4 text-blue-500" />
+                    Progresso por Etapa WBS (%)
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-muted-foreground">
+                    {stages.length} Etapas
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {stages.map((stage) => {
+                    const stageTasks = tasks.filter((t) => t.stage_id === stage.id);
+                    const stageDone = stageTasks.filter((t) => t.status === "done").length;
+                    const stagePct =
+                      stageTasks.length > 0
+                        ? Math.round(
+                            stageTasks.reduce((sum, t) => sum + (t.progress || 0), 0) / stageTasks.length
+                          )
+                        : 0;
+
+                    return (
+                      <div key={stage.id} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs font-semibold">
+                          <span className="flex items-center gap-1.5 text-foreground truncate max-w-[180px]">
+                            <span
+                              className="h-2.5 w-2.5 rounded-full inline-block shrink-0"
+                              style={{ backgroundColor: stage.color || "#3b82f6" }}
+                            />
+                            {stage.name}
+                          </span>
+                          <span className="font-mono text-[11px] text-muted-foreground font-bold">
+                            {stagePct}% <span className="text-[10px] font-normal">({stageDone}/{stageTasks.length})</span>
+                          </span>
+                        </div>
+                        <div className="w-full bg-muted/60 rounded-full h-2 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${stagePct}%`,
+                              backgroundColor: stage.color || "#3b82f6",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Gráfico 2: Distribuição Visual de Status (Gráfico de Rosca / Donut SVG) */}
+              <div className="p-5 rounded-2xl border border-border/80 bg-card space-y-4 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5">
+                    <PieChart className="h-4 w-4 text-emerald-500" />
+                    Distribuição dos Status das Tarefas
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-muted-foreground">
+                    {totalTasks} Tarefas
+                  </span>
+                </div>
+
+                {/* Donut Chart SVG + Legenda */}
+                <div className="flex items-center justify-around gap-4 py-2">
+                  <div className="relative flex items-center justify-center shrink-0">
+                    <svg className="w-28 h-28 transform -rotate-90" viewBox="0 0 36 36">
+                      {/* Background Ring */}
+                      <path
+                        className="text-muted/40"
+                        strokeWidth="3.8"
+                        stroke="currentColor"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      />
+                      {/* Concluídas (Verde) */}
+                      <path
+                        className="text-emerald-500"
+                        strokeWidth="3.8"
+                        strokeDasharray={`${pctDone}, 100`}
+                        stroke="currentColor"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      />
+                      {/* Em Progresso (Azul) */}
+                      <path
+                        className="text-blue-500"
+                        strokeWidth="3.8"
+                        strokeDasharray={`${pctInProgress}, 100`}
+                        strokeDashoffset={`-${pctDone}`}
+                        stroke="currentColor"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      />
+                      {/* Em Atraso (Vermelho) */}
+                      <path
+                        className="text-rose-500"
+                        strokeWidth="3.8"
+                        strokeDasharray={`${pctOverdue}, 100`}
+                        strokeDashoffset={`-${pctDone + pctInProgress}`}
+                        stroke="currentColor"
+                        fill="none"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                      />
+                    </svg>
+                    <div className="absolute flex flex-col items-center justify-center text-center">
+                      <span className="text-lg font-extrabold font-mono leading-none">{avgProgress}%</span>
+                      <span className="text-[9px] text-muted-foreground font-semibold uppercase mt-0.5">Concluído</span>
+                    </div>
+                  </div>
+
+                  {/* Legenda de Cores */}
+                  <div className="space-y-2 text-xs font-semibold">
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full bg-emerald-500 shrink-0" />
+                      <span className="text-foreground">Concluídas:</span>
+                      <span className="font-mono text-muted-foreground font-bold">{doneTasks} ({pctDone}%)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full bg-blue-500 shrink-0" />
+                      <span className="text-foreground">Em Progresso:</span>
+                      <span className="font-mono text-muted-foreground font-bold">{inProgressTasks} ({pctInProgress}%)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full bg-rose-500 shrink-0" />
+                      <span className="text-foreground">Atrasadas:</span>
+                      <span className="font-mono text-muted-foreground font-bold">{overdueTasks} ({pctOverdue}%)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full bg-slate-400 shrink-0" />
+                      <span className="text-foreground">A Fazer:</span>
+                      <span className="font-mono text-muted-foreground font-bold">{todoTasks} ({pctTodo}%)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Informações de Cronograma & Datas */}
           <div className="p-4 rounded-xl border border-border/80 bg-muted/20 flex flex-wrap items-center justify-between gap-4 text-xs">
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4 text-blue-500" />
