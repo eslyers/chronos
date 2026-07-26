@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Plus, Calendar, Target, Trash2, Edit, FolderOpen, FolderKanban, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,10 +13,14 @@ import { ImportProjectButton } from "@/components/ImportProjectButton";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
 
 export default function ProjectsPage() {
-  const { projects, getTasksByProject, deleteProject, loading } = useData();
+  const { projects, getTasksByProject, deleteProject, loading, loadAllProjectsDetails } = useData();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [filter, setFilter] = useState<"all" | "active" | "completed" | "archived">("all");
+
+  useEffect(() => {
+    loadAllProjectsDetails();
+  }, [loadAllProjectsDetails]);
 
   function openCreate() {
     setEditingProject(null);
@@ -163,6 +167,12 @@ export default function ProjectsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProjects.map((project) => {
             const projectTasks = getTasksByProject(project.id);
+            const totalTasks = projectTasks.length;
+            const doneTasks = projectTasks.filter((t) => t.status === "done").length;
+            const calculatedProgress =
+              totalTasks > 0
+                ? Math.round((doneTasks / totalTasks) * 100)
+                : project.progress || 0;
             const days = daysUntil(project.target_date);
             const overdue = days !== null && days < 0 && project.status === "active";
             const dueSoon = days !== null && days >= 0 && days <= 3 && project.status === "active";
@@ -194,7 +204,7 @@ export default function ProjectsPage() {
                         </div>
                         <div className="min-w-0">
                           <Link href={`/app/projects/${project.id}`} className="block">
-                            <h3 className="font-bold text-lg leading-tight text-foreground group-hover:text-blue-500 transition-colors truncate">
+                            <h3 className="font-bold text-base leading-snug text-foreground group-hover:text-blue-500 transition-colors line-clamp-2" title={project.name}>
                               {project.name}
                             </h3>
                           </Link>
@@ -257,16 +267,16 @@ export default function ProjectsPage() {
                     <div className="space-y-1.5 pt-2">
                       <div className="flex justify-between text-xs font-semibold">
                         <span className="text-muted-foreground">Progresso Global</span>
-                        <span className="font-mono text-foreground">{project.progress}%</span>
+                        <span className="font-mono text-foreground">{calculatedProgress}%</span>
                       </div>
-                      <Progress value={project.progress} className="h-2 bg-muted/60" />
+                      <Progress value={calculatedProgress} className="h-2 bg-muted/60" />
                     </div>
 
                     {/* Task Stats & Target Date */}
                     <div className="flex items-center justify-between text-xs text-muted-foreground pt-3 border-t border-border/40 font-medium">
                       <div className="flex items-center gap-1.5">
                         <Target className="h-3.5 w-3.5 text-blue-500" />
-                        <span>{projectTasks.length} tarefas</span>
+                        <span className="font-semibold text-foreground">{totalTasks} {totalTasks === 1 ? "tarefa" : "tarefas"}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
