@@ -177,77 +177,62 @@ export default function TimelinePage() {
 
       if (!isCollapsed) {
         const tasks = getTasksByProject(project.id);
-        const rootTasks = tasks.filter((t) => !t.parent_task_id);
-        rootTasks.forEach((task: Task) => {
-          const start = task.start_date
-            ? new Date(task.start_date)
-            : projectStart;
-          const end = task.due_date
-            ? new Date(task.due_date)
-            : new Date(start.getTime() + 7 * 86400000);
-
-          const priority = task.priority as keyof typeof PRIORITY_PALETTE | undefined;
-          const paletteForTask = priority && PRIORITY_PALETTE[priority]
-            ? PRIORITY_PALETTE[priority]
-            : null;
-          const barColor = paletteForTask
-            ? (isDark ? paletteForTask.dark : paletteForTask.light)
-            : palette.barBackground;
-
-          result.push({
-            start,
-            end,
-            name: task.title,
-            id: `task-${task.id}`,
-            type: "task",
-            progress: task.progress,
-            project: `project-${project.id}`,
-            dependencies: dependenciesByTask.get(task.id),
-            hideChildren: false,
-            styles: {
-              backgroundColor: barColor,
-              backgroundSelectedColor: barColor,
-              progressColor: "#ffffff",
-              progressSelectedColor: "#ffffff",
-            },
-          });
-        });
-
-        rootTasks.forEach((parent: Task) => {
-          const children = tasks.filter((t) => t.parent_task_id === parent.id);
-          children.forEach((subtask: Task) => {
-            const start = subtask.start_date
-              ? new Date(subtask.start_date)
-              : projectStart;
-            const end = subtask.due_date
-              ? new Date(subtask.due_date)
+        // Renderiza hierarquia N-níveis de forma recursiva (preserva níveis 1, 2, 3, 4+)
+        const addTasksRecursively = (
+          parentList: Task[],
+          depth: number,
+          pId: string,
+          pStart: Date
+        ) => {
+          const sorted = [...parentList].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+          sorted.forEach((task: Task) => {
+            const start = task.start_date
+              ? new Date(task.start_date)
+              : pStart;
+            const end = task.due_date
+              ? new Date(task.due_date)
               : new Date(start.getTime() + 7 * 86400000);
-            const subPriority = subtask.priority as keyof typeof PRIORITY_PALETTE | undefined;
-            const subPalette = subPriority && PRIORITY_PALETTE[subPriority]
-              ? PRIORITY_PALETTE[subPriority]
+
+            const priority = task.priority as keyof typeof PRIORITY_PALETTE | undefined;
+            const paletteForTask = priority && PRIORITY_PALETTE[priority]
+              ? PRIORITY_PALETTE[priority]
               : null;
-            const subBarColor = subPalette
-              ? (isDark ? subPalette.dark : subPalette.light)
-              : palette.projectBackground;
+            const barColor = paletteForTask
+              ? (isDark ? paletteForTask.dark : paletteForTask.light)
+              : (depth > 0 ? palette.projectBackground : palette.barBackground);
+
+            // Indentação visual proporcional ao nível (Nível 1: Nome, Nível 2: ↳ Nome, Nível 3:   ↳ Nome)
+            const indent = depth > 1 ? "  ".repeat(depth - 1) : "";
+            const prefix = depth === 0 ? "" : `${indent}↳ `;
+
             result.push({
               start,
               end,
-              name: `↳ ${subtask.title}`,
-              id: `task-${subtask.id}`,
+              name: `${prefix}${task.title}`,
+              id: `task-${task.id}`,
               type: "task",
-              progress: subtask.progress,
-              project: `task-${parent.id}`,
-              dependencies: dependenciesByTask.get(subtask.id),
+              progress: task.progress,
+              project: task.parent_task_id ? `task-${task.parent_task_id}` : `project-${pId}`,
+              dependencies: dependenciesByTask.get(task.id),
               hideChildren: false,
               styles: {
-                backgroundColor: subBarColor,
-                backgroundSelectedColor: subBarColor,
+                backgroundColor: barColor,
+                backgroundSelectedColor: barColor,
                 progressColor: "#ffffff",
                 progressSelectedColor: "#ffffff",
               },
             });
+
+            // Processa filhas de nível N+1
+            const children = tasks.filter((t) => t.parent_task_id === task.id);
+            if (children.length > 0) {
+              addTasksRecursively(children, depth + 1, pId, pStart);
+            }
           });
-        });
+        };
+
+        const rootTasks = tasks.filter((t) => !t.parent_task_id);
+        addTasksRecursively(rootTasks, 0, project.id, projectStart);
       }
     });
 
