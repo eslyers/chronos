@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -12,11 +12,15 @@ import {
   Flag,
   CheckCircle2,
   ShieldCheck,
+  Filter,
+  UserCheck,
+  Users,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useData } from "@/lib/context/DataContext";
+import { TaskAssignee } from "@/components/TaskAssignee";
 
 const PRIORITY_COLORS: Record<string, string> = {
   critical: "border-l-red-500 bg-red-500/10 text-foreground",
@@ -65,7 +69,47 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loadingDetails, setLoadingDetails] = useState(false);
 
-  React.useEffect(() => {
+  // Usuário e permissões para filtro de visibilidade do calendário
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string>("member");
+  const [viewFilter, setViewFilter] = useState<"all" | "mine">("all");
+
+  useEffect(() => {
+    async function loadUser() {
+      try {
+        const isSupabase = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
+        if (isSupabase) {
+          const { createSPAClient } = await import("@/lib/supabase/client");
+          const supabase = createSPAClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            setCurrentUserId(user.id);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const memberClient = supabase.from("workspace_members") as any;
+            const { data: member } = await memberClient
+              .select("role")
+              .eq("user_id", user.id)
+              .maybeSingle();
+            if (member?.role) {
+              setCurrentUserRole(member.role);
+            }
+          }
+        } else {
+          const { demoGetSession } = await import("@/lib/auth/demo-auth");
+          const session = demoGetSession();
+          if (session?.user) {
+            setCurrentUserId(session.user.id);
+            setCurrentUserRole("owner");
+          }
+        }
+      } catch (err) {
+        console.error("[Calendar] loadUser error:", err);
+      }
+    }
+    loadUser();
+  }, []);
+
+  useEffect(() => {
     async function fetchDetails() {
       setLoadingDetails(true);
       await loadAllProjectsDetails();
@@ -74,9 +118,37 @@ export default function CalendarPage() {
     fetchDetails();
   }, [loadAllProjectsDetails]);
 
+  // Filtro de Tarefas por Usuário / Permissões
+  // Donos do Projeto / Workspace vêm TODAS as tarefas com indicativo visual de quem é o responsável.
+  // Membros normais vêm apenas as SUAS PRÓPRIAS tarefas atribuídas.
+  const visibleTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      if (!task.due_date) return false;
+
+      // Se o usuário alternar para "Apenas Minhas Tarefas"
+      if (viewFilter === "mine") {
+        return task.assignee_id === currentUserId;
+      }
+
+      // Se for Owner ou Admin do Workspace
+      if (currentUserRole === "owner" || currentUserRole === "admin") {
+        return true;
+      }
+
+      // Se for o Dono/Criador do projeto desta tarefa
+      const project = projects.find((p) => p.id === task.project_id);
+      if (project && (project.owner_id === currentUserId || !currentUserId)) {
+        return true;
+      }
+
+      // Membros comuns vêm apenas as tarefas atribuídas a eles
+      return task.assignee_id === currentUserId;
+    });
+  }, [tasks, projects, currentUserId, currentUserRole, viewFilter]);
+
   const tasksByDay = useMemo(() => {
-    const map = new Map<string, typeof tasks>();
-    for (const task of tasks) {
+    const map = new Map<string, typeof visibleTasks>();
+    for (const task of visibleTasks) {
       if (!task.due_date) continue;
       const day = task.due_date.slice(0, 10);
       const list = map.get(day) ?? [];
@@ -84,12 +156,12 @@ export default function CalendarPage() {
       map.set(day, list);
     }
     return map;
-  }, [tasks]);
+  }, [visibleTasks]);
 
   const stats = useMemo(() => {
     const monthStart = startOfMonth(currentDate);
     const monthEnd = endOfMonth(currentDate);
-    const monthTasks = tasks.filter((t) => {
+    const monthTasks = visibleTasks.filter((t) => {
       if (!t.due_date) return false;
       const d = new Date(t.due_date);
       return d >= monthStart && d <= monthEnd;
@@ -101,7 +173,7 @@ export default function CalendarPage() {
     const due = monthTasks.filter((t) => t.status !== "done").length;
     const done = monthTasks.filter((t) => t.status === "done").length;
     return { total: monthTasks.length, overdue, due, done };
-  }, [tasks, currentDate]);
+  }, [visibleTasks, currentDate]);
 
   if (loading || loadingDetails) {
     return (
@@ -121,7 +193,7 @@ export default function CalendarPage() {
   const startWeekday = monthStart.getDay();
   const daysInMonth = monthEnd.getDate();
 
-  const calendarDays: Array<{ date: Date | null; tasks: typeof tasks }> = [];
+  const calendarDays: Array<{ date: Date | null; tasks: typeof visibleTasks }> = [];
 
   for (let i = 0; i < startWeekday; i++) {
     calendarDays.push({ date: null, tasks: [] });
@@ -139,6 +211,7 @@ export default function CalendarPage() {
   }
 
   const today = new Date();
+  const isManager = currentUserRole === "owner" || currentUserRole === "admin";
 
   return (
     <div className="space-y-8 animate-fadeIn pb-12">
@@ -150,17 +223,24 @@ export default function CalendarPage() {
               <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-xs font-semibold">
                 CALENDÁRIO MENSAL
               </Badge>
+              {isManager && (
+                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs font-bold">
+                  👑 Visão Geral do Gestor
+                </Badge>
+              )}
             </div>
             <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2 flex items-center gap-3">
               <CalendarIcon className="h-7 w-7 text-blue-500" />
               Calendário de Entregáveis
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-              Visão mensal consolidada dos prazos e entregas programadas no mapa de execução.
+              {isManager
+                ? "Visão executiva completa de todas as entregas do projeto com identificativo dos responsáveis."
+                : "Visão focada nas suas tarefas e prazos individuais de execução."}
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <Button
               variant="outline"
               size="icon"
@@ -193,6 +273,41 @@ export default function CalendarPage() {
           </div>
         </div>
       </div>
+
+      {/* Control & Permisson Filter Bar */}
+      <Card className="p-4 sm:p-5 border-border/80 bg-card shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <Filter className="h-4 w-4 text-blue-500" />
+            <span>Filtro de Exibição do Calendário:</span>
+          </div>
+
+          <div className="inline-flex p-1 rounded-xl bg-muted/60 border border-border/60">
+            <button
+              onClick={() => setViewFilter("all")}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewFilter === "all"
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Users className="h-3.5 w-3.5" />
+              {isManager ? "📊 Todas as Tarefas do Projeto" : "👥 Tarefas do Time"}
+            </button>
+            <button
+              onClick={() => setViewFilter("mine")}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewFilter === "mine"
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-500/20"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <UserCheck className="h-3.5 w-3.5" />
+              👤 Apenas Minhas Tarefas
+            </button>
+          </div>
+        </div>
+      </Card>
 
       {/* KPI Stats Grid */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
@@ -250,15 +365,15 @@ export default function CalendarPage() {
       </div>
 
       {/* Main Calendar Card */}
-      {tasks.length === 0 ? (
+      {visibleTasks.length === 0 ? (
         <Card className="border-dashed border-2 p-8">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center space-y-4">
             <div className="p-4 rounded-2xl bg-blue-500/10 text-blue-500">
               <CalendarIcon className="h-10 w-10" />
             </div>
-            <h2 className="text-2xl font-bold tracking-tight">Nenhuma tarefa com prazo definido</h2>
+            <h2 className="text-2xl font-bold tracking-tight">Nenhuma tarefa encontrada</h2>
             <p className="text-sm text-muted-foreground max-w-md">
-              Cadastre tarefas com data de vencimento (due_date) para acompanhá-las no calendário mensal.
+              Não há tarefas no calendário correspondentes ao filtro atual.
             </p>
             <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">
               <Link href="/app/projects">Ir para Projetos</Link>
@@ -284,7 +399,7 @@ export default function CalendarPage() {
             <div className="grid grid-cols-7 gap-2">
               {calendarDays.map((cell, idx) => {
                 if (!cell.date) {
-                  return <div key={idx} className="min-h-[110px] bg-muted/20 rounded-xl border border-border/30" />;
+                  return <div key={idx} className="min-h-[120px] bg-muted/20 rounded-xl border border-border/30" />;
                 }
 
                 const isToday = isSameDay(cell.date, today);
@@ -294,7 +409,7 @@ export default function CalendarPage() {
                 return (
                   <div
                     key={cell.date.toISOString()}
-                    className={`min-h-[110px] border rounded-xl p-2 transition-all flex flex-col justify-between ${
+                    className={`min-h-[120px] border rounded-xl p-2 transition-all flex flex-col justify-between ${
                       isToday
                         ? "border-blue-500 bg-blue-500/5 ring-2 ring-blue-500/30"
                         : isCurrentMonth
@@ -330,20 +445,30 @@ export default function CalendarPage() {
                           <div
                             key={task.id}
                             onClick={() => router.push(`/app/projects/${task.project_id}?task=${task.id}`)}
-                            className={`text-[10px] p-1.5 rounded-lg border-l-4 cursor-pointer hover:shadow-md transition-all ${
+                            className={`text-[10px] p-2 rounded-lg border-l-4 cursor-pointer hover:shadow-md transition-all space-y-1 ${
                               PRIORITY_COLORS[task.priority] ?? "border-l-slate-400 bg-muted/40"
-                            } ${isDone ? "opacity-50 line-through" : ""}`}
+                            } ${isDone ? "opacity-60 line-through" : ""}`}
                             title={`${task.title}${project ? ` (${project.name})` : ""}`}
                           >
                             <div className="font-semibold leading-tight line-clamp-1 flex items-center gap-1">
                               {isDone && <CheckCircle2 className="h-3 w-3 text-emerald-500 inline shrink-0" />}
                               <span>{task.title}</span>
                             </div>
-                            {project && (
-                              <div className="text-[9px] text-muted-foreground mt-0.5 line-clamp-1 font-mono">
-                                {project.name}
-                              </div>
-                            )}
+
+                            {/* Badge do Responsável + Nome do Projeto */}
+                            <div className="flex items-center justify-between gap-1 text-[9px] pt-0.5 border-t border-border/30">
+                              {project && (
+                                <span className="text-muted-foreground font-mono truncate max-w-[65px]">
+                                  {project.name}
+                                </span>
+                              )}
+                              <TaskAssignee
+                                assigneeId={task.assignee_id}
+                                assigneeName={task.assignee_name}
+                                workspaceId={project?.workspace_id}
+                                variant="badge"
+                              />
+                            </div>
                           </div>
                         );
                       })}
@@ -366,7 +491,7 @@ export default function CalendarPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-emerald-500" />
-            <span className="text-xs font-bold uppercase tracking-wider text-foreground">Legenda de Prioridades</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-foreground">Legenda de Prioridades & Governança</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-6 text-xs text-muted-foreground">
