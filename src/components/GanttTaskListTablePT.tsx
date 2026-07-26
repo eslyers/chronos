@@ -2,6 +2,7 @@
 
 import { type CSSProperties } from "react";
 import type { Task as GanttTask } from "gantt-task-react";
+import { TaskAssignee } from "@/components/TaskAssignee";
 
 interface TaskListTableProps {
   rowHeight: number;
@@ -26,8 +27,9 @@ function formatDateBR(date: Date): string {
   return `${dd}/${mm}/${yy}`;
 }
 
-const COL_WIDTH_NAME = "240px";
-const COL_WIDTH_DATE = "90px";
+const COL_WIDTH_NAME = "220px";
+const COL_WIDTH_ASSIGNEE = "120px";
+const COL_WIDTH_DATE = "85px";
 
 export function GanttTaskListTablePT({
   rowHeight,
@@ -47,6 +49,16 @@ export function GanttTaskListTablePT({
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
     verticalAlign: "middle",
+  };
+
+  const assigneeCellStyle: CSSProperties = {
+    minWidth: COL_WIDTH_ASSIGNEE,
+    maxWidth: COL_WIDTH_ASSIGNEE,
+    textAlign: "center",
+    verticalAlign: "middle",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   };
 
   const dateCellStyle: CSSProperties = {
@@ -72,6 +84,12 @@ export function GanttTaskListTablePT({
           t.hideChildren === false ? "▼" : t.hideChildren === true ? "▶" : "";
         const isSelected = selectedTaskId === t.id;
 
+        const customTask = t as GanttTask & {
+          assigneeId?: string | null;
+          assigneeName?: string | null;
+          workspaceId?: string;
+        };
+
         return (
           <div
             className={"_34SS0 group" + (isSelected ? " _3ZbQT-selected" : "")}
@@ -94,6 +112,7 @@ export function GanttTaskListTablePT({
               }
             }}
           >
+            {/* Coluna 1: Nome do Projeto / Tarefa */}
             <div
               className="_3lLk3"
               style={nameCellStyle}
@@ -115,7 +134,7 @@ export function GanttTaskListTablePT({
                   </span>
                 </div>
 
-                {/* Ícone de edição rápida de tarefa no hover */}
+                {/* Ícone de edição rápida no hover */}
                 {t.type === "task" && onTaskEditClick && (
                   <button
                     type="button"
@@ -131,9 +150,29 @@ export function GanttTaskListTablePT({
                 )}
               </div>
             </div>
+
+            {/* Coluna 2: Responsável */}
+            <div className="_3lLk3" style={assigneeCellStyle}>
+              {t.type === "task" ? (
+                <TaskAssignee
+                  assigneeId={customTask.assigneeId}
+                  assigneeName={customTask.assigneeName}
+                  workspaceId={customTask.workspaceId}
+                  variant="badge"
+                />
+              ) : (
+                <span className="text-[10px] font-bold text-muted-foreground uppercase font-mono">
+                  Projeto
+                </span>
+              )}
+            </div>
+
+            {/* Coluna 3: Data de Início */}
             <div className="_3lLk3" style={dateCellStyle}>
               {formatDateBR(t.start)}
             </div>
+
+            {/* Coluna 4: Data de Término */}
             <div className="_3lLk3" style={dateCellStyle}>
               {formatDateBR(t.end)}
             </div>

@@ -224,7 +224,10 @@ export default function TimelinePage() {
                 progressColor: "#ffffff",
                 progressSelectedColor: "#ffffff",
               },
-            });
+              assigneeId: task.assignee_id,
+              assigneeName: task.assignee_name,
+              workspaceId: project.workspace_id,
+            } as GanttTask & { assigneeId?: string | null; assigneeName?: string | null; workspaceId?: string });
 
             // Se a tarefa não estiver recolhida, renderiza as filhas de nível N+1 (drill-down)
             if (hasChildren && !isTaskCollapsed) {
@@ -492,7 +495,7 @@ export default function TimelinePage() {
                       ? 210
                       : 320
                   }
-                  listCellWidth="165px"
+                  listCellWidth="510px"
                   barBackgroundColor={palette.barBackground}
                   barBackgroundSelectedColor={palette.barBackgroundSelected}
                   todayColor={palette.todayColor}

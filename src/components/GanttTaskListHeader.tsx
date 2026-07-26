@@ -9,24 +9,11 @@ interface TaskListHeaderProps {
   fontSize: string;
 }
 
-// Larguras devem ser iguais as do GanttTaskListTablePT para
-// header e body ficarem alinhados.
-const COL_WIDTH_NAME = "240px";
-const COL_WIDTH_DATE = "90px";
+// Larguras alinhadas estritamente com GanttTaskListTablePT
+const COL_WIDTH_NAME = "220px";
+const COL_WIDTH_ASSIGNEE = "120px";
+const COL_WIDTH_DATE = "85px";
 
-/**
- * TaskListHeader PT-BR para o Gantt.
- * Substitui o default que vem com "Name", "From", "To" em ingles.
- * Titulos centralizados com largura customizada (Projetos mais largo).
- *
- * Uso: <Gantt TaskListHeader={GanttTaskListHeaderPT} ... />
- *
- * As classes CSS hasheadas vem do gantt-task-react (Emotion):
- *   _3_ygE → ganttTable (wrapper)
- *   _1nBOt → ganttTable_Header (header row)
- *   _WuQ0f → ganttTable_HeaderItem (celulas)
- *   _2eZzQ → ganttTable_HeaderSeparator (separador vertical)
- */
 export function GanttTaskListHeaderPT({
   headerHeight,
   fontFamily,
@@ -49,6 +36,14 @@ export function GanttTaskListHeaderPT({
     fontWeight: 600,
   };
 
+  const assigneeItemStyle: CSSProperties = {
+    minWidth: COL_WIDTH_ASSIGNEE,
+    maxWidth: COL_WIDTH_ASSIGNEE,
+    textAlign: "center",
+    verticalAlign: "middle",
+    fontWeight: 600,
+  };
+
   const dateItemStyle: CSSProperties = {
     minWidth: COL_WIDTH_DATE,
     maxWidth: COL_WIDTH_DATE,
@@ -66,7 +61,11 @@ export function GanttTaskListHeaderPT({
     <div className="_3_ygE" style={tableStyle}>
       <div className="_1nBOt" style={headerStyle}>
         <div className="_WuQ0f" style={nameItemStyle}>
-          &nbsp;Projetos
+          &nbsp;Projetos / Tarefas
+        </div>
+        <div className="_2eZzQ" style={separatorStyle(headerHeight * 0.2)} />
+        <div className="_WuQ0f" style={assigneeItemStyle}>
+          &nbsp;Responsável
         </div>
         <div className="_2eZzQ" style={separatorStyle(headerHeight * 0.2)} />
         <div className="_WuQ0f" style={dateItemStyle}>
