@@ -18,17 +18,71 @@ type Template = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Produto:    "bg-purple-500/10 text-purple-500 border-purple-500/30",
-  Engenharia: "bg-indigo-500/10 text-indigo-500 border-indigo-500/30",
-  Agile:      "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
-  RH:         "bg-violet-500/10 text-violet-500 border-violet-500/30",
-  Governanca: "bg-red-500/10 text-red-500 border-red-500/30",
-  Comercial:  "bg-green-500/10 text-green-500 border-green-500/30",
-  TI:         "bg-blue-500/10 text-blue-500 border-blue-500/30",
-  Estrategia: "bg-amber-500/10 text-amber-600 border-amber-500/30",
-  Eventos:    "bg-pink-500/10 text-pink-500 border-pink-500/30",
-  Mudanca:    "bg-orange-500/10 text-orange-500 border-orange-500/30",
+  Produto:      "bg-purple-500/10 text-purple-500 border-purple-500/30",
+  Engenharia:   "bg-indigo-500/10 text-indigo-500 border-indigo-500/30",
+  Agile:        "bg-emerald-500/10 text-emerald-500 border-emerald-500/30",
+  RH:           "bg-violet-500/10 text-violet-500 border-violet-500/30",
+  Governanca:   "bg-red-500/10 text-red-500 border-red-500/30",
+  Comercial:    "bg-green-500/10 text-green-500 border-green-500/30",
+  TI:           "bg-blue-500/10 text-blue-500 border-blue-500/30",
+  Estrategia:   "bg-amber-500/10 text-amber-600 border-amber-500/30",
+  Eventos:      "bg-pink-500/10 text-pink-500 border-pink-500/30",
+  Mudanca:      "bg-orange-500/10 text-orange-500 border-orange-500/30",
+  "Finanças":     "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
+  Controladoria:"bg-teal-500/10 text-teal-600 border-teal-500/30",
 };
+
+const DEFAULT_FINANCIAL_TEMPLATES: Template[] = [
+  {
+    id: "tpl-mec",
+    name: "Fechamento Contábil Mensal (MEC)",
+    description: "Ciclo completo de fechamento contábil e financeiro mensal (MEC). Inclui corte operacional, conciliações, provisões (accruals), apuração de impostos, intercompany, DRE e variance analysis.",
+    category: "Finanças",
+    icon: "📊",
+    is_public: true,
+    stages: [
+      { name: "Corte Operacional (Cut-off)", color: "#6366f1", sort_order: 0 },
+      { name: "Conciliações & Tesouraria", color: "#3b82f6", sort_order: 1 },
+      { name: "Provisões & Accruals", color: "#8b5cf6", sort_order: 2 },
+      { name: "Apuração de Estoques & Impostos", color: "#f59e0b", sort_order: 3 },
+      { name: "Consolidação & DRE", color: "#06b6d4", sort_order: 4 },
+      { name: "Variance Analysis (Actual vs Budget)", color: "#10b981", sort_order: 5 },
+      { name: "Lock Contábil & Fechamento", color: "#22c55e", sort_order: 6, is_done: true },
+    ],
+  },
+  {
+    id: "tpl-bdg",
+    name: "Elaboração de Budget Anual (BDG)",
+    description: "Processo anual de planejamento orçamentário (BDG). Coleta de premissas macroeconômicas, construção orçamentária pelas áreas (OPEX, CAPEX, Headcount), reuniões de challenge e aprovação no Conselho.",
+    category: "Finanças",
+    icon: "📑",
+    is_public: true,
+    stages: [
+      { name: "Premissas & Guideline Top-Down", color: "#6366f1", sort_order: 0 },
+      { name: "Construção Orçamentária pelas Áreas", color: "#3b82f6", sort_order: 1 },
+      { name: "Consolidação da Primeira Versão (V0)", color: "#8b5cf6", sort_order: 2 },
+      { name: "Rodadas de Challenge Sessions", color: "#f59e0b", sort_order: 3 },
+      { name: "Ajustes Finais & Alinhamento CFO", color: "#06b6d4", sort_order: 4 },
+      { name: "Aprovação no Conselho (Baseline)", color: "#22c55e", sort_order: 5, is_done: true },
+    ],
+  },
+  {
+    id: "tpl-refs",
+    name: "Reestimativa Orçamentária & Forecast (REFs)",
+    description: "Ciclo contínuo de reestimativa orçamentária (Ref 1, Ref 2, Ref 3 ou Rolling Forecast). Integração do executado (Actuals) com projeção atualizada das áreas e análise de desvios.",
+    category: "Finanças",
+    icon: "📈",
+    is_public: true,
+    stages: [
+      { name: "Extração do Executado (Actuals)", color: "#6366f1", sort_order: 0 },
+      { name: "Atualização de Premissas", color: "#3b82f6", sort_order: 1 },
+      { name: "Coleta de Forecast pelas Áreas", color: "#8b5cf6", sort_order: 2 },
+      { name: "Consolidação DRE Forecast", color: "#f59e0b", sort_order: 3 },
+      { name: "Análise de Desvios (Budget vs REF)", color: "#06b6d4", sort_order: 4 },
+      { name: "Apresentação Executiva & Alinhamento", color: "#22c55e", sort_order: 5, is_done: true },
+    ],
+  },
+];
 
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -38,14 +92,23 @@ export default function TemplatesPage() {
 
   useEffect(() => {
     async function load() {
-      const supabase = createSPAClient();
-      const { data } = await supabase
-        .from("templates")
-        .select("id, name, description, category, icon, is_public, stages")
-        .eq("is_public", true)
-        .order("name");
-      if (data) setTemplates(data as Template[]);
-      setLoading(false);
+      try {
+        const supabase = createSPAClient();
+        const { data } = await supabase
+          .from("templates")
+          .select("id, name, description, category, icon, is_public, stages")
+          .eq("is_public", true)
+          .order("name");
+        if (data && data.length > 0) {
+          setTemplates(data as Template[]);
+        } else {
+          setTemplates(DEFAULT_FINANCIAL_TEMPLATES);
+        }
+      } catch {
+        setTemplates(DEFAULT_FINANCIAL_TEMPLATES);
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, []);
