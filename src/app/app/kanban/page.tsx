@@ -36,6 +36,7 @@ import { Progress } from "@/components/ui/progress";
 import { useData } from "@/lib/context/DataContext";
 import { TaskAssignee } from "@/components/TaskAssignee";
 import { TaskDialog } from "@/components/TaskDialog";
+import { TaskIndicators } from "@/components/TaskIndicators";
 import { ImportProjectButton } from "@/components/ImportProjectButton";
 
 type TaskLike = {
@@ -192,16 +193,17 @@ function TaskCard({
           )}
         </div>
 
-        {(task.assignee_id || task.assignee_name) && (
-          <div className="pt-2 border-t border-border/40 flex items-center justify-between">
+        <div className="pt-2 border-t border-border/40 flex items-center justify-between gap-2">
+          {(task.assignee_id || task.assignee_name) ? (
             <TaskAssignee
               assigneeId={task.assignee_id}
               assigneeName={task.assignee_name}
               workspaceId={undefined as unknown as string}
               variant="badge"
             />
-          </div>
-        )}
+          ) : <div />}
+          <TaskIndicators taskId={task.id} />
+        </div>
       </CardContent>
     </Card>
   );

@@ -14,6 +14,7 @@ import { TaskAssignee } from "@/components/TaskAssignee";
 import { ImportProjectButton } from "@/components/ImportProjectButton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ProjectStatusReportPDF } from "@/components/ProjectStatusReportPDF";
+import { TaskIndicators } from "@/components/TaskIndicators";
 
 const PRIORITY_COLORS = {
   low: { bg: "bg-slate-500/15", text: "text-slate-600 dark:text-slate-400", label: "Baixa" },
@@ -352,16 +353,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                           </div>
                         )}
 
-                        {(task.assignee_id || task.assignee_name) && (
-                          <div className="mt-2 pt-2 border-t border-border/40">
+                        <div className="mt-2 pt-2 border-t border-border/40 flex items-center justify-between gap-2">
+                          {(task.assignee_id || task.assignee_name) ? (
                             <TaskAssignee
                               assigneeId={task.assignee_id}
                               assigneeName={task.assignee_name}
                               workspaceId={project.workspace_id}
                               variant="full"
                             />
-                          </div>
-                        )}
+                          ) : <div />}
+                          <TaskIndicators taskId={task.id} />
+                        </div>
                       </div>
                     );
                   })}

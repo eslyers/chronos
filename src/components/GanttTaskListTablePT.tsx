@@ -3,6 +3,7 @@
 import { type CSSProperties } from "react";
 import type { Task as GanttTask } from "gantt-task-react";
 import { TaskAssignee } from "@/components/TaskAssignee";
+import { TaskIndicators } from "@/components/TaskIndicators";
 
 interface TaskListTableProps {
   rowHeight: number;
@@ -132,6 +133,7 @@ export function GanttTaskListTablePT({
                   <span className={`truncate ${t.type === "project" ? "font-bold select-none" : ""}`}>
                     {t.name}
                   </span>
+                  {t.type === "task" && <TaskIndicators taskId={t.id} />}
                 </div>
 
                 {/* Ícone de edição rápida no hover */}

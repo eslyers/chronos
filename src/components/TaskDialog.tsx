@@ -21,8 +21,8 @@ import {
   Trash2,
   Upload,
   Plus,
-  ExternalLink,
   Sparkles,
+  Download,
 } from "lucide-react";
 import {
   useData,
@@ -127,9 +127,24 @@ export function TaskDialog({
   const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
   const [attachName, setAttachName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFileDataUrl, setSelectedFileDataUrl] = useState<string | null>(null);
   const [addingAttach, setAddingAttach] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function downloadAttachmentFile(fileUrl: string, fileName: string) {
+    try {
+      const link = document.createElement("a");
+      link.href = fileUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Error downloading attachment:", err);
+      window.open(fileUrl, "_blank");
+    }
+  }
 
   useEffect(() => {
     if (open && task?.id) {
@@ -527,14 +542,13 @@ export function TaskDialog({
                           📎
                         </div>
                         <div className="min-w-0">
-                          <a
-                            href={a.file_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-bold text-xs hover:underline truncate block text-foreground"
+                          <button
+                            type="button"
+                            onClick={() => downloadAttachmentFile(a.file_url, a.file_name)}
+                            className="font-bold text-xs hover:underline truncate block text-foreground text-left"
                           >
                             {a.file_name}
-                          </a>
+                          </button>
                           <span className="text-[10px] text-muted-foreground font-mono">
                             {(a.file_size / 1024).toFixed(1)} KB • {new Date(a.uploaded_at).toLocaleDateString("pt-BR")}
                           </span>
@@ -542,15 +556,14 @@ export function TaskDialog({
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0">
-                        <a
-                          href={a.file_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => downloadAttachmentFile(a.file_url, a.file_name)}
                           className="p-1.5 text-blue-500 hover:bg-muted rounded-lg text-xs"
-                          title="Abrir anexo"
+                          title="Baixar / Abrir anexo"
                         >
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
+                          <Download className="h-4 w-4" />
+                        </button>
                         <button
                           type="button"
                           onClick={async () => {
@@ -585,6 +598,13 @@ export function TaskDialog({
                   if (file) {
                     setSelectedFile(file);
                     setAttachName(file.name);
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                      if (evt.target?.result) {
+                        setSelectedFileDataUrl(evt.target.result as string);
+                      }
+                    };
+                    reader.readAsDataURL(file);
                   }
                 }}
                 className="hidden"
@@ -606,6 +626,7 @@ export function TaskDialog({
                     type="button"
                     onClick={() => {
                       setSelectedFile(null);
+                      setSelectedFileDataUrl(null);
                       setAttachName("");
                       if (fileInputRef.current) fileInputRef.current.value = "";
                     }}
@@ -643,7 +664,7 @@ export function TaskDialog({
                       const fileName = attachName.trim() || selectedFile.name;
                       const fileSize = selectedFile.size;
                       const fileType = selectedFile.type || "application/octet-stream";
-                      const fileUrl = URL.createObjectURL(selectedFile);
+                      const fileUrl = selectedFileDataUrl || URL.createObjectURL(selectedFile);
 
                       await addTaskAttachment(task.id, {
                         name: fileName,
@@ -654,6 +675,7 @@ export function TaskDialog({
 
                       setAttachName("");
                       setSelectedFile(null);
+                      setSelectedFileDataUrl(null);
                       if (fileInputRef.current) fileInputRef.current.value = "";
                       setAttachments(await getTaskAttachments(task.id));
                     } catch (err) {
