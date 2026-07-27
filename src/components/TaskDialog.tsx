@@ -134,12 +134,40 @@ export function TaskDialog({
 
   function downloadAttachmentFile(fileUrl: string, fileName: string) {
     try {
-      const link = document.createElement("a");
-      link.href = fileUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      if (fileUrl.startsWith("data:")) {
+        const parts = fileUrl.split(";base64,");
+        const contentType = parts[0].replace("data:", "");
+        const base64Data = parts[1] || "";
+        const raw = window.atob(base64Data);
+        const rawLength = raw.length;
+        const uInt8Array = new Uint8Array(rawLength);
+
+        for (let i = 0; i < rawLength; ++i) {
+          uInt8Array[i] = raw.charCodeAt(i);
+        }
+
+        const blob = new Blob([uInt8Array], { type: contentType });
+        const blobUrl = URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+        link.href = blobUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        setTimeout(() => {
+          URL.revokeObjectURL(blobUrl);
+        }, 1000);
+      } else {
+        const link = document.createElement("a");
+        link.href = fileUrl;
+        link.download = fileName;
+        link.target = "_blank";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
     } catch (err) {
       console.error("Error downloading attachment:", err);
       window.open(fileUrl, "_blank");
