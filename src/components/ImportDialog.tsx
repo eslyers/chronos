@@ -108,6 +108,9 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
     });
   };
 
+  // === FILTER POR STATUS (cards clicáveis) ===
+  const [statusFilter, setStatusFilter] = React.useState<"all" | "valid" | "warning" | "error">("all");
+
   // === FEATURE 4: ordenação ao clicar nos cabeçalhos ===
   type SortKey = "index" | "status" | "title" | "assignee_id" | "due_date" | "level" | null;
   type SortDir = "asc" | "desc";
@@ -121,7 +124,11 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
   };
   const sortedRows = React.useMemo(() => {
     if (!preview) return [] as ImportRow[];
-    if (sortKey === null) return preview.rows;
+    let list = preview.rows;
+    if (statusFilter !== "all") {
+      list = list.filter((r) => getEffectiveStatus(r, editedRows[r.index]).status === statusFilter);
+    }
+    if (sortKey === null) return list;
     const key = sortKey;
     const dir = sortDir === "asc" ? 1 : -1;
     function valueOf(row: ImportRow): string | number {
@@ -138,13 +145,13 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
       if (key === "due_date") return eff.due_date ?? "";
       return "";
     }
-    return [...preview.rows].sort((a, b) => {
+    return [...list].sort((a, b) => {
       const va = valueOf(a);
       const vb = valueOf(b);
       if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
       return String(va).localeCompare(String(vb), "pt-BR", { numeric: true, sensitivity: "base" }) * dir;
     });
-  }, [preview, sortKey, sortDir, editedRows]);
+  }, [preview, sortKey, sortDir, editedRows, statusFilter]);
 
   const pageRows = sortedRows.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
@@ -340,22 +347,50 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
           {phase === "preview" && preview && (
             <>
               <div className="grid grid-cols-4 gap-3">
-                <StatBox label="Total" value={preview.totalRows} color="default" />
-                <StatBox
-                  label="Válidas"
-                  value={
-                    Object.keys(editedRows).length === 0
-                      ? preview.validRows
-                      : preview.rows.reduce(
-                          (acc, row) =>
-                            acc + (getEffectiveStatus(row, editedRows[row.index]).status === "valid" ? 1 : 0),
-                          0
-                        )
-                  }
-                  color="green"
-                />
-                <StatBox label="Com avisos" value={preview.warningRows} color="yellow" />
-                <StatBox label="Com erro" value={preview.errorRows} color="red" />
+                <button
+                  type="button"
+                  onClick={() => { setStatusFilter("all"); setCurrentPage(0); }}
+                  className={`text-left transition-all rounded-xl focus:outline-none ${statusFilter === "all" ? "ring-2 ring-blue-500 shadow-md scale-[1.02]" : "opacity-85 hover:opacity-100 cursor-pointer"}`}
+                  title="Filtrar por todas as linhas"
+                >
+                  <StatBox label="Total" value={preview.totalRows} color="default" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setStatusFilter("valid"); setCurrentPage(0); }}
+                  className={`text-left transition-all rounded-xl focus:outline-none ${statusFilter === "valid" ? "ring-2 ring-emerald-500 shadow-md scale-[1.02]" : "opacity-85 hover:opacity-100 cursor-pointer"}`}
+                  title="Filtrar por linhas válidas"
+                >
+                  <StatBox
+                    label="Válidas"
+                    value={
+                      Object.keys(editedRows).length === 0
+                        ? preview.validRows
+                        : preview.rows.reduce(
+                            (acc, row) =>
+                              acc + (getEffectiveStatus(row, editedRows[row.index]).status === "valid" ? 1 : 0),
+                            0
+                          )
+                    }
+                    color="green"
+                  />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setStatusFilter("warning"); setCurrentPage(0); }}
+                  className={`text-left transition-all rounded-xl focus:outline-none ${statusFilter === "warning" ? "ring-2 ring-amber-500 shadow-md scale-[1.02]" : "opacity-85 hover:opacity-100 cursor-pointer"}`}
+                  title="Filtrar por linhas com avisos"
+                >
+                  <StatBox label="Com avisos" value={preview.warningRows} color="yellow" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setStatusFilter("error"); setCurrentPage(0); }}
+                  className={`text-left transition-all rounded-xl focus:outline-none ${statusFilter === "error" ? "ring-2 ring-rose-500 shadow-md scale-[1.02]" : "opacity-85 hover:opacity-100 cursor-pointer"}`}
+                  title="Filtrar por linhas com erro (clique para inspecionar)"
+                >
+                  <StatBox label="Com erro" value={preview.errorRows} color="red" />
+                </button>
               </div>
 
               {preview.hasWBS && (
@@ -385,8 +420,47 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                     <span className="text-xs text-red-500">⚠️ Nenhuma coluna reconhecida!</span>
                   )}
                 </div>
-                {preview.sheetName && (
-                  <p className="text-xs text-muted-foreground mt-2">📑 Aba: <code>{preview.sheetName}</code></p>
+              </div>
+
+              {/* Barra de Ações Rápidas de Seleção e Filtro Ativo */}
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserTouchedSelection(true);
+                      setSelectedRows(new Set(preview.rows.map((r) => r.index)));
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold border border-blue-500/20 transition-colors"
+                  >
+                    ☑️ Selecionar Todas as {preview.totalRows} Linhas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserTouchedSelection(true);
+                      setSelectedRows(new Set(preview.rows.filter((r) => r.status === "valid").map((r) => r.index)));
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20 transition-colors"
+                  >
+                    ✅ Selecionar Apenas Válidas ({preview.validRows})
+                  </button>
+                </div>
+
+                {statusFilter !== "all" && (
+                  <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                    <span>Filtro ativo:</span>
+                    <Badge variant="outline" className="text-xs uppercase font-bold">
+                      {statusFilter === "valid" ? "Válidas" : statusFilter === "warning" ? "Com Avisos" : "Com Erro"}
+                    </Badge>
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter("all")}
+                      className="text-blue-500 hover:underline font-bold text-xs ml-1"
+                    >
+                      (Limpar filtro)
+                    </button>
+                  </div>
                 )}
               </div>
 

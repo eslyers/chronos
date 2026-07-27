@@ -382,14 +382,19 @@ export async function parseImportFile(buffer: Buffer, filename: string): Promise
     .map((h) => String(h || "").trim())
     .filter(Boolean);
 
-  // Construir rows manualmente (sanitizeCell em cada c\u00e9lula, sem reliance no sheet_to_json)
-  const rows = cropped.slice(1).map((row) => {
+  // Construir rows manualmente (sanitizeCell em cada célula, sem reliance no sheet_to_json)
+  const rawRows = cropped.slice(1).map((row) => {
     const out: Record<string, string | number | null> = {};
     for (let i = 0; i < headers.length; i++) {
       out[headers[i]] = sanitizeCell(row[i]).value;
     }
     return out;
   });
+
+  // Filtra linhas 100% vazias da planilha para não poluir com falsos erros
+  const rows = rawRows.filter((r) =>
+    Object.values(r).some((v) => v !== null && v !== undefined && String(v).trim() !== "")
+  );
 
   return { rows, headers, sheetName };
 }
@@ -433,13 +438,31 @@ export function buildPreview(
       const raw = row[colName];
 
       switch (fieldName) {
-        case "title":
-          if (!raw || String(raw).trim() === "") {
-            errors.push("Título vazio");
+        case "title": {
+          const str = raw ? String(raw).trim() : "";
+          if (!str) {
+            // Tenta fallback inteligente usando outro campo da linha (descrição ou categoria/pilar)
+            let fallbackText = "";
+            for (const [col, f] of Object.entries(mapping)) {
+              if ((f === "description" || f === "category" || f === "project") && row[col]) {
+                const val = String(row[col]).trim();
+                if (val) {
+                  fallbackText = val;
+                  break;
+                }
+              }
+            }
+            if (fallbackText) {
+              parsed.title = fallbackText;
+              warnings.push(`Título vazio — preenchido com: "${fallbackText}"`);
+            } else {
+              errors.push("Título vazio");
+            }
           } else {
-            parsed.title = String(raw).trim();
+            parsed.title = str;
           }
           break;
+        }
 
         case "description":
           if (raw) parsed.description = String(raw).trim();
