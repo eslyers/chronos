@@ -391,10 +391,15 @@ export async function parseImportFile(buffer: Buffer, filename: string): Promise
     return out;
   });
 
-  // Filtra linhas 100% vazias da planilha para não poluir com falsos erros
-  const rows = rawRows.filter((r) =>
-    Object.values(r).some((v) => v !== null && v !== undefined && String(v).trim() !== "")
-  );
+  // Filtra linhas 100% vazias e linhas de rodapé (que contêm apenas totais numéricos sem texto de tarefa)
+  const rows = rawRows.filter((r) => {
+    const hasValues = Object.values(r).some((v) => v !== null && v !== undefined && String(v).trim() !== "");
+    if (!hasValues) return false;
+    // Deve conter pelo menos um valor de texto relevante em alguma coluna (não apenas números de somatórios)
+    return Object.values(r).some(
+      (v) => typeof v === "string" && v.trim().length > 0 && isNaN(Number(v.trim()))
+    );
+  });
 
   return { rows, headers, sheetName };
 }
