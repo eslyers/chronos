@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -30,6 +30,7 @@ import {
   Settings2,
   KanbanSquare,
   List,
+  ChevronDown,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -266,6 +267,8 @@ export default function FastCloseCockpitPage() {
   const [customOffsets, setCustomOffsets] = useState<number[] | undefined>(undefined);
   const [useD0, setUseD0] = useState(true);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [selectedEditTask, setSelectedEditTask] = useState<Task | null>(null);
@@ -275,11 +278,24 @@ export default function FastCloseCockpitPage() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [defaultTaskDueDate, setDefaultTaskDueDate] = useState<string | undefined>(undefined);
 
+  // Fechar dropdown de ações ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setActionsMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Carregar preferência salva do D0/offsets do localStorage para o projeto selecionado
   useEffect(() => {
     if (typeof window === "undefined") return;
     const storageKey = `fastclose_config_${selectedProjectId}`;
-    const saved = localStorage.getItem(storageKey);
+    const globalKey = `fastclose_config_global`;
+    
+    const saved = localStorage.getItem(storageKey) || localStorage.getItem(globalKey);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -289,23 +305,20 @@ export default function FastCloseCockpitPage() {
       } catch (err) {
         console.warn("Error parsing fastclose config:", err);
       }
-    } else {
-      // Padrão se não tiver configuração salva
-      setUseD0(true);
-      setCustomOffsets(undefined);
-      setOffsetRange("D-5_D+5");
     }
   }, [selectedProjectId]);
 
-  // Função auxiliar para salvar configurações do projeto no localStorage
+  // Função atômica para salvar a configuração inteira no localStorage
   const saveProjectConfig = (newUseD0: boolean, newCustomOffsets?: number[], newOffsetRange?: string) => {
     if (typeof window === "undefined") return;
-    const storageKey = `fastclose_config_${selectedProjectId}`;
-    localStorage.setItem(storageKey, JSON.stringify({
+    const payload = JSON.stringify({
       useD0: newUseD0,
       customOffsets: newCustomOffsets ?? customOffsets,
       offsetRange: newOffsetRange ?? offsetRange,
-    }));
+    });
+
+    localStorage.setItem(`fastclose_config_${selectedProjectId}`, payload);
+    localStorage.setItem(`fastclose_config_global`, payload);
   };
 
   // Filtrar apenas projetos do escopo de Fechamento / Controladoria
@@ -559,173 +572,197 @@ export default function FastCloseCockpitPage() {
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-[1700px] mx-auto">
-      {/* Top Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-card border border-border/80 p-5 rounded-2xl shadow-xs">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20">
-              <CalendarClock className="h-6 w-6" />
+      {/* Sleek Single-Line Executive Header */}
+      <div className="bg-card border border-border/80 p-4 sm:p-5 rounded-2xl shadow-xs space-y-4">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+          {/* Título & Badge */}
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20">
+              <CalendarClock className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
                 Cockpit de Fechamento Contábil
-                <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30">
+                <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30">
                   Fast Close
                 </Badge>
               </h1>
               <p className="text-xs text-muted-foreground">
-                Régua diária por projeto corporativo com suporte a D0 e Ds customizados
+                Régua de dias úteis com suporte a D0 e sincronização por projeto
               </p>
             </div>
           </div>
-        </div>
 
-        {/* Controles Principais */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Alternador de Modo de Visualização (Kanban x Lista) */}
-          <div className="flex items-center p-1 rounded-xl bg-muted border border-border shrink-0">
-            <button
-              type="button"
-              onClick={() => setViewMode("kanban")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                viewMode === "kanban"
-                  ? "bg-card text-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <KanbanSquare className="h-3.5 w-3.5" />
-              Matriz Kanban
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("list")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                viewMode === "list"
-                  ? "bg-card text-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <List className="h-3.5 w-3.5" />
-              Lista Cronológica
-            </button>
-          </div>
+          {/* Single-Line Executive Toolbar */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            {/* Seletor de Projeto */}
+            <div className="flex items-center gap-1.5 bg-muted/50 px-2.5 py-1.5 rounded-xl border border-border/80">
+              <FolderKanban className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+              <select
+                value={selectedProjectId}
+                onChange={(e) => {
+                  if (e.target.value === "new") {
+                    handleCreateFastCloseProject();
+                  } else {
+                    setSelectedProjectId(e.target.value);
+                  }
+                }}
+                className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100 max-w-[160px] truncate"
+              >
+                <option value="all">📁 (Todos os Fechamentos)</option>
+                {closingProjects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    📁 {p.name}
+                  </option>
+                ))}
+                <option value="new">➕ + Novo Projeto</option>
+              </select>
+            </div>
 
-          {/* Seletor de Projeto (Apenas Projetos de Fechamento/Controladoria) */}
-          <div className="flex items-center gap-1.5 bg-muted/40 p-1.5 rounded-xl border border-border">
-            <FolderKanban className="h-4 w-4 text-blue-500 ml-1 shrink-0" />
-            <select
-              value={selectedProjectId}
-              onChange={(e) => {
-                if (e.target.value === "new") {
-                  handleCreateFastCloseProject();
-                } else {
-                  setSelectedProjectId(e.target.value);
-                }
-              }}
-              className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100 max-w-[180px] truncate"
-            >
-              <option value="all">📁 (Todos os Projetos de Fechamento)</option>
-              {closingProjects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  📁 {p.name}
-                </option>
-              ))}
-              <option value="new">➕ + Criar Projeto de Fechamento</option>
-            </select>
-          </div>
+            {/* Mês e Ano */}
+            <div className="flex items-center gap-1 bg-muted/50 px-2.5 py-1.5 rounded-xl border border-border/80">
+              <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
+              >
+                {MONTH_NAMES.map((m, idx) => (
+                  <option key={idx} value={idx + 1}>{m}</option>
+                ))}
+              </select>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
+              >
+                <option value={2025}>2025</option>
+                <option value={2026}>2026</option>
+                <option value={2027}>2027</option>
+              </select>
+            </div>
 
-          {/* Seletor Mês/Ano */}
-          <div className="flex items-center gap-1.5 bg-muted/40 p-1.5 rounded-xl border border-border">
-            <CalendarIcon className="h-4 w-4 text-muted-foreground ml-1 shrink-0" />
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(Number(e.target.value))}
-              className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
-            >
-              {MONTH_NAMES.map((m, idx) => (
-                <option key={idx} value={idx + 1}>{m}</option>
-              ))}
-            </select>
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
-            >
-              <option value={2025}>2025</option>
-              <option value={2026}>2026</option>
-              <option value={2027}>2027</option>
-            </select>
-          </div>
+            {/* Alcance de Ds */}
+            <div className="flex items-center gap-1.5 bg-muted/50 px-2.5 py-1.5 rounded-xl border border-border/80">
+              <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <select
+                value={offsetRange}
+                onChange={(e) => {
+                  const newRange = e.target.value;
+                  setOffsetRange(newRange);
+                  setCustomOffsets(undefined);
+                  saveProjectConfig(useD0, undefined, newRange);
+                }}
+                className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
+              >
+                <option value="D-5_D+5">D-5 a D+5</option>
+                <option value="D-3_D+3">D-3 a D+3</option>
+                <option value="D-2_D+4">D-2 a D+4</option>
+                <option value="D-10_D+10">D-10 a D+10</option>
+              </select>
+            </div>
 
-          {/* Seletor de Intervalo de "Ds" */}
-          <div className="flex items-center gap-1.5 bg-muted/40 p-1.5 rounded-xl border border-border">
-            <Filter className="h-3.5 w-3.5 text-muted-foreground ml-1 shrink-0" />
-            <select
-              value={offsetRange}
-              onChange={(e) => {
-                const newRange = e.target.value;
-                setOffsetRange(newRange);
-                setCustomOffsets(undefined);
-                saveProjectConfig(useD0, undefined, newRange);
-              }}
-              className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
-            >
-              <option value="D-5_D+5">Alcance: D-5 a D+5 (Completo)</option>
-              <option value="D-3_D+3">Alcance: D-3 a D+3 (Curto)</option>
-              <option value="D-2_D+4">Alcance: D-2 a D+4 (Padrão)</option>
-              <option value="D-10_D+10">Alcance: D-10 a D+10 (Expandido)</option>
-            </select>
-          </div>
+            {/* Alternador de Visão (Matriz x Lista) */}
+            <div className="flex items-center p-1 rounded-xl bg-muted border border-border shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode("kanban")}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                  viewMode === "kanban"
+                    ? "bg-card text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                title="Visão Matriz Kanban"
+              >
+                <KanbanSquare className="h-3.5 w-3.5" />
+                <span>Matriz</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                  viewMode === "list"
+                    ? "bg-card text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                title="Visão Lista Cronológica"
+              >
+                <List className="h-3.5 w-3.5" />
+                <span>Lista</span>
+              </button>
+            </div>
 
-          {/* Botão Configurar Régua */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setConfigDialogOpen(true)}
-            className="text-xs font-bold gap-1.5 h-9 rounded-xl border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-500/5 hover:bg-purple-500/10"
-            title="Configurar D0 e Dias D customizados"
-          >
-            <Settings2 className="h-3.5 w-3.5" />
-            ⚙️ Configurar Régua
-          </Button>
-
-          {/* Botão Importar Planilha */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setImportDialogOpen(true)}
-            className="text-xs font-bold gap-1.5 h-9 rounded-xl border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10"
-          >
-            <FileSpreadsheet className="h-3.5 w-3.5" />
-            Importar Planilha
-          </Button>
-
-          {/* Botão Copiar Fechamento */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setCopyDialogOpen(true)}
-            className="text-xs font-bold gap-1.5 h-9 rounded-xl border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/5 hover:bg-blue-500/10"
-          >
-            <Copy className="h-3.5 w-3.5" />
-            Copiar Mês Anterior
-          </Button>
-
-          {/* Botão Gerar Rotinas Padrão */}
-          {monthTasks.length === 0 && (
+            {/* Botão Configurar Régua */}
             <Button
               type="button"
+              variant="outline"
               size="sm"
-              onClick={handleGenerateDefaultClosingTasks}
-              className="text-xs font-bold gap-1.5 h-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20"
+              onClick={() => setConfigDialogOpen(true)}
+              className="text-xs font-bold gap-1.5 h-9 rounded-xl border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-500/5 hover:bg-purple-500/10"
+              title="Configurar D0 e Régua de Dias"
             >
-              <Sparkles className="h-3.5 w-3.5" />
-              ⚡ Gerar Rotinas do Mês
+              <Settings2 className="h-3.5 w-3.5" />
+              <span>Régua</span>
             </Button>
-          )}
+
+            {/* Menu Dropdown de Ações Unificadas */}
+            <div className="relative" ref={menuRef}>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setActionsMenuOpen(!actionsMenuOpen)}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs gap-1.5 h-9 px-3.5 rounded-xl shadow-md shadow-blue-500/20"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Ações</span>
+                <ChevronDown className="h-3.5 w-3.5 opacity-80" />
+              </Button>
+
+              {actionsMenuOpen && (
+                <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-xl shadow-2xl z-[9999] py-1 divide-y divide-border/50 animate-in fade-in zoom-in-95">
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActionsMenuOpen(false);
+                        setCopyDialogOpen(true);
+                      }}
+                      className="w-full px-3.5 py-2 text-left text-xs font-semibold text-foreground hover:bg-blue-500/10 hover:text-blue-500 flex items-center gap-2.5 transition-colors"
+                    >
+                      <Copy className="h-4 w-4 text-blue-500" />
+                      <span>Copiar Mês Anterior</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActionsMenuOpen(false);
+                        setImportDialogOpen(true);
+                      }}
+                      className="w-full px-3.5 py-2 text-left text-xs font-semibold text-foreground hover:bg-emerald-500/10 hover:text-emerald-500 flex items-center gap-2.5 transition-colors"
+                    >
+                      <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
+                      <span>Importar Planilha (.ODS/XLSX)</span>
+                    </button>
+                  </div>
+
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActionsMenuOpen(false);
+                        handleGenerateDefaultClosingTasks();
+                      }}
+                      className="w-full px-3.5 py-2 text-left text-xs font-semibold text-foreground hover:bg-purple-500/10 hover:text-purple-500 flex items-center gap-2.5 transition-colors"
+                    >
+                      <Sparkles className="h-4 w-4 text-purple-500" />
+                      <span>⚡ Gerar Rotinas Padrão</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -733,7 +770,7 @@ export default function FastCloseCockpitPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-card border-border/80 p-4 space-y-2">
           <div className="flex items-center justify-between text-xs font-bold text-muted-foreground">
-            <span>Progresso ({selectedProjectObj?.name || "Todos os Projetos de Fechamento"})</span>
+            <span>Progresso ({selectedProjectObj?.name || "Todos os Fechamentos"})</span>
             <span className="text-blue-500 font-mono">{closingProgressPercent}%</span>
           </div>
           <Progress value={closingProgressPercent} className="h-2" />
@@ -861,19 +898,16 @@ export default function FastCloseCockpitPage() {
         onImportSuccess={handleImportSpreadsheetSuccess}
       />
 
-      {/* Modal de Configuração de Dias Úteis & D0 */}
+      {/* Modal de Configuração de Dias Úteis & D0 (Salvamento Atômico) */}
       <WorkdayConfigDialog
         open={configDialogOpen}
         onOpenChange={setConfigDialogOpen}
         useD0={useD0}
-        onToggleUseD0={(newUseD0) => {
-          setUseD0(newUseD0);
-          saveProjectConfig(newUseD0, customOffsets, offsetRange);
-        }}
         workdayOffsets={workdayOffsets}
-        onSaveOffsets={(newOffsets) => {
+        onSaveConfig={(newUseD0, newOffsets) => {
+          setUseD0(newUseD0);
           setCustomOffsets(newOffsets);
-          saveProjectConfig(useD0, newOffsets, offsetRange);
+          saveProjectConfig(newUseD0, newOffsets, offsetRange);
         }}
       />
     </div>

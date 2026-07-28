@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Settings2, X, Plus, Check, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -8,22 +8,28 @@ interface WorkdayConfigDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   useD0: boolean;
-  onToggleUseD0: (useD0: boolean) => void;
   workdayOffsets: number[];
-  onSaveOffsets: (newOffsets: number[]) => void;
+  onSaveConfig: (useD0: boolean, offsets: number[]) => void;
 }
 
 export function WorkdayConfigDialog({
   open,
   onOpenChange,
   useD0,
-  onToggleUseD0,
   workdayOffsets,
-  onSaveOffsets,
+  onSaveConfig,
 }: WorkdayConfigDialogProps) {
   const [currentUseD0, setCurrentUseD0] = useState(useD0);
   const [offsets, setOffsets] = useState<number[]>(workdayOffsets);
   const [newOffsetInput, setNewOffsetInput] = useState("");
+
+  // Atualiza estados locais quando o modal abre
+  useEffect(() => {
+    if (open) {
+      setCurrentUseD0(useD0);
+      setOffsets(workdayOffsets);
+    }
+  }, [open, useD0, workdayOffsets]);
 
   if (!open) return null;
 
@@ -47,8 +53,8 @@ export function WorkdayConfigDialog({
   };
 
   const handleSave = () => {
-    onToggleUseD0(currentUseD0);
-    onSaveOffsets(offsets.length > 0 ? offsets : [0]);
+    const finalOffsets = offsets.length > 0 ? offsets : [0];
+    onSaveConfig(currentUseD0, finalOffsets);
     onOpenChange(false);
   };
 
@@ -93,7 +99,7 @@ export function WorkdayConfigDialog({
             <div className="space-y-0.5">
               <span className="text-xs font-bold text-foreground block">Utilizar marcador D0 (Dia de Corte ERP)?</span>
               <span className="text-[11px] text-muted-foreground block">
-                Se desativado, as colunas utilizam contagem contínua (WD1, WD2...)
+                Se desativado, o último dia útil do mês vira D-1 e não há coluna D0.
               </span>
             </div>
             <button
