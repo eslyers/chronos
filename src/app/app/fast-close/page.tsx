@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -62,6 +62,11 @@ const PRIORITY_FLAG_COLORS = {
   high: "#3b82f6",
   critical: "#ef4444",
 };
+
+const CLOSING_KEYWORDS = [
+  "fechamento", "fast close", "contábil", "contabil", "controladoria",
+  "demonstrativo", "fp&a", "fpa", "financeiro", "orçamento", "orcamento", "dre", "balancete"
+];
 
 function FastCloseTaskCard({
   task,
@@ -270,6 +275,48 @@ export default function FastCloseCockpitPage() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [defaultTaskDueDate, setDefaultTaskDueDate] = useState<string | undefined>(undefined);
 
+  // Carregar preferência salva do D0/offsets do localStorage para o projeto selecionado
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storageKey = `fastclose_config_${selectedProjectId}`;
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.useD0 === "boolean") setUseD0(parsed.useD0);
+        if (Array.isArray(parsed.customOffsets)) setCustomOffsets(parsed.customOffsets);
+        if (typeof parsed.offsetRange === "string") setOffsetRange(parsed.offsetRange);
+      } catch (err) {
+        console.warn("Error parsing fastclose config:", err);
+      }
+    } else {
+      // Padrão se não tiver configuração salva
+      setUseD0(true);
+      setCustomOffsets(undefined);
+      setOffsetRange("D-5_D+5");
+    }
+  }, [selectedProjectId]);
+
+  // Função auxiliar para salvar configurações do projeto no localStorage
+  const saveProjectConfig = (newUseD0: boolean, newCustomOffsets?: number[], newOffsetRange?: string) => {
+    if (typeof window === "undefined") return;
+    const storageKey = `fastclose_config_${selectedProjectId}`;
+    localStorage.setItem(storageKey, JSON.stringify({
+      useD0: newUseD0,
+      customOffsets: newCustomOffsets ?? customOffsets,
+      offsetRange: newOffsetRange ?? offsetRange,
+    }));
+  };
+
+  // Filtrar apenas projetos do escopo de Fechamento / Controladoria
+  const closingProjects = useMemo(() => {
+    return projects.filter((p) => {
+      const nameLower = p.name.toLowerCase();
+      const descLower = (p.description || "").toLowerCase();
+      return CLOSING_KEYWORDS.some((kw) => nameLower.includes(kw) || descLower.includes(kw));
+    });
+  }, [projects]);
+
   // Tarefas filtradas pelo projeto selecionado
   const scopedTasks = useMemo(() => {
     if (selectedProjectId === "all") return tasks;
@@ -285,7 +332,7 @@ export default function FastCloseCockpitPage() {
     const projName = `Fechamento Contábil ${selectedMonth}/${selectedYear}`;
     const newProj = await createProject({
       name: projName,
-      description: "Projeto de Fechamento Contábil (Fast Close)",
+      description: "Projeto de Fechamento Contábil (Fast Close / Controladoria)",
       color: "#3b82f6",
     });
     if (newProj && newProj.id) {
@@ -563,7 +610,7 @@ export default function FastCloseCockpitPage() {
             </button>
           </div>
 
-          {/* Seletor de Projeto */}
+          {/* Seletor de Projeto (Apenas Projetos de Fechamento/Controladoria) */}
           <div className="flex items-center gap-1.5 bg-muted/40 p-1.5 rounded-xl border border-border">
             <FolderKanban className="h-4 w-4 text-blue-500 ml-1 shrink-0" />
             <select
@@ -577,8 +624,8 @@ export default function FastCloseCockpitPage() {
               }}
               className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100 max-w-[180px] truncate"
             >
-              <option value="all">📁 (Todos os Projetos)</option>
-              {projects.map((p) => (
+              <option value="all">📁 (Todos os Projetos de Fechamento)</option>
+              {closingProjects.map((p) => (
                 <option key={p.id} value={p.id}>
                   📁 {p.name}
                 </option>
@@ -616,8 +663,10 @@ export default function FastCloseCockpitPage() {
             <select
               value={offsetRange}
               onChange={(e) => {
-                setOffsetRange(e.target.value);
+                const newRange = e.target.value;
+                setOffsetRange(newRange);
                 setCustomOffsets(undefined);
+                saveProjectConfig(useD0, undefined, newRange);
               }}
               className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
             >
@@ -684,7 +733,7 @@ export default function FastCloseCockpitPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-card border-border/80 p-4 space-y-2">
           <div className="flex items-center justify-between text-xs font-bold text-muted-foreground">
-            <span>Progresso ({selectedProjectObj?.name || "Todos os Projetos"})</span>
+            <span>Progresso ({selectedProjectObj?.name || "Todos os Projetos de Fechamento"})</span>
             <span className="text-blue-500 font-mono">{closingProgressPercent}%</span>
           </div>
           <Progress value={closingProgressPercent} className="h-2" />
@@ -817,9 +866,15 @@ export default function FastCloseCockpitPage() {
         open={configDialogOpen}
         onOpenChange={setConfigDialogOpen}
         useD0={useD0}
-        onToggleUseD0={setUseD0}
+        onToggleUseD0={(newUseD0) => {
+          setUseD0(newUseD0);
+          saveProjectConfig(newUseD0, customOffsets, offsetRange);
+        }}
         workdayOffsets={workdayOffsets}
-        onSaveOffsets={(newOffsets) => setCustomOffsets(newOffsets)}
+        onSaveOffsets={(newOffsets) => {
+          setCustomOffsets(newOffsets);
+          saveProjectConfig(useD0, newOffsets, offsetRange);
+        }}
       />
     </div>
   );
