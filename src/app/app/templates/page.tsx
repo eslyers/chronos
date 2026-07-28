@@ -67,6 +67,21 @@ const DEFAULT_FINANCIAL_TEMPLATES: Template[] = [
     ],
   },
   {
+    id: "tpl-fast-close",
+    name: "Fechamento Contábil Mensal por Dias Úteis (D-5 a D+5 - Fast Close)",
+    description: "Régua diária corporativa de fechamento contábil e gerencial (Working Days D-5 a D+5). Estruturada em marcos de cut-off, provisões (accruals), impostos, intercompany, conciliação e DRE executiva.",
+    category: "Controladoria",
+    icon: "⏱️",
+    is_public: true,
+    stages: [
+      { name: "D-5 a D-3 — Pré-Fechamento & Cut-off Operacional", color: "#6366f1", sort_order: 0 },
+      { name: "D-2 a D-1 — Provisões, Folha & Conciliações Prévias", color: "#3b82f6", sort_order: 1 },
+      { name: "D0 / WD0 — Trava do ERP & Corte Contábil Oficial", color: "#ec4899", sort_order: 2 },
+      { name: "D+1 a D+3 — Lançamentos de Fechamento, Impostos & Intercompany", color: "#f59e0b", sort_order: 3 },
+      { name: "D+4 a D+5 — Balancete Final & Reporting Executivo ao CFO", color: "#10b981", sort_order: 4, is_done: true },
+    ],
+  },
+  {
     id: "tpl-refs",
     name: "Reestimativa Orçamentária & Forecast (REFs)",
     description: "Ciclo contínuo de reestimativa orçamentária (Ref 1, Ref 2, Ref 3 ou Rolling Forecast). Integração do executado (Actuals) com projeção atualizada das áreas e análise de desvios.",
