@@ -28,6 +28,8 @@ import {
   FolderKanban,
   FileSpreadsheet,
   Settings2,
+  KanbanSquare,
+  List,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,9 +42,10 @@ import { TaskIndicators } from "@/components/TaskIndicators";
 import { CopyClosingDialog } from "@/components/CopyClosingDialog";
 import { ImportClosingSpreadsheetDialog } from "@/components/ImportClosingSpreadsheetDialog";
 import { WorkdayConfigDialog } from "@/components/WorkdayConfigDialog";
+import { FastCloseListView } from "@/components/FastCloseListView";
 import {
   getClosingD0Date,
-  addBusinessDays,
+  getCalculatedWorkdayDate,
   getWorkdayOffsets,
   formatWorkdayColumnHeader,
   getWorkdayOffsetFromDate,
@@ -248,7 +251,7 @@ function WorkdayColumn({
 }
 
 export default function FastCloseCockpitPage() {
-  const { tasks, projects, loading, createTask, updateTask, createProject } = useData();
+  const { tasks, projects, loading, createTask, updateTask, deleteTask, createProject } = useData();
 
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1); // 1-12
@@ -257,6 +260,7 @@ export default function FastCloseCockpitPage() {
   const [offsetRange, setOffsetRange] = useState("D-5_D+5");
   const [customOffsets, setCustomOffsets] = useState<number[] | undefined>(undefined);
   const [useD0, setUseD0] = useState(true);
+  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
 
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [selectedEditTask, setSelectedEditTask] = useState<Task | null>(null);
@@ -266,7 +270,7 @@ export default function FastCloseCockpitPage() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [defaultTaskDueDate, setDefaultTaskDueDate] = useState<string | undefined>(undefined);
 
-  // Filtra tarefas do projeto selecionado (ou todas se "all")
+  // Tarefas filtradas pelo projeto selecionado
   const scopedTasks = useMemo(() => {
     if (selectedProjectId === "all") return tasks;
     return tasks.filter((t) => t.project_id === selectedProjectId);
@@ -289,26 +293,26 @@ export default function FastCloseCockpitPage() {
     }
   };
 
-  // Calcula a data D0 (último dia útil do mês selecionado)
-  const d0Date = useMemo(() => {
+  // Data do último dia útil do mês selecionado
+  const lastDayOfMonth = useMemo(() => {
     return getClosingD0Date(selectedYear, selectedMonth);
   }, [selectedYear, selectedMonth]);
 
-  // Lista de offsets visíveis
+  // Lista de offsets visíveis (respeitando useD0!)
   const workdayOffsets = useMemo(() => {
-    return getWorkdayOffsets(offsetRange, customOffsets);
-  }, [offsetRange, customOffsets]);
+    return getWorkdayOffsets(offsetRange, customOffsets, useD0);
+  }, [offsetRange, customOffsets, useD0]);
 
-  // Mapeia cada offset para sua data real de calendário
+  // Mapeia cada offset para sua data real de calendário (respeitando useD0!)
   const offsetDatesMap = useMemo(() => {
     const map = new Map<number, Date>();
     workdayOffsets.forEach((offset) => {
-      map.set(offset, addBusinessDays(d0Date, offset));
+      map.set(offset, getCalculatedWorkdayDate(selectedYear, selectedMonth, offset, useD0));
     });
     return map;
-  }, [d0Date, workdayOffsets]);
+  }, [selectedYear, selectedMonth, workdayOffsets, useD0]);
 
-  // Agrupa tarefas por offset de dia útil (usando tarefas filtradas por projeto!)
+  // Agrupa tarefas por offset de dia útil
   const tasksByOffset = useMemo(() => {
     const map = new Map<number, Task[]>();
     workdayOffsets.forEach((offset) => map.set(offset, []));
@@ -318,7 +322,7 @@ export default function FastCloseCockpitPage() {
       const tDate = new Date((t.due_date || t.start_date) + "T00:00:00");
       
       if (tDate.getMonth() + 1 === selectedMonth && tDate.getFullYear() === selectedYear) {
-        const offset = getWorkdayOffsetFromDate(tDate, d0Date);
+        const offset = getWorkdayOffsetFromDate(tDate, selectedYear, selectedMonth, useD0);
         if (map.has(offset)) {
           map.get(offset)!.push(t);
         } else {
@@ -334,7 +338,7 @@ export default function FastCloseCockpitPage() {
     });
 
     return map;
-  }, [scopedTasks, selectedMonth, selectedYear, d0Date, workdayOffsets]);
+  }, [scopedTasks, selectedMonth, selectedYear, useD0, workdayOffsets]);
 
   // Métricas
   const monthTasks = useMemo(() => {
@@ -381,26 +385,55 @@ export default function FastCloseCockpitPage() {
     }
   };
 
+  // Alternar conclusão rápida de tarefa
+  const handleToggleTaskComplete = async (task: Task) => {
+    const isCurrentlyDone = task.status === "done" || task.progress === 100;
+    await updateTask(task.id, {
+      status: isCurrentlyDone ? "todo" : "done",
+      progress: isCurrentlyDone ? 0 : 100,
+    });
+  };
+
+  // Excluir tarefa
+  const handleDeleteTask = async (taskId: string) => {
+    if (confirm("Tem certeza que deseja excluir esta rotina?")) {
+      await deleteTask(taskId);
+    }
+  };
+
   // Gerar rotinas padrão do mês
   const handleGenerateDefaultClosingTasks = async () => {
     const targetProjId = selectedProjectId !== "all" ? selectedProjectId : undefined;
 
-    const defaultRoutines = [
-      { offset: -5, title: "[D-5] Notificação de encerramento de POs", priority: "medium" },
-      { offset: -4, title: "[D-4] Corte de faturamento e remessas", priority: "high" },
-      { offset: -3, title: "[D-3] Conciliação de Contas a Receber (AR)", priority: "high" },
-      { offset: -2, title: "[D-2] Integração da Folha & Benefícios", priority: "critical" },
-      { offset: -1, title: "[D-1] Provisões & Conciliação Bancária Prévia", priority: "high" },
-      { offset: 0, title: "[D0] Trava oficial de lançamentos no ERP", priority: "critical" },
-      { offset: 1, title: "[D+1] Depreciação e Accruals Operacionais", priority: "high" },
-      { offset: 2, title: "[D+2] Conciliação Intercompany & FX Gain/Loss", priority: "medium" },
-      { offset: 3, title: "[D+3] Apuração de Impostos Diretos/Indiretos", priority: "high" },
-      { offset: 4, title: "[D+4] Emissão do Balancete Final (Trial Balance)", priority: "critical" },
-      { offset: 5, title: "[D+5] Reporting Executivo ao CFO & Conselho", priority: "critical" },
-    ];
+    const defaultRoutines = useD0
+      ? [
+          { offset: -5, title: "[D-5] Notificação de encerramento de POs", priority: "medium" },
+          { offset: -4, title: "[D-4] Corte de faturamento e remessas", priority: "high" },
+          { offset: -3, title: "[D-3] Conciliação de Contas a Receber (AR)", priority: "high" },
+          { offset: -2, title: "[D-2] Integração da Folha & Benefícios", priority: "critical" },
+          { offset: -1, title: "[D-1] Provisões & Conciliação Bancária Prévia", priority: "high" },
+          { offset: 0, title: "[D0] Trava oficial de lançamentos no ERP", priority: "critical" },
+          { offset: 1, title: "[D+1] Depreciação e Accruals Operacionais", priority: "high" },
+          { offset: 2, title: "[D+2] Conciliação Intercompany & FX Gain/Loss", priority: "medium" },
+          { offset: 3, title: "[D+3] Apuração de Impostos Diretos/Indiretos", priority: "high" },
+          { offset: 4, title: "[D+4] Emissão do Balancete Final (Trial Balance)", priority: "critical" },
+          { offset: 5, title: "[D+5] Reporting Executivo ao CFO & Conselho", priority: "critical" },
+        ]
+      : [
+          { offset: -5, title: "[D-5] Notificação de encerramento de POs", priority: "medium" },
+          { offset: -4, title: "[D-4] Corte de faturamento e remessas", priority: "high" },
+          { offset: -3, title: "[D-3] Conciliação de Contas a Receber (AR)", priority: "high" },
+          { offset: -2, title: "[D-2] Provisões & Conciliação Bancária Prévia", priority: "high" },
+          { offset: -1, title: "[D-1] Trava oficial e encerramento do mês", priority: "critical" },
+          { offset: 1, title: "[D+1] Depreciação e Accruals Operacionais", priority: "high" },
+          { offset: 2, title: "[D+2] Conciliação Intercompany & FX Gain/Loss", priority: "medium" },
+          { offset: 3, title: "[D+3] Apuração de Impostos Diretos/Indiretos", priority: "high" },
+          { offset: 4, title: "[D+4] Emissão do Balancete Final (Trial Balance)", priority: "critical" },
+          { offset: 5, title: "[D+5] Reporting Executivo ao CFO & Conselho", priority: "critical" },
+        ];
 
     for (const r of defaultRoutines) {
-      const targetDate = addBusinessDays(d0Date, r.offset);
+      const targetDate = getCalculatedWorkdayDate(selectedYear, selectedMonth, r.offset, useD0);
       const isoDate = targetDate.toISOString().split("T")[0];
       await createTask({
         title: r.title,
@@ -423,15 +456,12 @@ export default function FastCloseCockpitPage() {
     resetStatus: boolean;
     keepAssignees: boolean;
   }) => {
-    const sourceD0 = getClosingD0Date(params.sourceYear, params.sourceMonth);
-    const targetD0 = getClosingD0Date(params.targetYear, params.targetMonth);
-
     const sourceTasksToCopy = scopedTasks.filter((t) => params.selectedTaskIds.includes(t.id));
 
     for (const t of sourceTasksToCopy) {
-      const originalDate = new Date((t.due_date || t.start_date || d0Date.toISOString()) + "T00:00:00");
-      const offset = getWorkdayOffsetFromDate(originalDate, sourceD0);
-      const newTargetDate = addBusinessDays(targetD0, offset);
+      const originalDate = new Date((t.due_date || t.start_date || lastDayOfMonth.toISOString()) + "T00:00:00");
+      const offset = getWorkdayOffsetFromDate(originalDate, params.sourceYear, params.sourceMonth, useD0);
+      const newTargetDate = getCalculatedWorkdayDate(params.targetYear, params.targetMonth, offset, useD0);
       const isoDate = newTargetDate.toISOString().split("T")[0];
 
       await createTask({
@@ -505,6 +535,34 @@ export default function FastCloseCockpitPage() {
 
         {/* Controles Principais */}
         <div className="flex flex-wrap items-center gap-3">
+          {/* Alternador de Modo de Visualização (Kanban x Lista) */}
+          <div className="flex items-center p-1 rounded-xl bg-muted border border-border shrink-0">
+            <button
+              type="button"
+              onClick={() => setViewMode("kanban")}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                viewMode === "kanban"
+                  ? "bg-card text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <KanbanSquare className="h-3.5 w-3.5" />
+              Matriz Kanban
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                viewMode === "list"
+                  ? "bg-card text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <List className="h-3.5 w-3.5" />
+              Lista Cronológica
+            </button>
+          </div>
+
           {/* Seletor de Projeto */}
           <div className="flex items-center gap-1.5 bg-muted/40 p-1.5 rounded-xl border border-border">
             <FolderKanban className="h-4 w-4 text-blue-500 ml-1 shrink-0" />
@@ -638,14 +696,14 @@ export default function FastCloseCockpitPage() {
         <Card className="bg-card border-border/80 p-4 flex items-center justify-between">
           <div>
             <span className="text-xs font-bold text-muted-foreground block">
-              {useD0 ? "Dia do Corte Oficial (D0 / WD0)" : "Dia Base de Referência"}
+              {useD0 ? "Dia do Corte Oficial (D0 / WD0)" : "Encerramento do Mês (D-1)"}
             </span>
             <span className="text-base font-bold text-pink-600 dark:text-pink-400">
-              {formatWorkdayColumnHeader(0, d0Date, useD0).formattedDate} — {formatWorkdayColumnHeader(0, d0Date, useD0).weekdayName}
+              {formatWorkdayColumnHeader(useD0 ? 0 : -1, lastDayOfMonth, useD0).formattedDate} — {formatWorkdayColumnHeader(useD0 ? 0 : -1, lastDayOfMonth, useD0).weekdayName}
             </span>
           </div>
           <Badge className="bg-pink-500/15 text-pink-600 dark:text-pink-400 border-pink-500/30">
-            {useD0 ? "Corte ERP" : "Base"}
+            {useD0 ? "Corte ERP" : "D-1 (Sem D0)"}
           </Badge>
         </Card>
 
@@ -662,47 +720,67 @@ export default function FastCloseCockpitPage() {
         </Card>
       </div>
 
-      {/* Kanban Grid por Dias Úteis */}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x scrollbar-thin">
-          {workdayOffsets.map((offset) => {
-            const columnDate = offsetDatesMap.get(offset) || d0Date;
-            const columnTasks = tasksByOffset.get(offset) || [];
+      {/* Exibição: Kanban vs Lista Cronológica */}
+      {viewMode === "kanban" ? (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x scrollbar-thin">
+            {workdayOffsets.map((offset) => {
+              const columnDate = offsetDatesMap.get(offset) || lastDayOfMonth;
+              const columnTasks = tasksByOffset.get(offset) || [];
 
-            return (
-              <WorkdayColumn
-                key={offset}
-                offset={offset}
-                columnDate={columnDate}
-                useD0={useD0}
-                tasks={columnTasks}
-                onAddTask={() => {
-                  setDefaultTaskDueDate(columnDate.toISOString().split("T")[0]);
-                  setSelectedEditTask(null);
-                  setTaskDialogOpen(true);
-                }}
-                onOpenEditTask={(task) => {
-                  setSelectedEditTask(task);
-                  setTaskDialogOpen(true);
-                }}
-              />
-            );
-          })}
-        </div>
+              return (
+                <WorkdayColumn
+                  key={offset}
+                  offset={offset}
+                  columnDate={columnDate}
+                  useD0={useD0}
+                  tasks={columnTasks}
+                  onAddTask={() => {
+                    setDefaultTaskDueDate(columnDate.toISOString().split("T")[0]);
+                    setSelectedEditTask(null);
+                    setTaskDialogOpen(true);
+                  }}
+                  onOpenEditTask={(task) => {
+                    setSelectedEditTask(task);
+                    setTaskDialogOpen(true);
+                  }}
+                />
+              );
+            })}
+          </div>
 
-        <DragOverlay>
-          {activeTask ? (
-            <div className="w-72 bg-card border-2 border-blue-500 rounded-xl p-3 shadow-2xl opacity-90">
-              <h4 className="text-xs font-bold text-foreground">{activeTask.title}</h4>
-            </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+          <DragOverlay>
+            {activeTask ? (
+              <div className="w-72 bg-card border-2 border-blue-500 rounded-xl p-3 shadow-2xl opacity-90">
+                <h4 className="text-xs font-bold text-foreground">{activeTask.title}</h4>
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      ) : (
+        <FastCloseListView
+          workdayOffsets={workdayOffsets}
+          offsetDatesMap={offsetDatesMap}
+          tasksByOffset={tasksByOffset}
+          useD0={useD0}
+          onOpenEditTask={(task) => {
+            setSelectedEditTask(task);
+            setTaskDialogOpen(true);
+          }}
+          onToggleTaskComplete={handleToggleTaskComplete}
+          onDeleteTask={handleDeleteTask}
+          onAddTaskToOffset={(date) => {
+            setDefaultTaskDueDate(date.toISOString().split("T")[0]);
+            setSelectedEditTask(null);
+            setTaskDialogOpen(true);
+          }}
+        />
+      )}
 
       {/* Modal de Criação / Edição de Tarefa */}
       <TaskDialog
