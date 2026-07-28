@@ -38,7 +38,8 @@ interface TaskDialogProps {
   onOpenChange: (open: boolean) => void;
   task?: Task | null;
   defaultStageId?: string | null;
-  projectId: string;
+  defaultDueDate?: string | null;
+  projectId?: string;
 }
 
 const PRIORITIES = [
@@ -77,6 +78,7 @@ export function TaskDialog({
   onOpenChange,
   task,
   defaultStageId,
+  defaultDueDate,
   projectId,
 }: TaskDialogProps) {
   const {
@@ -91,8 +93,8 @@ export function TaskDialog({
     addTaskAttachment,
     deleteTaskAttachment,
   } = useData();
-  const stages = getStagesByProject(projectId);
-  const projectTasks = getTasksByProject(projectId);
+  const stages = projectId ? getStagesByProject(projectId) : [];
+  const projectTasks = projectId ? getTasksByProject(projectId) : [];
   const isEdit = !!task;
 
   // Evita auto-referência na lista de tarefas pai
@@ -261,7 +263,7 @@ export function TaskDialog({
       setPriority("medium");
       setProgress(0);
       setStartDate(new Date().toISOString().split("T")[0]);
-      setDueDate("");
+      setDueDate(defaultDueDate || "");
       setAssigneeMode("member");
       setAssigneeId("");
       setAssigneeName(null);

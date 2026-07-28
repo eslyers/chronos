@@ -19,6 +19,7 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
+  CalendarClock,
 } from "lucide-react";
 import { useGlobal } from "@/lib/context/GlobalContext";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -75,6 +76,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const navigation = [
     { name: "Dashboard", href: "/app", icon: LayoutDashboard },
     { name: "Projetos", href: "/app/projects", icon: FolderKanban },
+    { name: "Fechamento (Fast Close)", href: "/app/fast-close", icon: CalendarClock },
     { name: "Cronograma", href: "/app/timeline", icon: Clock },
     { name: "Kanban", href: "/app/kanban", icon: KanbanSquare },
     { name: "Calendário", href: "/app/calendar", icon: CalendarDays },
