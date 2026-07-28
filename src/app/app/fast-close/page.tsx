@@ -25,6 +25,9 @@ import {
   Loader2,
   Calendar as CalendarIcon,
   Filter,
+  FolderKanban,
+  FileSpreadsheet,
+  Settings2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +38,8 @@ import { TaskAssignee } from "@/components/TaskAssignee";
 import { TaskDialog } from "@/components/TaskDialog";
 import { TaskIndicators } from "@/components/TaskIndicators";
 import { CopyClosingDialog } from "@/components/CopyClosingDialog";
+import { ImportClosingSpreadsheetDialog } from "@/components/ImportClosingSpreadsheetDialog";
+import { WorkdayConfigDialog } from "@/components/WorkdayConfigDialog";
 import {
   getClosingD0Date,
   addBusinessDays,
@@ -149,12 +154,14 @@ function FastCloseTaskCard({
 function WorkdayColumn({
   offset,
   columnDate,
+  useD0,
   tasks,
   onAddTask,
   onOpenEditTask,
 }: {
   offset: number;
   columnDate: Date;
+  useD0: boolean;
   tasks: Task[];
   onAddTask: () => void;
   onOpenEditTask: (t: Task) => void;
@@ -164,8 +171,8 @@ function WorkdayColumn({
     data: { type: "workday", offset, columnDate },
   });
 
-  const headerInfo = formatWorkdayColumnHeader(offset, columnDate);
-  const isD0 = offset === 0;
+  const headerInfo = formatWorkdayColumnHeader(offset, columnDate, useD0);
+  const isD0 = useD0 && offset === 0;
 
   return (
     <div
@@ -241,30 +248,58 @@ function WorkdayColumn({
 }
 
 export default function FastCloseCockpitPage() {
-  const { tasks, loading, createTask, updateTask } = useData();
+  const { tasks, projects, loading, createTask, updateTask, createProject } = useData();
 
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1); // 1-12
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
-  const [offsetRange, setOffsetRange] = useState("D-5_D+5"); // D-5_D+5, D-3_D+3, D-2_D+4
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
+  const [offsetRange, setOffsetRange] = useState("D-5_D+5");
+  const [customOffsets, setCustomOffsets] = useState<number[] | undefined>(undefined);
+  const [useD0, setUseD0] = useState(true);
 
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [selectedEditTask, setSelectedEditTask] = useState<Task | null>(null);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [defaultTaskDueDate, setDefaultTaskDueDate] = useState<string | undefined>(undefined);
+
+  // Filtra tarefas do projeto selecionado (ou todas se "all")
+  const scopedTasks = useMemo(() => {
+    if (selectedProjectId === "all") return tasks;
+    return tasks.filter((t) => t.project_id === selectedProjectId);
+  }, [tasks, selectedProjectId]);
+
+  const selectedProjectObj = useMemo(() => {
+    return projects.find((p) => p.id === selectedProjectId);
+  }, [projects, selectedProjectId]);
+
+  // Criar Projeto de Fechamento rápido
+  const handleCreateFastCloseProject = async () => {
+    const projName = `Fechamento Contábil ${selectedMonth}/${selectedYear}`;
+    const newProj = await createProject({
+      name: projName,
+      description: "Projeto de Fechamento Contábil (Fast Close)",
+      color: "#3b82f6",
+    });
+    if (newProj && newProj.id) {
+      setSelectedProjectId(newProj.id);
+    }
+  };
 
   // Calcula a data D0 (último dia útil do mês selecionado)
   const d0Date = useMemo(() => {
     return getClosingD0Date(selectedYear, selectedMonth);
   }, [selectedYear, selectedMonth]);
 
-  // Obtém a lista de offsets (ex: [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5])
+  // Lista de offsets visíveis
   const workdayOffsets = useMemo(() => {
-    return getWorkdayOffsets(offsetRange);
-  }, [offsetRange]);
+    return getWorkdayOffsets(offsetRange, customOffsets);
+  }, [offsetRange, customOffsets]);
 
-  // Mapeia para cada offset a sua data de calendário real
+  // Mapeia cada offset para sua data real de calendário
   const offsetDatesMap = useMemo(() => {
     const map = new Map<number, Date>();
     workdayOffsets.forEach((offset) => {
@@ -273,22 +308,20 @@ export default function FastCloseCockpitPage() {
     return map;
   }, [d0Date, workdayOffsets]);
 
-  // Agrupa tarefas por offset de dia útil
+  // Agrupa tarefas por offset de dia útil (usando tarefas filtradas por projeto!)
   const tasksByOffset = useMemo(() => {
     const map = new Map<number, Task[]>();
     workdayOffsets.forEach((offset) => map.set(offset, []));
 
-    tasks.forEach((t) => {
+    scopedTasks.forEach((t) => {
       if (!t.due_date && !t.start_date) return;
       const tDate = new Date((t.due_date || t.start_date) + "T00:00:00");
       
-      // Verifica se a tarefa pertence ao mês/ano selecionado
       if (tDate.getMonth() + 1 === selectedMonth && tDate.getFullYear() === selectedYear) {
         const offset = getWorkdayOffsetFromDate(tDate, d0Date);
         if (map.has(offset)) {
           map.get(offset)!.push(t);
         } else {
-          // Se estiver fora do alcance visível, joga no offset mais próximo
           const minOffset = workdayOffsets[0];
           const maxOffset = workdayOffsets[workdayOffsets.length - 1];
           if (offset < minOffset && map.has(minOffset)) {
@@ -301,9 +334,9 @@ export default function FastCloseCockpitPage() {
     });
 
     return map;
-  }, [tasks, selectedMonth, selectedYear, d0Date, workdayOffsets]);
+  }, [scopedTasks, selectedMonth, selectedYear, d0Date, workdayOffsets]);
 
-  // Métricas do ciclo do mês selecionado
+  // Métricas
   const monthTasks = useMemo(() => {
     return Array.from(tasksByOffset.values()).flat();
   }, [tasksByOffset]);
@@ -317,7 +350,7 @@ export default function FastCloseCockpitPage() {
     return Math.round((completedTasksCount / monthTasks.length) * 100);
   }, [monthTasks, completedTasksCount]);
 
-  // Sensors para drag and drop
+  // Drag and drop
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
@@ -350,6 +383,8 @@ export default function FastCloseCockpitPage() {
 
   // Gerar rotinas padrão do mês
   const handleGenerateDefaultClosingTasks = async () => {
+    const targetProjId = selectedProjectId !== "all" ? selectedProjectId : undefined;
+
     const defaultRoutines = [
       { offset: -5, title: "[D-5] Notificação de encerramento de POs", priority: "medium" },
       { offset: -4, title: "[D-4] Corte de faturamento e remessas", priority: "high" },
@@ -373,6 +408,7 @@ export default function FastCloseCockpitPage() {
         priority: r.priority as Task["priority"],
         status: "todo",
         progress: 0,
+        project_id: targetProjId,
       });
     }
   };
@@ -390,7 +426,7 @@ export default function FastCloseCockpitPage() {
     const sourceD0 = getClosingD0Date(params.sourceYear, params.sourceMonth);
     const targetD0 = getClosingD0Date(params.targetYear, params.targetMonth);
 
-    const sourceTasksToCopy = tasks.filter((t) => params.selectedTaskIds.includes(t.id));
+    const sourceTasksToCopy = scopedTasks.filter((t) => params.selectedTaskIds.includes(t.id));
 
     for (const t of sourceTasksToCopy) {
       const originalDate = new Date((t.due_date || t.start_date || d0Date.toISOString()) + "T00:00:00");
@@ -407,6 +443,28 @@ export default function FastCloseCockpitPage() {
         progress: params.resetStatus ? 0 : t.progress,
         assignee_id: params.keepAssignees ? t.assignee_id || undefined : undefined,
         assignee_name: params.keepAssignees ? t.assignee_name || undefined : undefined,
+        project_id: t.project_id || (selectedProjectId !== "all" ? selectedProjectId : undefined),
+      });
+    }
+  };
+
+  // Importação de planilha
+  const handleImportSpreadsheetSuccess = async (importedTasks: {
+    title: string;
+    description?: string;
+    due_date?: string;
+    priority: "low" | "medium" | "high" | "critical";
+    project_id?: string;
+  }[]) => {
+    for (const t of importedTasks) {
+      await createTask({
+        title: t.title,
+        description: t.description,
+        due_date: t.due_date,
+        priority: t.priority,
+        status: "todo",
+        progress: 0,
+        project_id: t.project_id || (selectedProjectId !== "all" ? selectedProjectId : undefined),
       });
     }
   };
@@ -439,7 +497,7 @@ export default function FastCloseCockpitPage() {
                 </Badge>
               </h1>
               <p className="text-xs text-muted-foreground">
-                Régua diária de dias úteis (Business Days) com recálculo automático de calendário
+                Régua diária por projeto corporativo com suporte a D0 e Ds customizados
               </p>
             </div>
           </div>
@@ -447,6 +505,30 @@ export default function FastCloseCockpitPage() {
 
         {/* Controles Principais */}
         <div className="flex flex-wrap items-center gap-3">
+          {/* Seletor de Projeto */}
+          <div className="flex items-center gap-1.5 bg-muted/40 p-1.5 rounded-xl border border-border">
+            <FolderKanban className="h-4 w-4 text-blue-500 ml-1 shrink-0" />
+            <select
+              value={selectedProjectId}
+              onChange={(e) => {
+                if (e.target.value === "new") {
+                  handleCreateFastCloseProject();
+                } else {
+                  setSelectedProjectId(e.target.value);
+                }
+              }}
+              className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100 max-w-[180px] truncate"
+            >
+              <option value="all">📁 (Todos os Projetos)</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  📁 {p.name}
+                </option>
+              ))}
+              <option value="new">➕ + Criar Projeto de Fechamento</option>
+            </select>
+          </div>
+
           {/* Seletor Mês/Ano */}
           <div className="flex items-center gap-1.5 bg-muted/40 p-1.5 rounded-xl border border-border">
             <CalendarIcon className="h-4 w-4 text-muted-foreground ml-1 shrink-0" />
@@ -456,7 +538,7 @@ export default function FastCloseCockpitPage() {
               className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
             >
               {MONTH_NAMES.map((m, idx) => (
-                <option key={idx} value={idx + 1} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">{m}</option>
+                <option key={idx} value={idx + 1}>{m}</option>
               ))}
             </select>
             <select
@@ -464,9 +546,9 @@ export default function FastCloseCockpitPage() {
               onChange={(e) => setSelectedYear(Number(e.target.value))}
               className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
             >
-              <option value={2025} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">2025</option>
-              <option value={2026} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">2026</option>
-              <option value={2027} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">2027</option>
+              <option value={2025}>2025</option>
+              <option value={2026}>2026</option>
+              <option value={2027}>2027</option>
             </select>
           </div>
 
@@ -475,14 +557,43 @@ export default function FastCloseCockpitPage() {
             <Filter className="h-3.5 w-3.5 text-muted-foreground ml-1 shrink-0" />
             <select
               value={offsetRange}
-              onChange={(e) => setOffsetRange(e.target.value)}
+              onChange={(e) => {
+                setOffsetRange(e.target.value);
+                setCustomOffsets(undefined);
+              }}
               className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
             >
-              <option value="D-5_D+5" className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">Alcance: D-5 a D+5 (Completo)</option>
-              <option value="D-3_D+3" className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">Alcance: D-3 a D+3 (Curto)</option>
-              <option value="D-2_D+4" className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">Alcance: D-2 a D+4 (Padrão)</option>
+              <option value="D-5_D+5">Alcance: D-5 a D+5 (Completo)</option>
+              <option value="D-3_D+3">Alcance: D-3 a D+3 (Curto)</option>
+              <option value="D-2_D+4">Alcance: D-2 a D+4 (Padrão)</option>
+              <option value="D-10_D+10">Alcance: D-10 a D+10 (Expandido)</option>
             </select>
           </div>
+
+          {/* Botão Configurar Régua */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setConfigDialogOpen(true)}
+            className="text-xs font-bold gap-1.5 h-9 rounded-xl border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-500/5 hover:bg-purple-500/10"
+            title="Configurar D0 e Dias D customizados"
+          >
+            <Settings2 className="h-3.5 w-3.5" />
+            ⚙️ Configurar Régua
+          </Button>
+
+          {/* Botão Importar Planilha */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setImportDialogOpen(true)}
+            className="text-xs font-bold gap-1.5 h-9 rounded-xl border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            Importar Planilha
+          </Button>
 
           {/* Botão Copiar Fechamento */}
           <Button
@@ -515,36 +626,38 @@ export default function FastCloseCockpitPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="bg-card border-border/80 p-4 space-y-2">
           <div className="flex items-center justify-between text-xs font-bold text-muted-foreground">
-            <span>Progresso do Fechamento de {MONTH_NAMES[selectedMonth - 1]}</span>
+            <span>Progresso ({selectedProjectObj?.name || "Todos os Projetos"})</span>
             <span className="text-blue-500 font-mono">{closingProgressPercent}%</span>
           </div>
           <Progress value={closingProgressPercent} className="h-2" />
           <p className="text-[11px] text-muted-foreground">
-            {completedTasksCount} de {monthTasks.length} rotinas contábeis concluídas
+            {completedTasksCount} de {monthTasks.length} rotinas contábeis concluídas em {MONTH_NAMES[selectedMonth - 1]}
           </p>
         </Card>
 
         <Card className="bg-card border-border/80 p-4 flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-muted-foreground block">Dia do Corte Oficial (D0 / WD0)</span>
+            <span className="text-xs font-bold text-muted-foreground block">
+              {useD0 ? "Dia do Corte Oficial (D0 / WD0)" : "Dia Base de Referência"}
+            </span>
             <span className="text-base font-bold text-pink-600 dark:text-pink-400">
-              {formatWorkdayColumnHeader(0, d0Date).formattedDate} — {formatWorkdayColumnHeader(0, d0Date).weekdayName}
+              {formatWorkdayColumnHeader(0, d0Date, useD0).formattedDate} — {formatWorkdayColumnHeader(0, d0Date, useD0).weekdayName}
             </span>
           </div>
           <Badge className="bg-pink-500/15 text-pink-600 dark:text-pink-400 border-pink-500/30">
-            Corte ERP
+            {useD0 ? "Corte ERP" : "Base"}
           </Badge>
         </Card>
 
         <Card className="bg-card border-border/80 p-4 flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-muted-foreground block">Total de Rotinas na Régua</span>
+            <span className="text-xs font-bold text-muted-foreground block">Rotinas no Escopo Atual</span>
             <span className="text-base font-bold text-foreground">
               {monthTasks.length} rotinas ativas
             </span>
           </div>
           <Badge variant="outline" className="font-mono text-xs">
-            {workdayOffsets.length} dias úteis
+            {workdayOffsets.length} colunas diárias
           </Badge>
         </Card>
       </div>
@@ -566,6 +679,7 @@ export default function FastCloseCockpitPage() {
                 key={offset}
                 offset={offset}
                 columnDate={columnDate}
+                useD0={useD0}
                 tasks={columnTasks}
                 onAddTask={() => {
                   setDefaultTaskDueDate(columnDate.toISOString().split("T")[0]);
@@ -595,6 +709,7 @@ export default function FastCloseCockpitPage() {
         open={taskDialogOpen}
         onOpenChange={setTaskDialogOpen}
         task={selectedEditTask}
+        projectId={selectedProjectId !== "all" ? selectedProjectId : undefined}
         defaultDueDate={defaultTaskDueDate}
       />
 
@@ -604,8 +719,29 @@ export default function FastCloseCockpitPage() {
         onOpenChange={setCopyDialogOpen}
         currentMonth={selectedMonth}
         currentYear={selectedYear}
-        tasks={tasks}
+        tasks={scopedTasks}
         onCopyTasks={handleCopyTasksFromMonth}
+      />
+
+      {/* Modal de Importação de Planilha */}
+      <ImportClosingSpreadsheetDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        projectId={selectedProjectId !== "all" ? selectedProjectId : undefined}
+        projectName={selectedProjectObj?.name}
+        selectedMonth={selectedMonth}
+        selectedYear={selectedYear}
+        onImportSuccess={handleImportSpreadsheetSuccess}
+      />
+
+      {/* Modal de Configuração de Dias Úteis & D0 */}
+      <WorkdayConfigDialog
+        open={configDialogOpen}
+        onOpenChange={setConfigDialogOpen}
+        useD0={useD0}
+        onToggleUseD0={setUseD0}
+        workdayOffsets={workdayOffsets}
+        onSaveOffsets={(newOffsets) => setCustomOffsets(newOffsets)}
       />
     </div>
   );

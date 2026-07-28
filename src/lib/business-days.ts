@@ -43,12 +43,18 @@ export function addBusinessDays(baseDate: Date, offsetDays: number): Date {
  * Converte uma string de intervalo tipo "D-5_D+5" para array de números:
  * [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5]
  */
-export function getWorkdayOffsets(range: string): number[] {
+export function getWorkdayOffsets(range: string, customOffsets?: number[]): number[] {
+  if (customOffsets && customOffsets.length > 0) {
+    return Array.from(new Set(customOffsets)).sort((a, b) => a - b);
+  }
+
   switch (range) {
     case "D-3_D+3":
       return [-3, -2, -1, 0, 1, 2, 3];
     case "D-2_D+4":
       return [-2, -1, 0, 1, 2, 3, 4];
+    case "D-10_D+10":
+      return [-10, -7, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 7, 10];
     case "D-5_D+5":
     default:
       return [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
@@ -58,15 +64,26 @@ export function getWorkdayOffsets(range: string): number[] {
 const WEEKDAYS_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
 /**
- * Retorna o rótulo do dia útil com a data de calendário real formatada:
- * Ex: "D-2 (29/07 - Qua)" ou "D0 (31/07 - Sex)"
+ * Retorna o rótulo do dia útil com a data de calendário real formatada.
+ * Se useD0 = true (padrão): "D-2", "D0 / WD0", "D+3"
+ * Se useD0 = false: "WD -2", "Dia Base", "WD +3" ou "Dia {date}"
  */
-export function formatWorkdayColumnHeader(offset: number, date: Date): {
+export function formatWorkdayColumnHeader(
+  offset: number,
+  date: Date,
+  useD0: boolean = true
+): {
   badge: string;
   formattedDate: string;
   weekdayName: string;
 } {
-  const badge = offset === 0 ? "D0 / WD0" : offset > 0 ? `D+${offset}` : `D${offset}`;
+  let badge: string;
+  if (useD0) {
+    badge = offset === 0 ? "D0 / WD0" : offset > 0 ? `D+${offset}` : `D${offset}`;
+  } else {
+    badge = offset === 0 ? "Dia Base" : offset > 0 ? `WD+${offset}` : `WD${offset}`;
+  }
+
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const weekdayName = WEEKDAYS_PT[date.getDay()];

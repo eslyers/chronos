@@ -7,7 +7,6 @@
 
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
-import AdmZip from "adm-zip";
 import type { Task } from "@/lib/context/DataContext";
 
 // ── Tipos ────────────────────────────────────────────────────
@@ -265,17 +264,18 @@ function findHeaderRow(rows: unknown[][]): number {
 // devolver um novo buffer pro SheetJS. Preserva o #REF!/#DIV/0! vis\u00edvel na preview.
 function fixOdsErrorTypes(buf: Buffer): Buffer {
   try {
-    const zip = new AdmZip(buf);
+    if (typeof window !== "undefined") return buf;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const AdmZipClass = require("adm-zip");
+    const zip = new AdmZipClass(buf);
     const entry = zip.getEntry("content.xml");
     if (!entry) return buf;
     let xml = entry.getData().toString("utf-8");
     const before = (xml.match(/office:value-type="error"/g) || []).length;
     if (before === 0) return buf;
-    // Troca o tipo "error" por "string" pra SheetJS ler como texto normal.
-    // O valor do erro (#REF!, #DIV/0!, etc) j\u00e1 est\u00e1 no <text:p> que o SheetJS captura como string-value.
     xml = xml.replace(/office:value-type="error"/g, 'office:value-type="string"');
     zip.updateFile("content.xml", Buffer.from(xml, "utf-8"));
-    console.log(`[excel-parser] ODS patch: ${before} c\u00e9lula(s) com valor-type="error" convertidas pra "string"`);
+    console.log(`[excel-parser] ODS patch: ${before} célula(s) com valor-type="error" convertidas pra "string"`);
     return zip.toBuffer();
   } catch (err) {
     console.warn("[excel-parser] Falha ao patchar ODS, usando buffer original:", err);
