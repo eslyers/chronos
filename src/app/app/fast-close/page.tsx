@@ -453,20 +453,20 @@ export default function FastCloseCockpitPage() {
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(Number(e.target.value))}
-              className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
             >
               {MONTH_NAMES.map((m, idx) => (
-                <option key={idx} value={idx + 1}>{m}</option>
+                <option key={idx} value={idx + 1} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">{m}</option>
               ))}
             </select>
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
             >
-              <option value={2025}>2025</option>
-              <option value={2026}>2026</option>
-              <option value={2027}>2027</option>
+              <option value={2025} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">2025</option>
+              <option value={2026} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">2026</option>
+              <option value={2027} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">2027</option>
             </select>
           </div>
 
@@ -476,11 +476,11 @@ export default function FastCloseCockpitPage() {
             <select
               value={offsetRange}
               onChange={(e) => setOffsetRange(e.target.value)}
-              className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
             >
-              <option value="D-5_D+5">Alcance: D-5 a D+5 (Completo)</option>
-              <option value="D-3_D+3">Alcance: D-3 a D+3 (Curto)</option>
-              <option value="D-2_D+4">Alcance: D-2 a D+4 (Padrão)</option>
+              <option value="D-5_D+5" className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">Alcance: D-5 a D+5 (Completo)</option>
+              <option value="D-3_D+3" className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">Alcance: D-3 a D+3 (Curto)</option>
+              <option value="D-2_D+4" className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">Alcance: D-2 a D+4 (Padrão)</option>
             </select>
           </div>
 

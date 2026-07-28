@@ -148,20 +148,20 @@ export function CopyClosingDialog({
                 <select
                   value={sourceMonth}
                   onChange={(e) => setSourceMonth(Number(e.target.value))}
-                  className="flex-1 h-9 rounded-lg border border-input bg-background px-3 text-xs font-semibold focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 h-9 rounded-lg border border-input bg-card text-foreground dark:bg-zinc-900 dark:text-zinc-100 px-3 text-xs font-semibold focus:ring-2 focus:ring-blue-500 [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100 cursor-pointer"
                 >
                   {MONTH_NAMES.map((m, idx) => (
-                    <option key={idx} value={idx + 1}>{m}</option>
+                    <option key={idx} value={idx + 1} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">{m}</option>
                   ))}
                 </select>
                 <select
                   value={sourceYear}
                   onChange={(e) => setSourceYear(Number(e.target.value))}
-                  className="w-20 h-9 rounded-lg border border-input bg-background px-2 text-xs font-semibold focus:ring-2 focus:ring-blue-500"
+                  className="w-20 h-9 rounded-lg border border-input bg-card text-foreground dark:bg-zinc-900 dark:text-zinc-100 px-2 text-xs font-semibold focus:ring-2 focus:ring-blue-500 [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100 cursor-pointer"
                 >
-                  <option value={2025}>2025</option>
-                  <option value={2026}>2026</option>
-                  <option value={2027}>2027</option>
+                  <option value={2025} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">2025</option>
+                  <option value={2026} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">2026</option>
+                  <option value={2027} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">2027</option>
                 </select>
               </div>
             </div>

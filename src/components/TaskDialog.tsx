@@ -73,6 +73,13 @@ const PRIORITIES = [
   },
 ] as const;
 
+const DEFAULT_KANBAN_STAGES = [
+  { id: "todo", name: "A Fazer" },
+  { id: "in_progress", name: "Em Andamento" },
+  { id: "review", name: "Em Revisão" },
+  { id: "done", name: "Concluído" },
+];
+
 export function TaskDialog({
   open,
   onOpenChange,
@@ -93,7 +100,8 @@ export function TaskDialog({
     addTaskAttachment,
     deleteTaskAttachment,
   } = useData();
-  const stages = projectId ? getStagesByProject(projectId) : [];
+  const projectStages = projectId ? getStagesByProject(projectId) : [];
+  const stages = projectStages.length > 0 ? projectStages : DEFAULT_KANBAN_STAGES;
   const projectTasks = projectId ? getTasksByProject(projectId) : [];
   const isEdit = !!task;
 
@@ -779,10 +787,10 @@ export function TaskDialog({
                 id="task-stage"
                 value={stageId}
                 onChange={(e) => setStageId(e.target.value)}
-                className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all"
+                className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-card text-foreground dark:bg-zinc-900 dark:text-zinc-100 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all cursor-pointer"
               >
                 {stages.map((s) => (
-                  <option key={s.id} value={s.id}>
+                  <option key={s.id} value={s.id} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">
                     {s.name}
                   </option>
                 ))}
