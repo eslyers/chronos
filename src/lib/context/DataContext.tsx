@@ -27,6 +27,7 @@ export type Stage = {
   color: string;
   position: number;
   is_done: boolean;
+  wip_limit?: number | null;
 };
 
 export type Task = {
@@ -40,6 +41,7 @@ export type Task = {
   progress: number;
   start_date: string | null; // ISO
   due_date: string | null; // ISO
+  estimated_hours?: number | null;
   assignee_id: string | null;
   assignee_name: string | null; // texto original quando assignee não é membro
   assignee_status: "pending" | "invited" | null;

@@ -392,7 +392,7 @@ export function TaskDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6"
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-6"
       style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onOpenChange(false);
@@ -402,7 +402,7 @@ export function TaskDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="task-dialog-title"
-        className="relative w-full max-w-lg bg-card border border-border rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-fadeIn"
+        className="relative w-full sm:max-w-lg bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden h-[92vh] sm:h-auto max-h-[92vh] sm:max-h-[90vh] flex flex-col animate-fadeIn"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header estilo executivo */}
@@ -435,7 +435,7 @@ export function TaskDialog({
 
         {/* Tab Navigation (Apenas em Edição) */}
         {isEdit && (
-          <div className="flex items-center gap-2 px-6 pt-2 border-b border-border bg-muted/20 shrink-0">
+          <div className="flex items-center gap-2 px-4 sm:px-6 pt-2 border-b border-border bg-muted/20 shrink-0 overflow-x-auto justify-start flex-nowrap scrollbar-none">
             <button
               type="button"
               onClick={() => setActiveTab("details")}

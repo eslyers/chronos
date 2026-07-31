@@ -26,8 +26,10 @@ import {
   ArrowLeft,
   ShieldCheck,
   AlertCircle,
+  AlertTriangle,
   GripVertical,
   CornerDownRight,
+  BarChart3,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +40,7 @@ import { TaskAssignee } from "@/components/TaskAssignee";
 import { TaskDialog } from "@/components/TaskDialog";
 import { TaskIndicators } from "@/components/TaskIndicators";
 import { ImportProjectButton } from "@/components/ImportProjectButton";
+import { ProjectAnalyticsDialog } from "@/components/ProjectAnalyticsDialog";
 
 type TaskLike = {
   id: string;
@@ -59,6 +62,7 @@ type StageLike = {
   position: number;
   is_done: boolean;
   project_id: string;
+  wip_limit?: number | null;
 };
 
 const PRIORITY_COLORS = {
@@ -229,32 +233,69 @@ function StageColumn({
     data: { type: "stage", stageId: stage.id },
   });
 
+  const wipLimit = stage.wip_limit ?? null;
+  const hasWipLimit = wipLimit !== null && wipLimit > 0;
+  const isWipExceeded = hasWipLimit && tasks.length > wipLimit;
+  const isWipNear = hasWipLimit && tasks.length === wipLimit;
+
   return (
     <div
       ref={setNodeRef}
-      className={`flex-shrink-0 w-[85vw] sm:w-80 flex flex-col bg-muted/30 rounded-2xl border border-border/80 snap-center transition-all ${
+      className={`flex-shrink-0 w-[85vw] sm:w-80 flex flex-col rounded-2xl border snap-center transition-all ${
+        isWipExceeded
+          ? "bg-red-500/5 border-red-500/80 ring-1 ring-red-500/20"
+          : isWipNear
+          ? "bg-amber-500/5 border-amber-500/60"
+          : "bg-muted/30 border-border/80"
+      } ${
         isOver ? "bg-blue-500/10 border-blue-500 ring-2 ring-blue-500/30" : ""
       }`}
     >
       {/* Column Header */}
       <div
-        className="p-3.5 border-b border-border/60 flex items-center justify-between bg-card/60 rounded-t-2xl backdrop-blur-sm"
+        className={`p-3.5 border-b flex items-center justify-between rounded-t-2xl backdrop-blur-sm ${
+          isWipExceeded
+            ? "bg-red-500/15 border-red-500/30"
+            : isWipNear
+            ? "bg-amber-500/15 border-amber-500/30"
+            : "bg-card/60 border-border/60"
+        }`}
         style={{
-          borderTopColor: stage.color || "#3b82f6",
+          borderTopColor: isWipExceeded ? "#ef4444" : isWipNear ? "#f59e0b" : (stage.color || "#3b82f6"),
           borderTopWidth: 3,
         }}
       >
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
           <div
-            className="w-3 h-3 rounded-full shadow-sm"
+            className="w-3 h-3 rounded-full shadow-sm shrink-0"
             style={{ backgroundColor: stage.color || "#3b82f6" }}
           />
-          <h3 className="font-bold text-sm text-foreground">{stage.name}</h3>
+          <h3 className="font-bold text-sm text-foreground truncate">{stage.name}</h3>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Badge variant="outline" className="text-xs font-mono font-bold bg-background">
-            {tasks.length}
-          </Badge>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {isWipExceeded ? (
+            <Badge
+              variant="outline"
+              className="text-[11px] font-mono font-bold bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/40 animate-pulse px-2 py-0.5 inline-flex items-center gap-1"
+              title={`Limite WIP excedido: ${tasks.length} tarefas para um limite de ${wipLimit}`}
+            >
+              <AlertTriangle className="h-3 w-3 shrink-0 text-red-500" />
+              <span>{tasks.length}/{wipLimit}</span>
+            </Badge>
+          ) : isWipNear ? (
+            <Badge
+              variant="outline"
+              className="text-[11px] font-mono font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40 px-2 py-0.5 inline-flex items-center gap-1"
+              title={`No limite WIP: ${tasks.length} de ${wipLimit}`}
+            >
+              <AlertCircle className="h-3 w-3 shrink-0 text-amber-500" />
+              <span>{tasks.length}/{wipLimit}</span>
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-xs font-mono font-bold bg-background">
+              {hasWipLimit ? `${tasks.length}/${wipLimit}` : tasks.length}
+            </Badge>
+          )}
           <Button
             size="icon"
             variant="ghost"
@@ -308,6 +349,7 @@ export default function KanbanPage() {
   } = useData();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [loadingProject, setLoadingProject] = useState(false);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
 
   useEffect(() => {
     async function fetchDetails() {
@@ -322,6 +364,7 @@ export default function KanbanPage() {
 
   const [activeTask, setActiveTask] = useState<TaskLike | null>(null);
   const [moveError, setMoveError] = useState<string | null>(null);
+  const [wipWarning, setWipWarning] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [defaultStageId, setDefaultStageId] = useState<string | null>(null);
 
@@ -342,6 +385,7 @@ export default function KanbanPage() {
 
   const handleDragStart = (event: DragStartEvent) => {
     setMoveError(null);
+    setWipWarning(null);
     const task = projectTasks.find((t) => t.id === event.active.id);
     if (task) setActiveTask(task);
   };
@@ -368,6 +412,17 @@ export default function KanbanPage() {
 
     const movedTask = projectTasks.find((t) => t.id === taskId);
     if (!movedTask || movedTask.stage_id === targetStageId) return;
+
+    // Verificar se o estágio destino possui limite WIP excedido
+    const targetStage = stages.find((s) => s.id === targetStageId);
+    if (targetStage && targetStage.wip_limit && targetStage.wip_limit > 0) {
+      const currentTasksInTarget = projectTasks.filter((t) => t.stage_id === targetStageId).length;
+      if (currentTasksInTarget >= targetStage.wip_limit) {
+        setWipWarning(
+          `⚠️ Atenção: O estágio "${targetStage.name}" ultrapassará o limite WIP de ${targetStage.wip_limit} tarefas (${currentTasksInTarget + 1}/${targetStage.wip_limit}).`
+        );
+      }
+    }
 
     try {
       await updateTask(taskId, { stage_id: targetStageId });
@@ -516,9 +571,23 @@ export default function KanbanPage() {
     );
   }
 
-  const projectStages = stages
-    .filter((s) => s.project_id === project.id)
-    .sort((a, b) => a.position - b.position);
+  const projectStages = useMemo(() => {
+    return stages
+      .filter((s) => s.project_id === project.id)
+      .sort((a, b) => a.position - b.position);
+  }, [stages, project.id]);
+
+  const [activeMobileStageId, setActiveMobileStageId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (projectStages.length > 0) {
+      if (!activeMobileStageId || !projectStages.some((s) => s.id === activeMobileStageId)) {
+        setActiveMobileStageId(projectStages[0].id);
+      }
+    } else {
+      setActiveMobileStageId(null);
+    }
+  }, [projectStages, activeMobileStageId]);
 
   return (
     <div className="space-y-8 animate-fadeIn pb-12">
@@ -542,6 +611,15 @@ export default function KanbanPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAnalyticsOpen(true)}
+              className="h-10 px-4 text-xs font-semibold border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/5 hover:bg-blue-500/10 gap-2"
+            >
+              <BarChart3 className="h-4 w-4 text-blue-500" />
+              <span>Analytics & Desempenho</span>
+            </Button>
             <ImportProjectButton mode="single" project={project} />
             {projectStages.map((stage) => (
               <Button
@@ -562,6 +640,22 @@ export default function KanbanPage() {
           </div>
         </div>
       </div>
+
+      {/* WIP Warning Banner */}
+      {wipWarning && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-600 dark:text-amber-400 font-semibold flex items-center justify-between animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+            <span>{wipWarning}</span>
+          </div>
+          <button
+            onClick={() => setWipWarning(null)}
+            className="text-xs underline hover:text-foreground ml-4 shrink-0"
+          >
+            Entendido
+          </button>
+        </div>
+      )}
 
       {/* Error Banner */}
       {moveError && (
@@ -596,14 +690,74 @@ export default function KanbanPage() {
           onDragEnd={handleDragEnd}
           onDragCancel={() => setActiveTask(null)}
         >
-          <div className="flex gap-4 overflow-x-auto pb-6 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory">
+          {/* Mobile View: Single Column with Segmented Tab Control */}
+          <div className="block sm:hidden space-y-4">
+            <div className="flex gap-1.5 overflow-x-auto pb-2 border-b border-border/40 scrollbar-none">
+              {projectStages.map((stage) => {
+                const isActive = activeMobileStageId === stage.id;
+                const stageTasksCount = projectTasks.filter((t) => t.stage_id === stage.id).length;
+                return (
+                  <button
+                    key={`tab-${stage.id}`}
+                    onClick={() => setActiveMobileStageId(stage.id)}
+                    className={`px-3.5 py-2 text-xs font-bold rounded-lg border whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 ${
+                      isActive
+                        ? "bg-blue-600 border-blue-600 text-white shadow-sm font-semibold"
+                        : "bg-card border-border hover:bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: stage.color || "#3b82f6" }}
+                    />
+                    <span>{stage.name}</span>
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] font-mono px-1.5 py-0 font-bold ${
+                        isActive
+                          ? "bg-blue-700/50 text-white border-blue-400/40"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {stageTasksCount}
+                    </Badge>
+                  </button>
+                );
+              })}
+            </div>
+
+            {projectStages
+              .filter((stage) => stage.id === activeMobileStageId)
+              .map((stage) => {
+                const stageTasks = projectTasks
+                  .filter((t) => t.stage_id === stage.id)
+                  .sort((a, b) => a.position - b.position);
+                return (
+                  <StageColumn
+                    key={`mobile-${stage.id}`}
+                    stage={stage}
+                    tasks={stageTasks}
+                    projectId={project.id}
+                    isDone={stage.is_done}
+                    router={router}
+                    onAddTask={() => {
+                      setDefaultStageId(stage.id);
+                      setCreateOpen(true);
+                    }}
+                  />
+                );
+              })}
+          </div>
+
+          {/* Desktop View: Multi-column horizontal scroll (Original Layout) */}
+          <div className="hidden sm:flex gap-4 overflow-x-auto pb-6 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory">
             {projectStages.map((stage) => {
               const stageTasks = projectTasks
                 .filter((t) => t.stage_id === stage.id)
                 .sort((a, b) => a.position - b.position);
               return (
                 <StageColumn
-                  key={stage.id}
+                  key={`desktop-${stage.id}`}
                   stage={stage}
                   tasks={stageTasks}
                   projectId={project.id}
@@ -639,7 +793,7 @@ export default function KanbanPage() {
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
           <span>
-            💡 <strong>Interatividade Drag-and-Drop:</strong> Arraste os cards entre as colunas para atualizar a etapa. As transições são gravadas na trilha de auditoria e notificam os membros do projeto em tempo real.
+            💡 <strong>Interatividade Drag-and-Drop:</strong> Arraste os cards entre as colunas para atualizar a etapa. Limites WIP destacam gargalos de execução automaticamente.
           </span>
         </div>
       </Card>
@@ -652,6 +806,12 @@ export default function KanbanPage() {
         }}
         projectId={project.id}
         defaultStageId={defaultStageId}
+      />
+
+      <ProjectAnalyticsDialog
+        open={analyticsOpen}
+        onOpenChange={setAnalyticsOpen}
+        projectId={project.id}
       />
     </div>
   );

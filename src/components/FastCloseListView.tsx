@@ -60,13 +60,13 @@ export function FastCloseListView({
           >
             {/* Header do Dia */}
             <div
-              className={`p-3.5 px-5 border-b border-border/60 flex items-center justify-between backdrop-blur-sm ${
+              className={`p-3.5 px-4 sm:px-5 border-b border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-2 backdrop-blur-sm ${
                 isD0 ? "bg-pink-500/10 border-b-pink-500/30" : "bg-muted/30"
               }`}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-start sm:items-center gap-2.5 flex-wrap">
                 <Badge
-                  className={`text-xs font-mono font-bold px-2.5 py-0.5 border-0 ${
+                  className={`text-xs font-mono font-bold px-2 py-0.5 border-0 ${
                     isD0
                       ? "bg-pink-600 text-white shadow-md shadow-pink-500/20"
                       : offset < 0
@@ -77,7 +77,7 @@ export function FastCloseListView({
                   {headerInfo.badge}
                 </Badge>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                   <span className="text-sm font-bold text-foreground">
                     {headerInfo.formattedDate} — {headerInfo.weekdayName}
                   </span>
@@ -90,7 +90,7 @@ export function FastCloseListView({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto border-t sm:border-t-0 pt-2.5 sm:pt-0 border-border/20">
                 <Badge variant="outline" className="text-xs font-mono font-bold bg-background">
                   {tasks.length} rotinas
                 </Badge>
@@ -100,7 +100,7 @@ export function FastCloseListView({
                   onClick={() => onAddTaskToOffset(columnDate)}
                   className="h-8 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
                 >
-                  + Nova Rotina em {headerInfo.badge}
+                  + Nova Rotina
                 </Button>
               </div>
             </div>
@@ -148,7 +148,7 @@ export function FastCloseListView({
                     </div>
 
                     {/* Lado Direito: Metadata & Ações */}
-                    <div className="flex items-center gap-4 shrink-0 justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-border/30">
+                    <div className="flex flex-wrap items-center gap-3 sm:gap-4 shrink-0 justify-between sm:justify-end border-t sm:border-t-0 pt-2.5 sm:pt-0 border-border/20 w-full sm:w-auto">
                       {/* Prioridade */}
                       <Badge
                         variant="outline"

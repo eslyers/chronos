@@ -2,7 +2,7 @@
 
 import { useState, use, useEffect, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Calendar, MoreVertical, CornerDownRight, FolderTree, FileText } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, MoreVertical, CornerDownRight, FolderTree, FileText, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import { ImportProjectButton } from "@/components/ImportProjectButton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ProjectStatusReportPDF } from "@/components/ProjectStatusReportPDF";
 import { TaskIndicators } from "@/components/TaskIndicators";
+import { ProjectAnalyticsDialog } from "@/components/ProjectAnalyticsDialog";
 
 const PRIORITY_COLORS = {
   low: { bg: "bg-slate-500/15", text: "text-slate-600 dark:text-slate-400", label: "Baixa" },
@@ -60,6 +61,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [deleteTaskTarget, setDeleteTaskTarget] = useState<Task | null>(null);
   const [showReportPDF, setShowReportPDF] = useState(false);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const processedTaskIdRef = useRef<string | null>(null);
 
   // Deep-link: se URL tem ?task=<id>, abre o dialog da task e scrolla ate ela sem travar
@@ -178,9 +180,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </div>
           <div className="flex flex-row items-center gap-3 shrink-0 flex-wrap">
             <Button
-              onClick={() => setShowReportPDF(true)}
+              onClick={() => setAnalyticsOpen(true)}
               variant="outline"
               className="h-10 px-3.5 text-xs font-bold border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 gap-2"
+            >
+              <BarChart3 className="h-4 w-4 text-blue-500" />
+              Analytics & Desempenho
+            </Button>
+            <Button
+              onClick={() => setShowReportPDF(true)}
+              variant="outline"
+              className="h-10 px-3.5 text-xs font-bold border-border bg-background hover:bg-muted gap-2"
             >
               <FileText className="h-4 w-4" />
               Gerar Status Report (PDF)
@@ -428,6 +438,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           project={project}
           tasks={allTasks}
           stages={stages}
+        />
+      )}
+
+      {project && (
+        <ProjectAnalyticsDialog
+          open={analyticsOpen}
+          onOpenChange={setAnalyticsOpen}
+          projectId={project.id}
         />
       )}
     </div>
