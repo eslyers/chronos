@@ -368,6 +368,25 @@ export default function KanbanPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [defaultStageId, setDefaultStageId] = useState<string | null>(null);
 
+  const projectStages = useMemo(() => {
+    if (!selectedProjectId) return [];
+    return stages
+      .filter((s) => s.project_id === selectedProjectId)
+      .sort((a, b) => a.position - b.position);
+  }, [stages, selectedProjectId]);
+
+  const [activeMobileStageId, setActiveMobileStageId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (projectStages.length > 0) {
+      if (!activeMobileStageId || !projectStages.some((s) => s.id === activeMobileStageId)) {
+        setActiveMobileStageId(projectStages[0].id);
+      }
+    } else {
+      setActiveMobileStageId(null);
+    }
+  }, [projectStages, activeMobileStageId]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 5 },
@@ -571,23 +590,7 @@ export default function KanbanPage() {
     );
   }
 
-  const projectStages = useMemo(() => {
-    return stages
-      .filter((s) => s.project_id === project.id)
-      .sort((a, b) => a.position - b.position);
-  }, [stages, project.id]);
 
-  const [activeMobileStageId, setActiveMobileStageId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (projectStages.length > 0) {
-      if (!activeMobileStageId || !projectStages.some((s) => s.id === activeMobileStageId)) {
-        setActiveMobileStageId(projectStages[0].id);
-      }
-    } else {
-      setActiveMobileStageId(null);
-    }
-  }, [projectStages, activeMobileStageId]);
 
   return (
     <div className="space-y-8 animate-fadeIn pb-12">

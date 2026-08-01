@@ -37,7 +37,7 @@ import {
   Layers,
   Hourglass,
 } from "lucide-react";
-import { useData, type Task, type Stage, type Project } from "@/lib/context/DataContext";
+import { useData, type Stage } from "@/lib/context/DataContext";
 
 interface ProjectAnalyticsDialogProps {
   open: boolean;
@@ -200,7 +200,7 @@ export function ProjectAnalyticsDialog({
     });
 
     return Object.entries(counts)
-      .filter(([_, count]) => count > 0)
+      .filter(([, count]) => count > 0)
       .map(([key, count]) => ({
         name: PRIORITY_LABELS[key] || key,
         val: count,
