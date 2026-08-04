@@ -32,6 +32,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     getTasksByStage,
     getTasksByProject,
     moveTask,
+    updateTask,
     deleteTask,
     loading,
     loadProjectDetails,
@@ -133,11 +134,46 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     e.dataTransfer.dropEffect = "move";
   }
 
-  async function handleDrop(e: React.DragEvent, stageId: string) {
+  async function reorderTasksInStage(targetStageId: string, draggedId: string, targetTaskId?: string) {
+    const stageTasks = getTasksByStage(targetStageId).sort((a, b) => a.position - b.position);
+    const filtered = stageTasks.filter((t) => t.id !== draggedId);
+
+    let targetIndex = filtered.length;
+    if (targetTaskId) {
+      const foundIdx = filtered.findIndex((t) => t.id === targetTaskId);
+      if (foundIdx !== -1) {
+        targetIndex = foundIdx;
+      }
+    }
+
+    const draggedTaskObj = allTasks.find((t) => t.id === draggedId);
+    if (!draggedTaskObj) return;
+
+    filtered.splice(targetIndex, 0, draggedTaskObj);
+
+    for (let i = 0; i < filtered.length; i++) {
+      const task = filtered[i];
+      if (task.id === draggedId) {
+        await moveTask(draggedId, targetStageId, i);
+      } else if (task.position !== i) {
+        await updateTask(task.id, { position: i });
+      }
+    }
+  }
+
+  async function handleDropOnStage(e: React.DragEvent, stageId: string) {
     e.preventDefault();
     if (!draggedTaskId) return;
-    const stageTasks = getTasksByStage(stageId);
-    await moveTask(draggedTaskId, stageId, stageTasks.length);
+    await reorderTasksInStage(stageId, draggedTaskId);
+    setDraggedTaskId(null);
+  }
+
+  async function handleDropOnTask(e: React.DragEvent, targetTask: Task) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!draggedTaskId || draggedTaskId === targetTask.id) return;
+    if (!targetTask.stage_id) return;
+    await reorderTasksInStage(targetTask.stage_id, draggedTaskId, targetTask.id);
     setDraggedTaskId(null);
   }
 
@@ -245,7 +281,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               <div
                 key={stage.id}
                 onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, stage.id)}
+                onDrop={(e) => handleDropOnStage(e, stage.id)}
                 className="w-80 flex-shrink-0"
               >
                 <div
@@ -281,6 +317,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                         id={`task-${task.id}`}
                         draggable
                         onDragStart={(e) => handleDragStart(e, task.id)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDropOnTask(e, task)}
                         onClick={() => openEditTask(task)}
                         className="bg-card rounded-md p-3 border hover:border-primary cursor-pointer transition-all hover:shadow-md group"
                       >

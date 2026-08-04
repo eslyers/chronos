@@ -617,7 +617,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const moveTask = useCallback(async (id: string, stageId: string, position: number) => {
     if (getDataLayer() === "supabase") {
-      await dataProvider.moveTask(id, stageId);
+      await dataProvider.moveTask(id, stageId, position);
     }
     setState((prev) => ({
       ...prev,

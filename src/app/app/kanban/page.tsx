@@ -110,11 +110,22 @@ function TaskCard({
   router: ReturnType<typeof useRouter>;
   isOverlay?: boolean;
 }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef: setDraggableRef, isDragging } = useDraggable({
     id: task.id,
     data: { type: "task", stageId: task.stage_id, taskId: task.id },
     disabled: isOverlay,
   });
+
+  const { setNodeRef: setDroppableRef } = useDroppable({
+    id: `droppable-task-${task.id}`,
+    data: { type: "task", stageId: task.stage_id, taskId: task.id },
+    disabled: isOverlay,
+  });
+
+  const setNodeRef = (node: HTMLElement | null) => {
+    setDraggableRef(node);
+    setDroppableRef(node);
+  };
 
   const days = daysUntil(task.due_date);
   const overdue = days !== null && days < 0 && !isDone;
@@ -343,6 +354,7 @@ export default function KanbanPage() {
     stages,
     tasks,
     loading,
+    moveTask,
     updateTask,
     loadProjectDetails,
     isProjectLoaded,
@@ -417,7 +429,7 @@ export default function KanbanPage() {
     const taskId = active.id as string;
     const overData = over.data.current as
       | { type: "stage"; stageId: string }
-      | { type: "task"; stageId: string }
+      | { type: "task"; stageId: string; taskId: string }
       | undefined;
 
     const targetStageId =
@@ -430,21 +442,45 @@ export default function KanbanPage() {
     if (!targetStageId) return;
 
     const movedTask = projectTasks.find((t) => t.id === taskId);
-    if (!movedTask || movedTask.stage_id === targetStageId) return;
+    if (!movedTask) return;
+
+    const targetTaskId = overData?.type === "task" ? overData.taskId : undefined;
 
     // Verificar se o estágio destino possui limite WIP excedido
-    const targetStage = stages.find((s) => s.id === targetStageId);
-    if (targetStage && targetStage.wip_limit && targetStage.wip_limit > 0) {
-      const currentTasksInTarget = projectTasks.filter((t) => t.stage_id === targetStageId).length;
-      if (currentTasksInTarget >= targetStage.wip_limit) {
-        setWipWarning(
-          `⚠️ Atenção: O estágio "${targetStage.name}" ultrapassará o limite WIP de ${targetStage.wip_limit} tarefas (${currentTasksInTarget + 1}/${targetStage.wip_limit}).`
-        );
+    if (movedTask.stage_id !== targetStageId) {
+      const targetStage = stages.find((s) => s.id === targetStageId);
+      if (targetStage && targetStage.wip_limit && targetStage.wip_limit > 0) {
+        const currentTasksInTarget = projectTasks.filter((t) => t.stage_id === targetStageId).length;
+        if (currentTasksInTarget >= targetStage.wip_limit) {
+          setWipWarning(
+            `⚠️ Atenção: O estágio "${targetStage.name}" ultrapassará o limite WIP de ${targetStage.wip_limit} tarefas (${currentTasksInTarget + 1}/${targetStage.wip_limit}).`
+          );
+        }
       }
     }
 
     try {
-      await updateTask(taskId, { stage_id: targetStageId });
+      const targetStageTasks = projectTasks
+        .filter((t) => t.stage_id === targetStageId && t.id !== taskId)
+        .sort((a, b) => a.position - b.position);
+
+      let targetIndex = targetStageTasks.length;
+      if (targetTaskId && targetTaskId !== taskId) {
+        const idx = targetStageTasks.findIndex((t) => t.id === targetTaskId);
+        if (idx !== -1) targetIndex = idx;
+      }
+
+      const updatedList = [...targetStageTasks];
+      updatedList.splice(targetIndex, 0, movedTask);
+
+      for (let i = 0; i < updatedList.length; i++) {
+        const t = updatedList[i];
+        if (t.id === taskId) {
+          await moveTask(taskId, targetStageId, i);
+        } else if (t.position !== i) {
+          await updateTask(t.id, { position: i });
+        }
+      }
     } catch (err) {
       console.error("[Kanban] move error:", err);
       setMoveError(

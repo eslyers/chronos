@@ -322,9 +322,12 @@ export async function updateTask(id: string, patch: Partial<Task>): Promise<void
   if (error) console.error("[supabase-data] updateTask", error);
 }
 
-export async function moveTaskToStage(taskId: string, stageId: string): Promise<void> {
+export async function moveTaskToStage(taskId: string, stageId: string, position?: number): Promise<void> {
   const supabase = client();
   const payload: any = { stage_id: stageId };
+  if (typeof position === "number") {
+    payload.position = position;
+  }
   const { error } = await supabase.from("tasks").update(payload).eq("id", taskId);
   if (error) console.error("[supabase-data] moveTaskToStage", error);
 }
