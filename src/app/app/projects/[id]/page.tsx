@@ -16,6 +16,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ProjectStatusReportPDF } from "@/components/ProjectStatusReportPDF";
 import { TaskIndicators } from "@/components/TaskIndicators";
 import { ProjectAnalyticsDialog } from "@/components/ProjectAnalyticsDialog";
+import { formatDateBR, daysUntil } from "@/lib/utils";
 
 const PRIORITY_COLORS = {
   low: { bg: "bg-slate-500/15", text: "text-slate-600 dark:text-slate-400", label: "Baixa" },
@@ -177,15 +178,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     setDraggedTaskId(null);
   }
 
-  function formatDate(iso: string | null): string {
-    if (!iso) return "";
-    return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
-  }
-
-  function daysUntil(iso: string | null): number | null {
-    if (!iso) return null;
-    return Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
-  }
+  const formatDate = formatDateBR;
 
   const completedTasks = allTasks.filter((t) => t.status === "done").length;
   const projectProgress = allTasks.length > 0 ? Math.round((completedTasks / allTasks.length) * 100) : 0;

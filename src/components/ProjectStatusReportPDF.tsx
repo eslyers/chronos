@@ -28,10 +28,12 @@ interface ProjectStatusReportPDFProps {
   stages: Stage[];
 }
 
+import { parseLocalDate } from "@/lib/utils";
+
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "N/A";
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("pt-BR");
+  const date = parseLocalDate(dateStr);
+  return date ? date.toLocaleDateString("pt-BR") : "N/A";
 }
 
 export function ProjectStatusReportPDF({

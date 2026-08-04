@@ -86,16 +86,7 @@ const PRIORITY_FLAG_COLORS = {
   low: "#94a3b8",
 } as const;
 
-function formatDate(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
-}
-
-function daysUntil(iso: string | null): number | null {
-  if (!iso) return null;
-  return Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
-}
+import { formatDateBR as formatDate, daysUntil } from "@/lib/utils";
 
 function TaskCard({
   task,

@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { useGlobal } from "@/lib/context/GlobalContext";
 import { useData, type Project } from "@/lib/context/DataContext";
 import { createSPAClient } from "@/lib/supabase/client";
+import { formatDateBR, daysUntil as getDaysUntilDiff } from "@/lib/utils";
 
 type UpcomingTask = {
   id: string;
@@ -155,14 +156,11 @@ export default function DashboardPage() {
   const healthText =
     healthScore >= 80 ? "Excelente" : healthScore >= 50 ? "Estável" : "Atenção Crítica";
 
-  function formatDate(iso: string | null) {
-    if (!iso) return "";
-    return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
-  }
+  const formatDate = formatDateBR;
 
   function daysUntil(iso: string | null) {
-    if (!iso) return null;
-    const days = Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
+    const days = getDaysUntilDiff(iso);
+    if (days === null) return null;
     if (days < 0) return "Atrasado";
     if (days === 0) return "Vence Hoje";
     if (days === 1) return "Amanhã";
