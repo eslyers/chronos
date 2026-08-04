@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useMemo } from "react";
 import {
   FileText,
   Calendar,
@@ -15,6 +15,9 @@ import {
   PieChart,
   BarChart3,
   Layers,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +46,115 @@ export function ProjectStatusReportPDF({
   tasks,
   stages,
 }: ProjectStatusReportPDFProps) {
+  type SortField = "title" | "assignee" | "priority" | "start_date" | "due_date" | "progress";
+  type SortDirection = "asc" | "desc";
+
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else {
+        setSortField(null);
+        setSortDirection("asc");
+      }
+    } else {
+      setSortField(field);
+      setSortDirection(field === "priority" || field === "progress" ? "desc" : "asc");
+    }
+  };
+
+  const sortedTasks = useMemo(() => {
+    if (!sortField) return tasks;
+
+    const weights: Record<string, number> = {
+      critical: 4,
+      high: 3,
+      medium: 2,
+      low: 1,
+    };
+
+    return [...tasks].sort((a, b) => {
+      let result = 0;
+
+      switch (sortField) {
+        case "title": {
+          const nameA = a.title || "";
+          const nameB = b.title || "";
+          result = nameA.localeCompare(nameB, "pt-BR");
+          break;
+        }
+        case "assignee": {
+          const nameA = a.assignee_name || "zzz";
+          const nameB = b.assignee_name || "zzz";
+          result = nameA.localeCompare(nameB, "pt-BR");
+          break;
+        }
+        case "priority": {
+          const weightA = weights[a.priority] || 0;
+          const weightB = weights[b.priority] || 0;
+          result = weightA - weightB;
+          break;
+        }
+        case "start_date": {
+          const timeA = a.start_date ? new Date(a.start_date).getTime() : 0;
+          const timeB = b.start_date ? new Date(b.start_date).getTime() : 0;
+          result = timeA - timeB;
+          break;
+        }
+        case "due_date": {
+          const timeA = a.due_date ? new Date(a.due_date).getTime() : 0;
+          const timeB = b.due_date ? new Date(b.due_date).getTime() : 0;
+          result = timeA - timeB;
+          break;
+        }
+        case "progress": {
+          result = (a.progress || 0) - (b.progress || 0);
+          break;
+        }
+      }
+
+      return sortDirection === "asc" ? result : -result;
+    });
+  }, [tasks, sortField, sortDirection]);
+
+  const renderSortHeader = (
+    label: string,
+    field: SortField,
+    align: "left" | "center" = "left"
+  ) => {
+    const isSorted = sortField === field;
+    return (
+      <th
+        onClick={() => handleSort(field)}
+        className={`py-2.5 px-3 cursor-pointer select-none hover:bg-muted/60 transition-colors ${
+          align === "center" ? "text-center" : "text-left"
+        }`}
+      >
+        <div
+          className={`inline-flex items-center gap-1 ${
+            align === "center" ? "justify-center" : "justify-start"
+          }`}
+        >
+          <span>{label}</span>
+          <span className="print:hidden">
+            {isSorted ? (
+              sortDirection === "asc" ? (
+                <ArrowUp className="h-3 w-3 text-blue-500" />
+              ) : (
+                <ArrowDown className="h-3 w-3 text-blue-500" />
+              )
+            ) : (
+              <ArrowUpDown className="h-3 w-3 text-muted-foreground/40 hover:text-muted-foreground transition-colors" />
+            )}
+          </span>
+        </div>
+      </th>
+    );
+  };
+
   if (!open) return null;
 
   const totalTasks = tasks.length;
@@ -106,7 +218,7 @@ export function ProjectStatusReportPDF({
         </div>
 
         {/* ÁREA DO DOCUMENTO IMPRESSO (PDF BODY) */}
-        <div className="p-8 sm:p-12 overflow-y-auto space-y-8 print:p-0 print:overflow-visible print:bg-white print:text-black">
+        <div id="printable-report-area" className="p-8 sm:p-12 overflow-y-auto space-y-8 print:p-0 print:overflow-visible print:bg-white print:text-black">
           {/* Header Institucional */}
           <div className="border-b-2 border-primary/20 pb-6 flex items-start justify-between gap-4">
             <div>
@@ -355,16 +467,16 @@ export function ProjectStatusReportPDF({
             <table className="w-full text-xs text-left border-collapse">
               <thead>
                 <tr className="border-b border-border/80 bg-muted/40 font-bold uppercase text-[10px] text-muted-foreground">
-                  <th className="py-2.5 px-3">Atividade / Tarefa</th>
-                  <th className="py-2.5 px-3">Responsável</th>
-                  <th className="py-2.5 px-3 text-center">Prioridade</th>
-                  <th className="py-2.5 px-3 text-center">Início</th>
-                  <th className="py-2.5 px-3 text-center">Término</th>
-                  <th className="py-2.5 px-3 text-center">Progresso</th>
+                  {renderSortHeader("Atividade / Tarefa", "title", "left")}
+                  {renderSortHeader("Responsável", "assignee", "left")}
+                  {renderSortHeader("Prioridade", "priority", "center")}
+                  {renderSortHeader("Início", "start_date", "center")}
+                  {renderSortHeader("Término", "due_date", "center")}
+                  {renderSortHeader("Progresso", "progress", "center")}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
-                {tasks.map((task) => {
+                {sortedTasks.map((task) => {
                   const isDone = task.status === "done";
                   const isOverdue =
                     !isDone &&

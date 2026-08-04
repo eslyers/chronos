@@ -279,6 +279,9 @@ export async function createTask(input: {
   due_date?: string | null;
   start_date?: string | null;
   parent_task_id?: string | null;
+  assignee_id?: string | null;
+  assignee_name?: string | null;
+  assignee_status?: Task["assignee_status"];
   created_by: string;
 }): Promise<Task | null> {
   const supabase = client();
@@ -294,6 +297,9 @@ export async function createTask(input: {
       due_date: input.due_date ?? null,
       start_date: input.start_date ?? null,
       parent_task_id: input.parent_task_id ?? null,
+      assignee_id: input.assignee_id ?? null,
+      assignee_name: input.assignee_name ?? null,
+      assignee_status: input.assignee_status ?? null,
       created_by: input.created_by,
     } as any).select()
     .single();
@@ -306,18 +312,20 @@ export async function createTask(input: {
 
 export async function updateTask(id: string, patch: Partial<Task>): Promise<void> {
   const supabase = client();
-  const payload: any = {
-    title: patch.title,
-    description: patch.description,
-    status: patch.status,
-    priority: patch.priority,
-    stage_id: patch.stage_id,
-    progress: patch.progress,
-    due_date: patch.due_date,
-    start_date: patch.start_date,
-    parent_task_id: patch.parent_task_id,
-    assignee_id: patch.assignee_id,
-  };
+  const payload: any = {};
+  if (patch.title !== undefined) payload.title = patch.title;
+  if (patch.description !== undefined) payload.description = patch.description;
+  if (patch.status !== undefined) payload.status = patch.status;
+  if (patch.priority !== undefined) payload.priority = patch.priority;
+  if (patch.stage_id !== undefined) payload.stage_id = patch.stage_id;
+  if (patch.progress !== undefined) payload.progress = patch.progress;
+  if (patch.due_date !== undefined) payload.due_date = patch.due_date;
+  if (patch.start_date !== undefined) payload.start_date = patch.start_date;
+  if (patch.parent_task_id !== undefined) payload.parent_task_id = patch.parent_task_id;
+  if (patch.assignee_id !== undefined) payload.assignee_id = patch.assignee_id;
+  if (patch.assignee_name !== undefined) payload.assignee_name = patch.assignee_name;
+  if (patch.assignee_status !== undefined) payload.assignee_status = patch.assignee_status;
+
   const { error } = await supabase.from("tasks").update(payload).eq("id", id);
   if (error) console.error("[supabase-data] updateTask", error);
 }

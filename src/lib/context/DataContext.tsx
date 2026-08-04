@@ -562,6 +562,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         due_date: data.due_date ?? undefined,
         start_date: data.start_date ?? undefined,
         parent_task_id: data.parent_task_id ?? undefined,
+        assignee_id: data.assignee_id ?? undefined,
+        assignee_name: data.assignee_name ?? undefined,
+        assignee_status: data.assignee_status ?? undefined,
         created_by: userId,
       });
       if (task) {
