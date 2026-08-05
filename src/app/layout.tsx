@@ -24,6 +24,13 @@ export const metadata: Metadata = {
     "Telegram",
   ],
   authors: [{ name: "Esly & Sarah" }],
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
   openGraph: {
     title: productName,
     description,

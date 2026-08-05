@@ -119,7 +119,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             className="flex items-center gap-2 min-w-0 overflow-hidden"
             title={productName}
           >
-            <span className="text-2xl shrink-0">🕐</span>
+            <div className="h-8 w-8 shrink-0 rounded-lg overflow-hidden flex items-center justify-center bg-blue-500/10 p-0.5">
+              <img src="/icon.svg" alt="CHRONOS Logo" className="h-full w-full object-contain" />
+            </div>
             {!isCollapsed && (
               <span className="text-lg font-bold tracking-tight truncate transition-opacity duration-200">
                 {productName}
