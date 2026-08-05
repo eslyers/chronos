@@ -9,6 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { isSupabaseConfigured } from "@/lib/supabase/mode";
 import { MembersTable } from "./_components/MembersTable";
 import { InviteDialog } from "./_components/InviteDialog";
+import { ToastContainer, useToast } from "@/components/ui/toast-notification";
 import {
   loadMembers,
   loadPendingInvites,
@@ -32,6 +33,7 @@ export default function UsersPage() {
   const [workspaceId, setWorkspaceId] = React.useState<string>("");
   const [currentUserRole, setCurrentUserRole] = React.useState<WorkspaceRole>("owner");
   const [inviteDialogOpen, setInviteDialogOpen] = React.useState(false);
+  const { toasts, addToast, dismiss } = useToast();
 
   const reload = React.useCallback(async () => {
     setLoading(true);
@@ -117,28 +119,54 @@ export default function UsersPage() {
       demoMembers.remove(id);
       await reload();
     } else {
-      alert("Remoção via Supabase pendente (precisa de API)");
+      // TODO: implement remove member API
+      addToast({ variant: "info", title: "Em breve", description: "Remoção de membros via API será implementada em breve." });
     }
   }
 
   async function handleRevokeInvite(token: string) {
-    if (!supabaseMode) {
-      demoInvites.revoke(token);
-    } else {
-      const { createSPAClient } = await import("@/lib/supabase/client");
-      const supabase: AnyClient = createSPAClient();
-      await supabase.from("invite_tokens").update({ status: "revoked" }).eq("token", token);
+    try {
+      if (!supabaseMode) {
+        demoInvites.revoke(token);
+      } else {
+        const { createSPAClient } = await import("@/lib/supabase/client");
+        const supabase: AnyClient = createSPAClient();
+        const { error } = await supabase.from("invite_tokens").update({ status: "revoked" }).eq("token", token);
+        if (error) throw new Error(error.message);
+      }
+      await reload();
+      addToast({ variant: "success", title: "Convite revogado", description: "O token foi invalidado com sucesso." });
+    } catch (err) {
+      addToast({ variant: "error", title: "Erro ao revogar", description: err instanceof Error ? err.message : "Tente novamente." });
     }
-    await reload();
   }
 
   async function handleResendInvite(token: string) {
     const invite = invites.find((i) => i.token === token);
     if (!invite) return;
-    if (supabaseMode) {
-      alert("Reenvio via Supabase pendente");
-    } else {
+
+    if (!supabaseMode) {
       console.info(`[demo] Reenvio simulado: ${invite.email} → /auth/invite/${token}`);
+      addToast({ variant: "info", title: "Modo demonstração", description: `Email simulado para ${invite.email}` });
+      return;
+    }
+
+    // supabaseMode: chama a API que usa Brevo
+    try {
+      const res = await fetch("/api/invites/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        addToast({ variant: "error", title: "Falha ao reenviar", description: data.error || "Tente novamente." });
+        return;
+      }
+      await reload();
+      addToast({ variant: "success", title: "Convite reenviado!", description: `Email enviado para ${invite.email} via Brevo.` });
+    } catch (err) {
+      addToast({ variant: "error", title: "Erro de conexão", description: err instanceof Error ? err.message : "Tente novamente." });
     }
   }
 
@@ -148,6 +176,7 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-8 animate-fadeIn pb-12">
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
       {/* Executive Header Banner */}
       <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-r from-card via-card to-blue-500/5 p-6 sm:p-8 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">

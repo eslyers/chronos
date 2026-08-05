@@ -528,7 +528,7 @@ body .gantt-wrapper svg line[stroke="#ebeff2"] {
     top: auto !important;
     width: 100% !important;
     margin: 0 !important;
-    padding: 1.5rem !important;
+    padding: 10mm 8mm !important;
     background-color: #ffffff !important;
     color: #0f172a !important;
     max-height: none !important;
@@ -540,8 +540,11 @@ body .gantt-wrapper svg line[stroke="#ebeff2"] {
     print-color-adjust: exact !important;
   }
 
-  /* 3. Forçar alto contraste (Texto escuro e nítido em papel branco) */
+  /* 3. Forçar alto contraste absoluto (Garante texto escuro no papel em dark mode) */
   #printable-report-area,
+  #printable-report-area *,
+  #printable-report-area .text-foreground,
+  #printable-report-area .text-muted-foreground,
   #printable-report-area p,
   #printable-report-area span,
   #printable-report-area td,
@@ -558,8 +561,8 @@ body .gantt-wrapper svg line[stroke="#ebeff2"] {
     color: #334155 !important;
   }
 
-  #printable-report-area .opacity-60 {
-    opacity: 0.85 !important;
+  #printable-report-area svg text {
+    fill: #0f172a !important;
   }
 
   /* 4. Bordas e fundos em cinza claro nítido */
@@ -574,13 +577,14 @@ body .gantt-wrapper svg line[stroke="#ebeff2"] {
   #printable-report-area .bg-muted\/20,
   #printable-report-area .bg-muted\/30,
   #printable-report-area .bg-muted\/40,
+  #printable-report-area .bg-muted\/60,
   #printable-report-area .bg-card,
   #printable-report-area .bg-background {
     background-color: #f8fafc !important;
     border-color: #cbd5e1 !important;
   }
 
-  /* 5. Badges de Prioridade com alto contraste na impressão */
+  /* 5. Badges e Destaques com alto contraste na impressão */
   #printable-report-area .bg-red-500\/15,
   #printable-report-area .bg-red-950\/40 {
     background-color: #fee2e2 !important;
@@ -609,11 +613,18 @@ body .gantt-wrapper svg line[stroke="#ebeff2"] {
     border: 1px solid #cbd5e1 !important;
   }
 
-  /* Evitar quebras de página no meio de linhas e cards */
+  /* Evitar quebras de página desnecessárias no meio de cards e linhas */
   #printable-report-area tr,
-  #printable-report-area .grid > div {
+  #printable-report-area .grid > div,
+  #printable-report-area .p-5,
+  #printable-report-area .p-4 {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+  }
+
+  @page {
+    size: A4 portrait !important;
+    margin: 10mm 8mm !important;
   }
 }
 
