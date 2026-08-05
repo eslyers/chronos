@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { isSupabaseConfigured } from "@/lib/supabase/mode";
-import { signUpWithPassword } from "@/lib/auth/supabase-auth";
 import { createSPAClient } from "@/lib/supabase/client";
 
 // ── Tipos ──────────────────────────────────────────────────────
@@ -101,7 +100,7 @@ function InvitePageInner({ token }: { token: string }) {
     };
   }, [token]);
 
-  // ── Aceitar convite: signUp + RPC ─────────────────────────────
+  // ── Aceitar convite: signup server-side + signIn client-side ─────────────────────────────────
   async function handleAccept(e: React.FormEvent) {
     e.preventDefault();
     if (!invite) return;
@@ -119,32 +118,46 @@ function InvitePageInner({ token }: { token: string }) {
     setSubmitting(true);
 
     try {
-      // ── 1. Criar conta no Supabase auth ──
-      const signUpResult = await signUpWithPassword(invite.email, password, name);
-      if (!signUpResult.ok) throw new Error(signUpResult.error);
-
-      // Aguardar sessão ser criada (signUp com auto-confirm retorna sessão)
-      const supabase = createSPAClient();
-      const { data: sessionData } = await supabase.auth.getSession();
-      const userId = sessionData.session?.user?.id;
-      if (!userId) {
-        throw new Error(
-          "Conta criada, mas sessão não foi estabelecida. Verifique se email precisa confirmar antes de entrar."
-        );
-      }
-
-      // ── 2. Aceitar o convite (chama RPC accept_invite_token) ──
-      const acceptRes = await fetch("/api/invites/accept", {
+      // ── 1. Criação de conta + aceite do convite (server-side, sem email confirm) ──
+      const acceptRes = await fetch("/api/invites/accept-signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, user_id: userId }),
+        body: JSON.stringify({
+          token,
+          email: invite.email,
+          password,
+          name: name || undefined,
+        }),
       });
       const acceptJson = await acceptRes.json();
+
+      // Usuário já existe: redirecionar para login
+      if (acceptRes.status === 409 && acceptRes.headers.get("X-Existing-User") === "true") {
+        setFormError(
+          "Este email já possui uma conta. Use o botão 'Já tenho conta → Fazer login' abaixo."
+        );
+        setSubmitting(false);
+        return;
+      }
+
       if (!acceptRes.ok) {
         throw new Error(acceptJson.error || "Falha ao aceitar convite");
       }
 
-      // ── 3. Sucesso: redirecionar pro /app ──
+      // ── 2. SignIn client-side com as credenciais recém-criadas ──
+      const supabase = createSPAClient();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: invite.email,
+        password,
+      });
+
+      if (signInError) {
+        throw new Error(
+          `Conta criada, mas login falhou: ${signInError.message}. Tente fazer login manualmente.`
+        );
+      }
+
+      // ── 3. Redirecionar pro app ──
       router.push("/app");
       router.refresh();
     } catch (err) {
@@ -153,6 +166,7 @@ function InvitePageInner({ token }: { token: string }) {
       setSubmitting(false);
     }
   }
+
 
   // ── Render: loading ──────────────────────────────────────────
   if (loadingInvite) {
