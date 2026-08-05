@@ -503,32 +503,29 @@ body .gantt-wrapper svg line[stroke="#ebeff2"] {
    Estilos de Impressão PDF Executiva (Relatório Status Report CHRONOS)
    ========================================================================== */
 @media print {
-  /* 1. Ocultar o layout normal da aplicação */
-  body > * {
+  /* 1. Ocultar o layout normal da aplicação quando no modo relatório executivo */
+  body.exec-report-print-mode > *:not(#exec-report-print-root) {
     display: none !important;
   }
 
-  /* Exibir apenas o container que engloba o relatório */
-  body > div:has(#printable-report-area) {
+  body.exec-report-print-mode #exec-report-print-root {
     display: block !important;
     position: static !important;
-    background: transparent !important;
+    background: #ffffff !important;
     padding: 0 !important;
     margin: 0 !important;
     overflow: visible !important;
   }
 
-  /* Tornar o relatório e seus descendentes visíveis */
-  #printable-report-area,
-  #printable-report-area * {
+  body.exec-report-print-mode #exec-report-print-root * {
     visibility: visible !important;
   }
 
   /* 2. Reset de container para fluxo A4 contínuo sem duplicações */
   #printable-report-area {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
     width: 100% !important;
     margin: 0 !important;
     padding: 1.5rem !important;
@@ -577,31 +574,36 @@ body .gantt-wrapper svg line[stroke="#ebeff2"] {
   #printable-report-area .bg-muted\/20,
   #printable-report-area .bg-muted\/30,
   #printable-report-area .bg-muted\/40,
-  #printable-report-area .bg-card {
+  #printable-report-area .bg-card,
+  #printable-report-area .bg-background {
     background-color: #f8fafc !important;
     border-color: #cbd5e1 !important;
   }
 
   /* 5. Badges de Prioridade com alto contraste na impressão */
-  #printable-report-area .bg-red-500\/15 {
+  #printable-report-area .bg-red-500\/15,
+  #printable-report-area .bg-red-950\/40 {
     background-color: #fee2e2 !important;
     color: #991b1b !important;
     border: 1px solid #fca5a5 !important;
   }
 
-  #printable-report-area .bg-amber-500\/15 {
+  #printable-report-area .bg-amber-500\/15,
+  #printable-report-area .bg-amber-950\/40 {
     background-color: #fef3c7 !important;
     color: #92400e !important;
     border: 1px solid #fcd34d !important;
   }
 
-  #printable-report-area .bg-blue-500\/15 {
+  #printable-report-area .bg-blue-500\/15,
+  #printable-report-area .bg-blue-950\/40 {
     background-color: #dbeafe !important;
     color: #1e40af !important;
     border: 1px solid #93c5fd !important;
   }
 
-  #printable-report-area .bg-slate-500\/15 {
+  #printable-report-area .bg-slate-500\/15,
+  #printable-report-area .bg-slate-950\/40 {
     background-color: #f1f5f9 !important;
     color: #334155 !important;
     border: 1px solid #cbd5e1 !important;

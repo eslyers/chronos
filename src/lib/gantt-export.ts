@@ -1,17 +1,35 @@
-// Utilitário de Exportação para Excel e PDF (Print) do Cronograma/Gantt
-// Usa xlsx (SheetJS) para gerar o .xlsx com formatação estruturada.
+// Utilitário de Exportação para Excel (.xlsx) e PDF do Cronograma/Gantt
+// Formatação e esquema de cores 100% alinhados com o modelo corporativo (Imagem 3).
 "use client";
 
 import * as XLSX from "xlsx";
 import type { Project, Task } from "@/lib/context/DataContext";
 
 // ─────────────────────────────────────────────────────────────
-// Helpers
+// Helpers de Formatação de Data e Status
 // ─────────────────────────────────────────────────────────────
-function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return "";
-  const [y, m, d] = dateStr.split("-");
-  return `${d}/${m}/${String(y).slice(-2)}`;
+function formatDate(dateInput: string | Date | null | undefined): string {
+  if (!dateInput) return "";
+
+  let str = "";
+  if (typeof dateInput === "object" && dateInput !== null && "toISOString" in dateInput) {
+    str = (dateInput as Date).toISOString();
+  } else {
+    str = String(dateInput).trim();
+  }
+
+  // Extrai apenas a parte da data YYYY-MM-DD descartando T00:00:00.000Z
+  const cleanStr = str.split("T")[0];
+  const parts = cleanStr.split("-");
+
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    if (y.length === 4) {
+      return `${d.padStart(2, "0")}/${m.padStart(2, "0")}/${y.slice(-2)}`;
+    }
+  }
+
+  return str;
 }
 
 function levelOf(task: Task, allTasks: Task[]): number {
@@ -36,7 +54,7 @@ function statusLabel(task: Task): string {
   return "Em progresso";
 }
 
-interface ExportRow {
+export interface ExportRow {
   projeto: string;
   etapas: string;
   nomeProjeto: string;
@@ -65,7 +83,7 @@ export function buildExportRows(
   filteredProjects.forEach((project) => {
     const tasks = getTasksByProject(project.id);
 
-    // Linha de cabeçalho do Projeto
+    // Linha do Projeto Pai (Nível 0 - Barra Preta de Destaque no Excel)
     rows.push({
       projeto: project.name,
       etapas: "PLANEJAMENTO",
@@ -73,11 +91,15 @@ export function buildExportRows(
       responsavel: "",
       dataInicio: formatDate(project.start_date),
       dataFim: formatDate(project.target_date),
-      observacao: "",
+      observacao: project.description || "",
       nivel: 0,
       realizado: `${project.progress ?? 0}%`,
       previsto: "100%",
-      status: statusLabel({ progress: project.progress, due_date: project.target_date, status: project.status } as unknown as Task),
+      status: statusLabel({
+        progress: project.progress,
+        due_date: project.target_date,
+        status: project.status,
+      } as unknown as Task),
     });
 
     const addTaskRows = (parentList: Task[], depth: number) => {
@@ -90,7 +112,7 @@ export function buildExportRows(
           rows.push({
             projeto: project.name,
             etapas: depth === 0 ? "PLANEJAMENTO" : "SUB-TAREFA",
-            nomeProjeto: task.title,
+            nomeProjeto: depth > 0 ? `${"  ".repeat(depth)}${task.title}` : task.title,
             responsavel: task.assignee_name || "",
             dataInicio: formatDate(task.start_date),
             dataFim: formatDate(task.due_date),
@@ -122,7 +144,7 @@ export function exportGanttToExcel(
 ) {
   const rows = buildExportRows(projects, getTasksByProject, selectedProjectId);
 
-  // Cabeçalho da planilha (igual à imagem 3 do usuário)
+  // Cabeçalho exatamente alinhado com a Imagem 3
   const headers = [
     "ÁREA DE PROJETO",
     "ETAPAS",
@@ -157,91 +179,109 @@ export function exportGanttToExcel(
 
   const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-  // Larguras das colunas
+  // Larguras das colunas otimizadas para leitura corporativa
   ws["!cols"] = [
-    { wch: 18 }, // ÁREA
-    { wch: 16 }, // ETAPAS
-    { wch: 45 }, // NOME DO PROJETO
-    { wch: 16 }, // RESPONSÁVEL
-    { wch: 12 }, // Data INÍCIO
-    { wch: 12 }, // Data FIM
-    { wch: 30 }, // OBSERVAÇÃO
+    { wch: 22 }, // ÁREA DE PROJETO
+    { wch: 18 }, // ETAPAS
+    { wch: 48 }, // NOME DO PROJETO
+    { wch: 22 }, // RESPONSÁVEL
+    { wch: 14 }, // Data INÍCIO
+    { wch: 14 }, // Data FIM
+    { wch: 28 }, // OBSERVAÇÃO
     { wch: 8 },  // Nível
-    { wch: 12 }, // REALIZADO %
-    { wch: 12 }, // PREVISTO %
-    { wch: 14 }, // STATUS
+    { wch: 14 }, // REALIZ ADO %
+    { wch: 14 }, // PREVISTO %
+    { wch: 16 }, // STATUS
   ];
 
-  // Estilo do cabeçalho (via SheetJS, estilo básico sem Pro)
   const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+
+  // 1. Estilização da Linha 1 (Cabeçalho Preto de Alto Impacto - Igual Imagem 3)
   for (let C = range.s.c; C <= range.e.c; C++) {
     const cellAddr = XLSX.utils.encode_cell({ r: 0, c: C });
     if (!ws[cellAddr]) continue;
     ws[cellAddr].s = {
-      font: { bold: true, color: { rgb: "FFFFFF" }, sz: 10 },
-      fill: { fgColor: { rgb: "1E3A5F" }, patternType: "solid" },
+      font: { bold: true, color: { rgb: "FFFFFF" }, sz: 10, name: "Calibri" },
+      fill: { fgColor: { rgb: "000000" }, patternType: "solid" },
       alignment: { horizontal: "center", vertical: "center", wrapText: true },
       border: {
-        top: { style: "thin", color: { rgb: "CCCCCC" } },
-        bottom: { style: "thin", color: { rgb: "CCCCCC" } },
-        left: { style: "thin", color: { rgb: "CCCCCC" } },
-        right: { style: "thin", color: { rgb: "CCCCCC" } },
+        top: { style: "thin", color: { rgb: "4B5563" } },
+        bottom: { style: "medium", color: { rgb: "000000" } },
+        left: { style: "thin", color: { rgb: "4B5563" } },
+        right: { style: "thin", color: { rgb: "4B5563" } },
       },
     };
   }
 
-  // Estilo das linhas de dados
+  // 2. Estilização das Linhas de Dados e Seções
   for (let R = 1; R <= range.e.r; R++) {
-    const isProjectRow = rows[R - 1]?.nivel === 0;
-    const rowStatus = rows[R - 1]?.status ?? "";
+    const rowData = rows[R - 1];
+    const isProjectHeaderRow = rowData?.nivel === 0;
+    const rowStatus = rowData?.status ?? "";
 
     for (let C = range.s.c; C <= range.e.c; C++) {
       const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
       if (!ws[cellAddr]) ws[cellAddr] = { v: "", t: "s" };
 
-      let bgColor = R % 2 === 0 ? "F0F4F8" : "FFFFFF";
-      if (isProjectRow) bgColor = "1E3A5F";
+      // Se for a linha de cabeçalho do projeto (Nível 0), usa fundo Preto igual à Imagem 3
+      let bgColor = isProjectHeaderRow ? "000000" : R % 2 === 0 ? "F9FAFB" : "FFFFFF";
+      let textColor = isProjectHeaderRow ? "FFFFFF" : "111827";
+      let fontBold = isProjectHeaderRow;
 
-      // Status badge colors
-      if (C === 10) {
-        if (rowStatus === "Concluído") bgColor = "D4EDDA";
-        else if (rowStatus === "Atrasado") bgColor = "F8D7DA";
-        else if (rowStatus === "Em progresso") bgColor = "FFF3CD";
-        else if (rowStatus === "Não iniciado") bgColor = "E2E8F0";
+      // Coluna 10 (STATUS): Esquema de cores corporativo da Imagem 3
+      if (C === 10 && !isProjectHeaderRow) {
+        fontBold = true;
+        if (rowStatus === "Concluído" || rowStatus === "No prazo") {
+          bgColor = "86EFAC"; // Verde vibrante suave
+          textColor = "065F46";
+        } else if (rowStatus === "Atrasado") {
+          bgColor = "FB923C"; // Laranja vibrante
+          textColor = "7C2D12";
+        } else if (rowStatus === "Não iniciado") {
+          bgColor = "93C5FD"; // Azul pastel de aço
+          textColor = "1E3A8A";
+        } else if (rowStatus === "Em progresso") {
+          bgColor = "FDE047"; // Amarelo vibrante
+          textColor = "713F12";
+        } else if (rowStatus === "Cancelado") {
+          bgColor = "FCA5A5"; // Vermelho suave
+          textColor = "7F1D1D";
+        }
       }
 
       ws[cellAddr].s = {
         font: {
           sz: 10,
-          bold: isProjectRow,
-          color: { rgb: isProjectRow ? "FFFFFF" : "1A202C" },
+          bold: fontBold,
+          color: { rgb: textColor },
+          name: "Calibri",
         },
         fill: { fgColor: { rgb: bgColor }, patternType: "solid" },
-        alignment: { vertical: "center", wrapText: false },
+        alignment: {
+          vertical: "center",
+          horizontal: [4, 5, 7, 8, 9, 10].includes(C) ? "center" : "left",
+          wrapText: false,
+        },
         border: {
-          top: { style: "thin", color: { rgb: "E2E8F0" } },
-          bottom: { style: "thin", color: { rgb: "E2E8F0" } },
-          left: { style: "thin", color: { rgb: "E2E8F0" } },
-          right: { style: "thin", color: { rgb: "E2E8F0" } },
+          top: { style: "thin", color: { rgb: isProjectHeaderRow ? "374151" : "E5E7EB" } },
+          bottom: { style: "thin", color: { rgb: isProjectHeaderRow ? "374151" : "E5E7EB" } },
+          left: { style: "thin", color: { rgb: isProjectHeaderRow ? "374151" : "E5E7EB" } },
+          right: { style: "thin", color: { rgb: isProjectHeaderRow ? "374151" : "E5E7EB" } },
         },
       };
-
-      // Centralizar colunas específicas
-      if ([4, 5, 7, 8, 9, 10].includes(C)) {
-        ws[cellAddr].s.alignment = { ...ws[cellAddr].s.alignment, horizontal: "center" };
-      }
     }
   }
 
-  // Altura das linhas
-  ws["!rows"] = [{ hpt: 30 }]; // cabeçalho
+  // Altura das linhas para visualização legível e espaçada
+  ws["!rows"] = [{ hpt: 28 }]; // Cabeçalho
   for (let R = 1; R <= range.e.r; R++) {
-    (ws["!rows"] as XLSX.RowInfo[]).push({ hpt: 20 });
+    const isProj = rows[R - 1]?.nivel === 0;
+    (ws["!rows"] as XLSX.RowInfo[]).push({ hpt: isProj ? 24 : 20 });
   }
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Cronograma");
 
-  const date = new Date().toLocaleDateString("pt-BR").replace(/\//g, "-");
-  XLSX.writeFile(wb, `${fileName}-${date}.xlsx`, { bookType: "xlsx", type: "binary" });
+  const todayStr = new Date().toLocaleDateString("pt-BR").replace(/\//g, "-");
+  XLSX.writeFile(wb, `${fileName}-${todayStr}.xlsx`, { bookType: "xlsx", type: "binary" });
 }

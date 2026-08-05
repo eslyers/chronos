@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   FileText,
   Calendar,
@@ -51,6 +52,21 @@ export function ProjectStatusReportPDF({
 
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      document.body.classList.remove("exec-report-print-mode");
+    };
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => {
+      window.removeEventListener("afterprint", handleAfterPrint);
+    };
+  }, []);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -184,11 +200,21 @@ export function ProjectStatusReportPDF({
   const pctOverdue = totalTasks > 0 ? Math.round((overdueTasks / totalTasks) * 100) : 0;
 
   const handlePrint = () => {
+    document.body.classList.add("exec-report-print-mode");
     window.print();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
+  if (!open || !mounted) return null;
+
+  let reportRoot = document.getElementById("exec-report-print-root");
+  if (!reportRoot) {
+    reportRoot = document.createElement("div");
+    reportRoot.id = "exec-report-print-root";
+    document.body.appendChild(reportRoot);
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto print:static print:bg-white print:p-0 print:block print:overflow-visible">
       {/* Container de Modal Executiva */}
       <div className="relative w-full max-w-4xl bg-background rounded-2xl border border-border shadow-2xl overflow-hidden my-8 animate-fadeIn flex flex-col max-h-[90vh]">
         {/* Barra de Ações do Relatório (Invisível na Impressão) */}
@@ -559,6 +585,7 @@ export function ProjectStatusReportPDF({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    reportRoot
   );
 }
