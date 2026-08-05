@@ -19,6 +19,7 @@ interface TaskListTableProps {
   onTaskClick?: (task: GanttTask) => void;
   // Callback para edição direta da tarefa (ícone de lápis ou duplo clique)
   onTaskEditClick?: (task: GanttTask) => void;
+  nameColumnWidth?: number;
 }
 
 function formatDateBR(date: Date): string {
@@ -28,7 +29,6 @@ function formatDateBR(date: Date): string {
   return `${dd}/${mm}/${yy}`;
 }
 
-const COL_WIDTH_NAME = "220px";
 const COL_WIDTH_ASSIGNEE = "120px";
 const COL_WIDTH_DATE = "85px";
 
@@ -42,10 +42,13 @@ export function GanttTaskListTablePT({
   onExpanderClick,
   onTaskClick,
   onTaskEditClick,
+  nameColumnWidth = 240,
 }: TaskListTableProps) {
+  const colWidthName = `${nameColumnWidth}px`;
+
   const nameCellStyle: CSSProperties = {
-    minWidth: COL_WIDTH_NAME,
-    maxWidth: COL_WIDTH_NAME,
+    minWidth: colWidthName,
+    maxWidth: colWidthName,
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",

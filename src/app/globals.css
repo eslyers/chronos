@@ -614,3 +614,62 @@ body .gantt-wrapper svg line[stroke="#ebeff2"] {
     break-inside: avoid !important;
   }
 }
+
+/* ==========================================================================
+   Estilos de Impressão — Preview de Cronograma (Gantt Print)
+   ========================================================================== */
+@media print {
+  /* Quando o preview do Gantt está ativo, ocultar TUDO exceto o preview */
+  body.gantt-print-mode > *:not(#gantt-print-root) {
+    display: none !important;
+  }
+
+  body.gantt-print-mode #gantt-print-root {
+    display: block !important;
+    position: static !important;
+    background: #fff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Ocultar botões de ação na impressão */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Área do relatório Gantt */
+  #gantt-print-area {
+    position: static !important;
+    width: 100% !important;
+    padding: 14mm 12mm !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-family: Arial, sans-serif !important;
+    font-size: 9pt !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #gantt-print-area table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+  }
+
+  #gantt-print-area tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  #gantt-print-area thead {
+    display: table-header-group !important;
+  }
+
+  @page {
+    size: A4 landscape !important;
+    margin: 10mm 8mm !important;
+  }
+}
+

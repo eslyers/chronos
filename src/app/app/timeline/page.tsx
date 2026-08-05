@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
 import { Gantt, ViewMode, type Task as GanttTask } from "gantt-task-react";
@@ -16,6 +17,7 @@ import {
   ShieldCheck,
   BarChart3,
   Printer,
+  FileSpreadsheet,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,11 +28,13 @@ import Link from "next/link";
 import { useData, type Project, type Task } from "@/lib/context/DataContext";
 import { DependencyManager } from "@/components/DependencyManager";
 import { TaskHierarchy } from "@/components/TaskHierarchy";
-import { GanttTaskListHeaderPT } from "@/components/GanttTaskListHeader";
+import { GanttTaskListHeaderPT, type GanttSortField, type GanttSortDirection } from "@/components/GanttTaskListHeader";
 import { GanttTaskListTablePT } from "@/components/GanttTaskListTablePT";
 import { GanttTooltipPT } from "@/components/GanttTooltipPT";
 import { TaskDialog } from "@/components/TaskDialog";
 import { ImportDialog } from "@/components/ImportDialog";
+import { GanttPrintPreview } from "@/components/GanttPrintPreview";
+import { exportGanttToExcel } from "@/lib/gantt-export";
 
 const VIEW_MODES = [
   { value: ViewMode.Day, label: "Dia" },
@@ -104,6 +108,35 @@ export default function TimelinePage() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
+
+  // Adiciona classe ao body para isolar impressão do Gantt
+  useEffect(() => {
+    if (printPreviewOpen) {
+      document.body.classList.add("gantt-print-mode");
+    } else {
+      document.body.classList.remove("gantt-print-mode");
+    }
+    return () => document.body.classList.remove("gantt-print-mode");
+  }, [printPreviewOpen]);
+
+  const [sortField, setSortField] = useState<GanttSortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<GanttSortDirection>("asc");
+  const [nameColumnWidth, setNameColumnWidth] = useState<number>(240);
+
+  const handleSort = (field: GanttSortField) => {
+    if (sortField === field) {
+      if (sortDirection === "asc") {
+        setSortDirection("desc");
+      } else {
+        setSortField(null);
+        setSortDirection("asc");
+      }
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
 
   const { theme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -177,7 +210,28 @@ export default function TimelinePage() {
           pId: string,
           pStart: Date
         ) => {
-          const sorted = [...parentList].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+          const sorted = [...parentList];
+          if (sortField) {
+            sorted.sort((a, b) => {
+              let res = 0;
+              if (sortField === "name") {
+                res = (a.title || "").localeCompare(b.title || "", "pt-BR");
+              } else if (sortField === "assignee") {
+                res = (a.assignee_name || "zzz").localeCompare(b.assignee_name || "zzz", "pt-BR");
+              } else if (sortField === "start") {
+                const tA = a.start_date ? new Date(a.start_date).getTime() : 0;
+                const tB = b.start_date ? new Date(b.start_date).getTime() : 0;
+                res = tA - tB;
+              } else if (sortField === "end") {
+                const tA = a.due_date ? new Date(a.due_date).getTime() : 0;
+                const tB = b.due_date ? new Date(b.due_date).getTime() : 0;
+                res = tA - tB;
+              }
+              return sortDirection === "asc" ? res : -res;
+            });
+          } else {
+            sorted.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+          }
           sorted.forEach((task: Task) => {
             const children = tasks.filter((t) => t.parent_task_id === task.id);
             const hasChildren = children.length > 0;
@@ -243,7 +297,7 @@ export default function TimelinePage() {
     });
 
     return result;
-  }, [projects, selectedProjectId, getTasksByProject, dependenciesByTask, collapsedProjects, collapsedTasks, isDark, palette]);
+  }, [projects, selectedProjectId, getTasksByProject, dependenciesByTask, collapsedProjects, collapsedTasks, isDark, palette, sortField, sortDirection]);
 
   const stats = useMemo(() => {
     const totalProjects = projects.length;
@@ -277,6 +331,7 @@ export default function TimelinePage() {
       : projects.find((p) => p.id === selectedProjectId)?.name || "Projeto Selecionado";
 
   return (
+    <>
     <div className="space-y-8 animate-fadeIn pb-12">
       {/* Header Banner */}
       <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-r from-card via-card to-blue-500/5 p-6 sm:p-8 shadow-sm">
@@ -300,11 +355,27 @@ export default function TimelinePage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.print()}
+              onClick={() => setPrintPreviewOpen(true)}
               className="h-10 px-4 text-xs font-bold border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 gap-2"
             >
               <Printer className="h-4 w-4" />
-              Exportar Gantt (PDF)
+              Exportar PDF
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                exportGanttToExcel(
+                  projects,
+                  getTasksByProject,
+                  selectedProjectId,
+                  `cronograma-${selectedProjectName.replace(/\s+/g, "-").toLowerCase()}`
+                )
+              }
+              className="h-10 px-4 text-xs font-bold border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 gap-2"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              Exportar Excel
             </Button>
             {selectedProjectId !== "all" && (
               <>
@@ -505,7 +576,7 @@ export default function TimelinePage() {
                       ? 210
                       : 320
                   }
-                  listCellWidth="510px"
+                  listCellWidth={`${nameColumnWidth + 290}px`}
                   barBackgroundColor={palette.barBackground}
                   barBackgroundSelectedColor={palette.barBackgroundSelected}
                   todayColor={palette.todayColor}
@@ -524,10 +595,20 @@ export default function TimelinePage() {
                   rtl={false}
                   handleWidth={8}
                   timeStep={300000}
-                  TaskListHeader={GanttTaskListHeaderPT}
+                  TaskListHeader={(headerProps) => (
+                    <GanttTaskListHeaderPT
+                      {...headerProps}
+                      nameColumnWidth={nameColumnWidth}
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                      onResizeNameColumn={setNameColumnWidth}
+                    />
+                  )}
                   TaskListTable={(props) => (
                     <GanttTaskListTablePT
                       {...props}
+                      nameColumnWidth={nameColumnWidth}
                       onExpanderClick={(ganttTask) => {
                         if (ganttTask.type === "project") {
                           const projectId = String(ganttTask.id).replace(/^project-/, "");
@@ -697,5 +778,26 @@ export default function TimelinePage() {
         ) : null;
       })()}
     </div>
+
+      {/* Portal do Preview de Impressão Gantt — isolado da UI */}
+      {printPreviewOpen && mounted && (() => {
+        let printRoot = document.getElementById("gantt-print-root");
+        if (!printRoot) {
+          printRoot = document.createElement("div");
+          printRoot.id = "gantt-print-root";
+          document.body.appendChild(printRoot);
+        }
+        return createPortal(
+          <GanttPrintPreview
+            projects={projects}
+            getTasksByProject={getTasksByProject}
+            selectedProjectId={selectedProjectId}
+            selectedProjectName={selectedProjectName}
+            onClose={() => setPrintPreviewOpen(false)}
+          />,
+          printRoot
+        );
+      })()}
+    </>
   );
 }
