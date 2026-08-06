@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { Project, Task, Stage } from "@/lib/context/DataContext";
+import { sortTasksWithHierarchy } from "@/lib/task-sorting";
 
 interface ProjectStatusReportPDFProps {
   open: boolean;
@@ -83,7 +84,10 @@ export function ProjectStatusReportPDF({
   };
 
   const sortedTasks = useMemo(() => {
-    if (!sortField) return tasks;
+    if (sortField === "due_date" && sortDirection === "asc") {
+      return sortTasksWithHierarchy(tasks);
+    }
+    if (!sortField) return sortTasksWithHierarchy(tasks);
 
     const weights: Record<string, number> = {
       critical: 4,
@@ -502,7 +506,7 @@ export function ProjectStatusReportPDF({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
-                {sortedTasks.map((task) => {
+                {sortedTasks.map((task: Task) => {
                   const isDone = task.status === "done";
                   const isOverdue =
                     !isDone &&

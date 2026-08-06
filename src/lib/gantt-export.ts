@@ -4,6 +4,7 @@
 
 import * as XLSX from "xlsx";
 import type { Project, Task } from "@/lib/context/DataContext";
+import { compareTasksByDueDate } from "@/lib/task-sorting";
 
 // ─────────────────────────────────────────────────────────────
 // Helpers de Formatação de Data e Status
@@ -104,7 +105,7 @@ export function buildExportRows(
 
     const addTaskRows = (parentList: Task[], depth: number) => {
       parentList
-        .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+        .sort(compareTasksByDueDate)
         .forEach((task) => {
           const children = tasks.filter((t) => t.parent_task_id === task.id);
           const level = levelOf(task, tasks);

@@ -35,6 +35,7 @@ import { TaskDialog } from "@/components/TaskDialog";
 import { ImportDialog } from "@/components/ImportDialog";
 import { GanttPrintPreview } from "@/components/GanttPrintPreview";
 import { exportGanttToExcel } from "@/lib/gantt-export";
+import { compareTasksByDueDate } from "@/lib/task-sorting";
 
 const VIEW_MODES = [
   { value: ViewMode.Day, label: "Dia" },
@@ -230,7 +231,7 @@ export default function TimelinePage() {
               return sortDirection === "asc" ? res : -res;
             });
           } else {
-            sorted.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+            sorted.sort(compareTasksByDueDate);
           }
           sorted.forEach((task: Task) => {
             const children = tasks.filter((t) => t.parent_task_id === task.id);

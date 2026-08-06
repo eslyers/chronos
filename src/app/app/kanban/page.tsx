@@ -41,6 +41,7 @@ import { TaskDialog } from "@/components/TaskDialog";
 import { TaskIndicators } from "@/components/TaskIndicators";
 import { ImportProjectButton } from "@/components/ImportProjectButton";
 import { ProjectAnalyticsDialog } from "@/components/ProjectAnalyticsDialog";
+import { sortTasksWithHierarchy } from "@/lib/task-sorting";
 
 type TaskLike = {
   id: string;
@@ -759,9 +760,9 @@ export default function KanbanPage() {
             {projectStages
               .filter((stage) => stage.id === activeMobileStageId)
               .map((stage) => {
-                const stageTasks = projectTasks
-                  .filter((t) => t.stage_id === stage.id)
-                  .sort((a, b) => a.position - b.position);
+                const stageTasks = sortTasksWithHierarchy(
+                  projectTasks.filter((t) => t.stage_id === stage.id)
+                );
                 return (
                   <StageColumn
                     key={`mobile-${stage.id}`}
@@ -782,9 +783,9 @@ export default function KanbanPage() {
           {/* Desktop View: Multi-column horizontal scroll (Original Layout) */}
           <div className="hidden sm:flex gap-4 overflow-x-auto pb-6 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory">
             {projectStages.map((stage) => {
-              const stageTasks = projectTasks
-                .filter((t) => t.stage_id === stage.id)
-                .sort((a, b) => a.position - b.position);
+              const stageTasks = sortTasksWithHierarchy(
+                projectTasks.filter((t) => t.stage_id === stage.id)
+              );
               return (
                 <StageColumn
                   key={`desktop-${stage.id}`}

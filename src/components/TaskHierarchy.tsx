@@ -23,6 +23,7 @@ import {
   Info,
 } from "lucide-react";
 import { useData, type Task } from "@/lib/context/DataContext";
+import { compareTasksByDueDate } from "@/lib/task-sorting";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 type TreeNode = {
@@ -45,9 +46,9 @@ function buildTree(tasks: Task[]): TreeNode[] {
       roots.push(node);
     }
   }
-  // Ordena por posição
+  // Ordena por data de entrega (due_date)
   const sortRec = (nodes: TreeNode[]) => {
-    nodes.sort((a, b) => a.task.position - b.task.position);
+    nodes.sort((a, b) => compareTasksByDueDate(a.task, b.task));
     nodes.forEach((n) => sortRec(n.children));
   };
   sortRec(roots);

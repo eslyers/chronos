@@ -13,6 +13,7 @@ import {
   loadWorkspaceContext,
   getDataLayer,
 } from "@/lib/data/data-provider";
+import { sortTasksWithHierarchy } from "@/lib/task-sorting";
 
 // ─────────────────────────────────────────────────────────────
 // CHRONOS — DataContext
@@ -694,17 +695,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const getTasksByProject = useCallback(
     (projectId: string) =>
-      state.tasks
-        .filter((t) => t.project_id === projectId)
-        .sort((a, b) => a.position - b.position),
+      sortTasksWithHierarchy(state.tasks.filter((t) => t.project_id === projectId)),
     [state.tasks]
   );
 
   const getTasksByStage = useCallback(
     (stageId: string) =>
-      state.tasks
-        .filter((t) => t.stage_id === stageId)
-        .sort((a, b) => a.position - b.position),
+      sortTasksWithHierarchy(state.tasks.filter((t) => t.stage_id === stageId)),
     [state.tasks]
   );
 
