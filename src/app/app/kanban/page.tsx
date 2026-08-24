@@ -30,6 +30,7 @@ import {
   GripVertical,
   CornerDownRight,
   BarChart3,
+  CheckCircle2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +50,7 @@ type TaskLike = {
   description: string | null;
   stage_id: string | null;
   priority: keyof typeof PRIORITY_COLORS;
+  status?: string;
   due_date: string | null;
   progress: number;
   assignee_id: string | null;
@@ -119,15 +121,20 @@ function TaskCard({
     setDroppableRef(node);
   };
 
+  const isTaskDone = isDone || task.status === "done" || task.progress === 100;
   const days = daysUntil(task.due_date);
-  const overdue = days !== null && days < 0 && !isDone;
+  const overdue = days !== null && days < 0 && !isTaskDone;
 
   return (
     <Card
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      className={`border-l-4 ${PRIORITY_COLORS[task.priority as keyof typeof PRIORITY_COLORS] || "border-l-blue-500"} bg-card border-border/80 ${
+      className={`border-l-4 ${
+        isTaskDone
+          ? "border-l-emerald-500 bg-emerald-500/5 dark:bg-emerald-950/10 border-border/80 shadow-xs"
+          : (PRIORITY_COLORS[task.priority as keyof typeof PRIORITY_COLORS] || "border-l-blue-500") + " bg-card border-border/80"
+      } ${
         isDragging && !isOverlay ? "opacity-30 scale-95" : ""
       } ${
         isOverlay
@@ -143,15 +150,20 @@ function TaskCard({
     >
       <CardContent className="p-3.5 space-y-2.5">
         <div className="flex items-start justify-between gap-2">
-          <h4 className="text-sm font-semibold leading-tight text-foreground group-hover:text-blue-500 transition-colors">
-            {task.title}
+          <h4 className="text-sm font-semibold leading-tight text-foreground group-hover:text-blue-500 transition-colors flex items-start gap-1.5 flex-1">
+            {isTaskDone && (
+              <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+            )}
+            <span className={isTaskDone ? "text-foreground font-semibold" : ""}>
+              {task.title}
+            </span>
           </h4>
           <div className="flex items-center gap-1 shrink-0">
             <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
             <Flag
               className="h-3.5 w-3.5"
               style={{
-                color: PRIORITY_FLAG_COLORS[task.priority as keyof typeof PRIORITY_FLAG_COLORS] || "#3b82f6",
+                color: isTaskDone ? "#10b981" : (PRIORITY_FLAG_COLORS[task.priority as keyof typeof PRIORITY_FLAG_COLORS] || "#3b82f6"),
               }}
             />
           </div>
@@ -180,6 +192,12 @@ function TaskCard({
               {PRIORITY_LABELS[task.priority as keyof typeof PRIORITY_LABELS] || "Média"}
             </Badge>
 
+            {isTaskDone && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0.2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-bold">
+                Concluída
+              </Badge>
+            )}
+
             {task.due_date && (
               <span
                 className={`text-[11px] inline-flex items-center gap-1 font-medium ${
@@ -194,11 +212,19 @@ function TaskCard({
           </div>
 
           {task.progress > 0 && (
-            <span className="text-[10px] font-bold text-muted-foreground font-mono">
+            <span className={`text-[10px] font-bold font-mono ${isTaskDone ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-muted-foreground"}`}>
               {task.progress}%
             </span>
           )}
         </div>
+
+        {task.progress > 0 && (
+          <Progress
+            value={task.progress}
+            className="h-1"
+            indicatorClassName={isTaskDone ? "bg-emerald-500" : undefined}
+          />
+        )}
 
         <div className="pt-2 border-t border-border/40 flex items-center justify-between gap-2">
           {(task.assignee_id || task.assignee_name) ? (

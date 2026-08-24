@@ -6,10 +6,11 @@ import { cn } from "@/lib/utils";
 interface ProgressProps extends React.HTMLAttributes<HTMLDivElement> {
   value: number; // 0-100
   max?: number;
+  indicatorClassName?: string;
 }
 
 const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
-  ({ className, value, max = 100, ...props }, ref) => {
+  ({ className, indicatorClassName, value, max = 100, ...props }, ref) => {
     const pct = Math.max(0, Math.min(100, (value / max) * 100));
     return (
       <div
@@ -21,7 +22,7 @@ const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(
         {...props}
       >
         <div
-          className="h-full bg-primary transition-all"
+          className={cn("h-full bg-primary transition-all", indicatorClassName)}
           style={{ width: `${pct}%` }}
         />
       </div>

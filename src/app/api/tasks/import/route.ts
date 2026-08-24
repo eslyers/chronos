@@ -154,14 +154,16 @@ export async function POST(request: NextRequest) {
     const insertPayloads = validRows.map((row, idx) => {
       const t = row.parsed;
       const resolved = resolveAssignee(t.assignee_id);
+      const rowProgress = typeof t.progress === "number" ? t.progress : 0;
+      const rowStatus = rowProgress === 100 ? "done" : (t.status || "todo");
       return {
         project_id: projectId,
         stage_id: initialStageId,
         title: t.title,
         description: t.description || null,
         priority: t.priority || "medium",
-        status: t.status || "todo",
-        progress: t.progress || 0,
+        status: rowStatus,
+        progress: rowProgress,
         start_date: t.start_date || null,
         due_date: t.due_date || null,
         assignee_id: resolved?.uuid ?? null,
@@ -184,14 +186,16 @@ export async function POST(request: NextRequest) {
         for (const row of validRows) {
           const t = row.parsed;
           const resolved = resolveAssignee(t.assignee_id);
+          const singleProgress = typeof t.progress === "number" ? t.progress : 0;
+          const singleStatus = singleProgress === 100 ? "done" : (t.status || "todo");
           const singlePayload = {
             project_id: projectId,
             stage_id: initialStageId,
             title: t.title,
             description: t.description || null,
             priority: t.priority || "medium",
-            status: t.status || "todo",
-            progress: t.progress || 0,
+            status: singleStatus,
+            progress: singleProgress,
             start_date: t.start_date || null,
             due_date: t.due_date || null,
             assignee_id: resolved?.uuid ?? null,

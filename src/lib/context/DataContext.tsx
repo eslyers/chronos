@@ -574,6 +574,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
     }
     const now = new Date().toISOString();
+    const initialProgress = data.progress ?? 0;
+    const initialStatus = data.status ?? (initialProgress === 100 ? "done" : "todo");
+
     const task: Task = {
       id: generateId("task"),
       project_id: data.project_id ?? "",
@@ -581,8 +584,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       title: data.title ?? "Nova Tarefa",
       description: data.description ?? null,
       priority: data.priority ?? "medium",
-      status: data.status ?? "todo",
-      progress: data.progress ?? 0,
+      status: initialStatus,
+      progress: initialProgress,
       start_date: data.start_date ?? null,
       due_date: data.due_date ?? null,
       assignee_id: data.assignee_id ?? userId,
@@ -598,13 +601,20 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, [userId]);
 
   const updateTask = useCallback(async (id: string, data: Partial<Task>) => {
+    const patch = { ...data };
+    if (patch.progress === 100 && !patch.status) {
+      patch.status = "done";
+    } else if (patch.status === "done" && patch.progress === undefined) {
+      patch.progress = 100;
+    }
+
     if (getDataLayer() === "supabase") {
-      await dataProvider.updateTask(id, data);
+      await dataProvider.updateTask(id, patch);
     }
     setState((prev) => ({
       ...prev,
       tasks: prev.tasks.map((t) =>
-        t.id === id ? { ...t, ...data, updated_at: new Date().toISOString() } : t
+        t.id === id ? { ...t, ...patch, updated_at: new Date().toISOString() } : t
       ),
     }));
   }, []);
@@ -620,16 +630,29 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const moveTask = useCallback(async (id: string, stageId: string, position: number) => {
+    const targetStage = state.stages.find((s) => s.id === stageId);
+    const updates: Partial<Task> = {
+      stage_id: stageId,
+      position,
+    };
+    if (targetStage?.is_done) {
+      updates.status = "done";
+      updates.progress = 100;
+    }
+
     if (getDataLayer() === "supabase") {
       await dataProvider.moveTask(id, stageId, position);
+      if (targetStage?.is_done) {
+        await dataProvider.updateTask(id, { status: "done", progress: 100 });
+      }
     }
     setState((prev) => ({
       ...prev,
       tasks: prev.tasks.map((t) =>
-        t.id === id ? { ...t, stage_id: stageId, position, updated_at: new Date().toISOString() } : t
+        t.id === id ? { ...t, ...updates, updated_at: new Date().toISOString() } : t
       ),
     }));
-  }, []);
+  }, [state.stages]);
 
   // ── Dependencies (RF-06) ────────────────────────────────────
   const addDependency = useCallback(

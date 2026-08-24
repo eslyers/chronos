@@ -333,12 +333,21 @@ export function TaskDialog({
     setError("");
 
     try {
+      const isCompleted = progress === 100;
+      let calculatedStatus: Task["status"] = task?.status ?? "todo";
+      if (isCompleted) {
+        calculatedStatus = "done";
+      } else if (calculatedStatus === "done") {
+        calculatedStatus = progress > 0 ? "in_progress" : "todo";
+      }
+
       const taskData: Partial<Task> = {
         title: title.trim(),
         description: description.trim() || null,
         stage_id: stageId || null,
         parent_task_id: parentTaskId || null,
         priority,
+        status: calculatedStatus,
         progress,
         start_date: startDate ? new Date(startDate).toISOString() : null,
         due_date: dueDate ? new Date(dueDate).toISOString() : null,

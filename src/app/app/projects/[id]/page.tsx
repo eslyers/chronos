@@ -2,7 +2,7 @@
 
 import { useState, use, useEffect, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Calendar, MoreVertical, CornerDownRight, FolderTree, FileText, BarChart3 } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, MoreVertical, CornerDownRight, FolderTree, FileText, BarChart3, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -301,8 +301,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   {stageTasks.map((task) => {
                     const priority = PRIORITY_COLORS[task.priority];
                     const days = daysUntil(task.due_date);
-                    const overdue = days !== null && days < 0 && task.status !== "done";
-                    const dueSoon = days !== null && days >= 0 && days <= 2 && task.status !== "done";
+                    const isTaskDone = task.status === "done" || task.progress === 100 || stage.is_done;
+                    const overdue = days !== null && days < 0 && !isTaskDone;
+                    const dueSoon = days !== null && days >= 0 && days <= 2 && !isTaskDone;
 
                     return (
                       <div
@@ -313,11 +314,18 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                         onDragOver={handleDragOver}
                         onDrop={(e) => handleDropOnTask(e, task)}
                         onClick={() => openEditTask(task)}
-                        className="bg-card rounded-md p-3 border hover:border-primary cursor-pointer transition-all hover:shadow-md group"
+                        className={`bg-card rounded-md p-3 border hover:border-primary cursor-pointer transition-all hover:shadow-md group ${
+                          isTaskDone ? "border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-950/10 shadow-xs" : ""
+                        }`}
                       >
                         <div className="flex items-start justify-between gap-2 mb-2">
-                          <h4 className="font-medium text-sm leading-tight flex-1">
-                            {task.title}
+                          <h4 className="font-medium text-sm leading-tight flex-1 flex items-start gap-1.5">
+                            {isTaskDone && (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+                            )}
+                            <span className={isTaskDone ? "text-foreground font-semibold" : ""}>
+                              {task.title}
+                            </span>
                           </h4>
                           <button
                             onClick={(e) => {
@@ -366,9 +374,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                         )}
 
                         <div className="flex items-center justify-between gap-2 mt-2">
-                          <Badge className={`${priority.bg} ${priority.text} border-0`}>
-                            {priority.label}
-                          </Badge>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Badge className={`${priority.bg} ${priority.text} border-0`}>
+                              {priority.label}
+                            </Badge>
+                            {isTaskDone && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0.2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-bold">
+                                Concluída
+                              </Badge>
+                            )}
+                          </div>
                           {task.due_date && (
                             <div
                               className={`text-xs flex items-center gap-1 ${
@@ -387,8 +402,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
                         {task.progress > 0 && (
                           <div className="mt-2">
-                            <Progress value={task.progress} className="h-1" />
-                            <div className="text-xs text-muted-foreground mt-1 text-right">
+                            <Progress
+                              value={task.progress}
+                              className="h-1"
+                              indicatorClassName={isTaskDone ? "bg-emerald-500" : undefined}
+                            />
+                            <div className={`text-xs mt-1 text-right font-mono font-medium ${
+                              isTaskDone ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-muted-foreground"
+                            }`}>
                               {task.progress}%
                             </div>
                           </div>
