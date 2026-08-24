@@ -2,6 +2,7 @@
 
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Gantt, ViewMode, type Task as GanttTask } from "gantt-task-react";
 import "gantt-task-react/dist/index.css";
@@ -80,6 +81,9 @@ const PRIORITY_PALETTE: Record<string, { light: string; dark: string }> = {
 };
 
 export default function TimelinePage() {
+  const searchParams = useSearchParams();
+  const projectParam = searchParams ? searchParams.get("project") : null;
+
   const {
     projects,
     getTasksByProject,
@@ -89,8 +93,14 @@ export default function TimelinePage() {
     loadAllProjectsDetails,
   } = useData();
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.Week);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(projectParam || "all");
   const [loadingDetails, setLoadingDetails] = useState(false);
+
+  useEffect(() => {
+    if (projectParam) {
+      setSelectedProjectId(projectParam);
+    }
+  }, [projectParam]);
 
   useEffect(() => {
     async function fetchDetails() {
@@ -309,17 +319,28 @@ export default function TimelinePage() {
   }, [projects, selectedProjectId, getTasksByProject, dependenciesByTask, collapsedProjects, collapsedTasks, isDark, palette, sortField, sortDirection]);
 
   const stats = useMemo(() => {
-    const totalProjects = projects.length;
-    const allTasks = projects.flatMap((p) => getTasksByProject(p.id));
-    const completed = allTasks.filter((t) => t.status === "done" || t.progress === 100).length;
-    const overdue = allTasks.filter(
+    const inScopeProjects =
+      selectedProjectId === "all"
+        ? projects
+        : projects.filter((p) => p.id === selectedProjectId);
+
+    const inScopeTasks = inScopeProjects.flatMap((p) => getTasksByProject(p.id));
+    const completed = inScopeTasks.filter((t) => t.status === "done" || t.progress === 100).length;
+    const overdue = inScopeTasks.filter(
       (t) => t.due_date && new Date(t.due_date) < new Date() && t.status !== "done" && t.progress !== 100
     ).length;
 
-    const completionRate = allTasks.length > 0 ? Math.round((completed / allTasks.length) * 100) : 0;
+    const completionRate = inScopeTasks.length > 0 ? Math.round((completed / inScopeTasks.length) * 100) : 0;
 
-    return { totalProjects, totalTasks: allTasks.length, completed, overdue, completionRate };
-  }, [projects, getTasksByProject]);
+    return {
+      totalProjects: inScopeProjects.length,
+      totalTasks: inScopeTasks.length,
+      completed,
+      overdue,
+      completionRate,
+      isFiltered: selectedProjectId !== "all",
+    };
+  }, [projects, selectedProjectId, getTasksByProject]);
 
   if (loading || loadingDetails) {
     return (
@@ -410,7 +431,9 @@ export default function TimelinePage() {
         <Card className="p-5 border-border/80 bg-card shadow-sm hover:border-blue-500/30 transition-all">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Projetos em Escopo</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {stats.isFiltered ? "Projeto Selecionado" : "Projetos em Escopo"}
+              </p>
               <p className="text-3xl font-extrabold mt-1.5">{stats.totalProjects}</p>
             </div>
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500 font-bold">
@@ -418,15 +441,17 @@ export default function TimelinePage() {
             </div>
           </div>
           <div className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <Sparkles className="h-3.5 w-3.5 text-blue-500" />
-            <span>Mapeamento Ativo</span>
+            <Sparkles className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+            <span className="truncate">{stats.isFiltered ? selectedProjectName : "Mapeamento Ativo"}</span>
           </div>
         </Card>
 
         <Card className="p-5 border-border/80 bg-card shadow-sm hover:border-indigo-500/30 transition-all">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Entregáveis Totais</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {stats.isFiltered ? "Entregáveis do Projeto" : "Entregáveis Totais"}
+              </p>
               <p className="text-3xl font-extrabold mt-1.5">{stats.totalTasks}</p>
             </div>
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-500 font-bold">
@@ -434,7 +459,7 @@ export default function TimelinePage() {
             </div>
           </div>
           <div className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <BarChart3 className="h-3.5 w-3.5 text-indigo-500" />
+            <BarChart3 className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
             <span>Tarefas & Subtarefas</span>
           </div>
         </Card>
@@ -442,7 +467,9 @@ export default function TimelinePage() {
         <Card className="p-5 border-border/80 bg-card shadow-sm hover:border-emerald-500/30 transition-all">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Conclusão Global</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {stats.isFiltered ? "Conclusão do Projeto" : "Conclusão Global"}
+              </p>
               <p className="text-3xl font-extrabold text-emerald-500 mt-1.5">{stats.completionRate}%</p>
             </div>
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 font-bold">
@@ -458,7 +485,9 @@ export default function TimelinePage() {
         <Card className="p-5 border-border/80 bg-card shadow-sm hover:border-red-500/30 transition-all">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Atrasos Críticos</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {stats.isFiltered ? "Atrasos no Projeto" : "Atrasos Críticos"}
+              </p>
               <p className={`text-3xl font-extrabold mt-1.5 ${stats.overdue > 0 ? "text-destructive" : "text-emerald-500"}`}>
                 {stats.overdue}
               </p>
