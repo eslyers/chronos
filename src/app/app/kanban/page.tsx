@@ -498,10 +498,10 @@ export default function KanbanPage() {
     return (
       <div className="space-y-6 animate-fadeIn">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-3">
+          <h2 className="text-3xl font-extrabold tracking-tight flex items-center gap-3">
             <KanbanSquare className="h-7 w-7 text-blue-500" />
             Board Kanban
-          </h1>
+          </h2>
           <p className="text-muted-foreground mt-1">
             Acompanhe o fluxo de execução em colunas interativas
           </p>
@@ -538,10 +538,10 @@ export default function KanbanPage() {
                   QUADRO KANBAN
                 </Badge>
               </div>
-              <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2 flex items-center gap-3">
+              <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2 flex items-center gap-3">
                 <KanbanSquare className="h-7 w-7 text-blue-500" />
                 Board Kanban — Seleção de Projeto
-              </h1>
+              </h2>
               <p className="text-sm text-muted-foreground mt-1 max-w-xl">
                 Escolha o projeto corporativo para visualizar e interagir com o quadro de etapas em tempo real.
               </p>

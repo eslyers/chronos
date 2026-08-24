@@ -252,7 +252,7 @@ export default function SettingsPage() {
     return (
       <div className="space-y-4 max-w-2xl">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
+          <h2 className="text-3xl font-bold tracking-tight">Configurações</h2>
           <p className="text-muted-foreground">Conta, notificações e integrações</p>
         </div>
         <Alert variant="destructive">

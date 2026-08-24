@@ -1,23 +1,11 @@
-
 // ─────────────────────────────────────────────────────────────
 // CHRONOS — Supabase Data Layer
 // Migra o DataContext do localStorage pro Postgres real do Supabase.
 // Usa schemas snake_case (DB) e converte pra camelCase (UI).
-// Tipos do Supabase estão como `never` porque não geramos `supabase gen types`
-// ainda. Quando rodar `npx supabase gen types typescript`, regenerar.
 // ─────────────────────────────────────────────────────────────
 
-import { createSPAClient as createSPAClientRaw } from "@/lib/supabase/client";
-
-interface SupabaseAny {
-  from: (table: string) => any;
-  auth: any;
-}
-
-function client(): SupabaseAny {
-  return createSPAClientRaw() as any;
-}
-
+import { createSPAClient } from "@/lib/supabase/client";
+import type { Database } from "@/lib/types";
 import type {
   Project,
   Stage,
@@ -25,64 +13,14 @@ import type {
   TaskDependency,
 } from "@/lib/context/DataContext";
 
-// ─────────────────────────────────────────────────────────────
-// CHRONOS — Supabase Data Layer
-// Migra o DataContext do localStorage pro Postgres real do Supabase.
-// Usa schemas snake_case (DB) e converte pra camelCase (UI).
-// ─────────────────────────────────────────────────────────────
+function client() {
+  return createSPAClient();
+}
 
-type DbProject = {
-  id: string;
-  workspace_id: string;
-  name: string;
-  description: string | null;
-  color: string;
-  status: string;
-  start_date: string | null;
-  target_date: string | null;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type DbStage = {
-  id: string;
-  project_id: string;
-  name: string;
-  color: string;
-  sort_order: number;
-  wip_limit: number | null;
-  is_done: boolean;
-  created_at: string;
-};
-
-type DbTask = {
-  id: string;
-  stage_id: string;
-  project_id: string;
-  title: string;
-  description: string | null;
-  status: string;
-  priority: string;
-  assignee_id: string | null;
-  assignee_name: string | null;
-  assignee_status: string | null;
-  start_date: string | null;
-  due_date: string | null;
-  progress: number;
-  estimated_hours: number | null;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type DbTaskDependency = {
-  id: string;
-  task_id: string;
-  depends_on_task_id: string;
-  dependency_type: string;
-  created_at: string;
-};
+type DbProject = Database["public"]["Tables"]["projects"]["Row"];
+type DbStage = Database["public"]["Tables"]["stages"]["Row"];
+type DbTask = Database["public"]["Tables"]["tasks"]["Row"];
+type DbTaskDependency = Database["public"]["Tables"]["task_dependencies"]["Row"];
 
 function dbToProject(d: DbProject): Project {
   return {
@@ -91,7 +29,7 @@ function dbToProject(d: DbProject): Project {
     owner_id: d.created_by ?? "",
     name: d.name,
     description: d.description,
-    color: d.color,
+    color: d.color ?? "#3b82f6",
     status: d.status as Project["status"],
     start_date: d.start_date,
     target_date: d.target_date,
@@ -106,9 +44,10 @@ function dbToStage(d: DbStage): Stage {
     id: d.id,
     project_id: d.project_id,
     name: d.name,
-    color: d.color,
+    color: d.color ?? "#3b82f6",
     position: d.sort_order,
     is_done: d.is_done,
+    wip_limit: d.wip_limit,
   };
 }
 
@@ -127,8 +66,8 @@ function dbToTask(d: DbTask): Task {
     assignee_id: d.assignee_id,
     assignee_name: d.assignee_name ?? null,
     assignee_status: (d.assignee_status as Task["assignee_status"]) ?? null,
-    position: 0,
-    parent_task_id: (d as { parent_task_id?: string | null }).parent_task_id ?? null,
+    position: d.position ?? 0,
+    parent_task_id: d.parent_task_id ?? null,
     created_at: d.created_at,
     updated_at: d.updated_at,
   };
@@ -157,7 +96,7 @@ export async function fetchAllProjects(): Promise<Project[]> {
     console.error("[supabase-data] fetchAllProjects", error);
     return [];
   }
-  return (data ?? []).map(dbToProject);
+  return ((data as DbProject[] | null) ?? []).map(dbToProject);
 }
 
 export async function fetchAllStages(projectIds: string[]): Promise<Stage[]> {
@@ -172,7 +111,7 @@ export async function fetchAllStages(projectIds: string[]): Promise<Stage[]> {
     console.error("[supabase-data] fetchAllStages", error);
     return [];
   }
-  return (data ?? []).map(dbToStage);
+  return ((data as DbStage[] | null) ?? []).map(dbToStage);
 }
 
 export async function fetchAllTasks(projectIds: string[]): Promise<Task[]> {
@@ -186,7 +125,7 @@ export async function fetchAllTasks(projectIds: string[]): Promise<Task[]> {
     console.error("[supabase-data] fetchAllTasks", error);
     return [];
   }
-  return (data ?? []).map(dbToTask);
+  return ((data as DbTask[] | null) ?? []).map(dbToTask);
 }
 
 export async function fetchAllDependencies(taskIds: string[]): Promise<TaskDependency[]> {
@@ -200,7 +139,7 @@ export async function fetchAllDependencies(taskIds: string[]): Promise<TaskDepen
     console.error("[supabase-data] fetchAllDependencies", error);
     return [];
   }
-  return (data ?? []).map(dbToDependency);
+  return ((data as DbTaskDependency[] | null) ?? []).map(dbToDependency);
 }
 
 export async function createProject(input: {
@@ -211,55 +150,56 @@ export async function createProject(input: {
   created_by: string;
 }): Promise<Project | null> {
   const supabase = client();
+  const payload: Database["public"]["Tables"]["projects"]["Insert"] = {
+    workspace_id: input.workspace_id,
+    name: input.name,
+    description: input.description ?? null,
+    color: input.color ?? "#3b82f6",
+    created_by: input.created_by,
+  };
   const { data, error } = await supabase
     .from("projects")
-    .insert({
-      workspace_id: input.workspace_id,
-      name: input.name,
-      description: input.description ?? null,
-      color: input.color ?? "#3b82f6",
-      created_by: input.created_by,
-    } as any)
+    .insert(payload as any)
     .select()
     .single();
   if (error) {
     console.error("[supabase-data] createProject", error);
     return null;
   }
-  return dbToProject(data);
+  return dbToProject(data as DbProject);
 }
 
 export async function createDefaultStages(projectId: string): Promise<Stage[]> {
   const supabase = client();
-  const stages = [
-    { name: "Backlog", color: "#94a3b8", sort_order: 0, is_done: false },
-    { name: "A Fazer", color: "#3b82f6", sort_order: 1, is_done: false },
-    { name: "Em Progresso", color: "#3b82f6", sort_order: 2, is_done: false },
-    { name: "Em Revisão", color: "#a855f7", sort_order: 3, is_done: false },
-    { name: "Concluído", color: "#10b981", sort_order: 4, is_done: true },
+  const stages: Database["public"]["Tables"]["stages"]["Insert"][] = [
+    { project_id: projectId, name: "Backlog", color: "#94a3b8", sort_order: 0, is_done: false },
+    { project_id: projectId, name: "A Fazer", color: "#3b82f6", sort_order: 1, is_done: false },
+    { project_id: projectId, name: "Em Progresso", color: "#3b82f6", sort_order: 2, is_done: false },
+    { project_id: projectId, name: "Em Revisão", color: "#a855f7", sort_order: 3, is_done: false },
+    { project_id: projectId, name: "Concluído", color: "#10b981", sort_order: 4, is_done: true },
   ];
   const { data, error } = await supabase
     .from("stages")
-    .insert(stages.map((s) => ({ ...s, project_id: projectId })) as any)
+    .insert(stages as any)
     .select();
   if (error) {
     console.error("[supabase-data] createDefaultStages", error);
     return [];
   }
-  return (data ?? []).map(dbToStage);
+  return ((data as DbStage[] | null) ?? []).map(dbToStage);
 }
 
 export async function updateProject(id: string, patch: Partial<Project>): Promise<void> {
   const supabase = client();
-  const payload: any = {
-    name: patch.name,
-    description: patch.description,
-    color: patch.color,
-    status: patch.status,
-    start_date: patch.start_date,
-    target_date: patch.target_date,
-  };
-  const { error } = await supabase.from("projects").update(payload).eq("id", id);
+  const payload: Database["public"]["Tables"]["projects"]["Update"] = {};
+  if (patch.name !== undefined) payload.name = patch.name;
+  if (patch.description !== undefined) payload.description = patch.description;
+  if (patch.color !== undefined) payload.color = patch.color;
+  if (patch.status !== undefined) payload.status = patch.status;
+  if (patch.start_date !== undefined) payload.start_date = patch.start_date;
+  if (patch.target_date !== undefined) payload.target_date = patch.target_date;
+
+  const { error } = await (supabase.from("projects") as any).update(payload).eq("id", id);
   if (error) console.error("[supabase-data] updateProject", error);
 }
 
@@ -285,39 +225,40 @@ export async function createTask(input: {
   created_by: string;
 }): Promise<Task | null> {
   const supabase = client();
-  const { data, error } = await supabase
-    .from("tasks")
-    .insert({
-      project_id: input.project_id,
-      stage_id: input.stage_id,
-      title: input.title,
-      description: input.description ?? null,
-      status: input.status ?? "todo",
-      priority: input.priority ?? "medium",
-      due_date: input.due_date ?? null,
-      start_date: input.start_date ?? null,
-      parent_task_id: input.parent_task_id ?? null,
-      assignee_id: input.assignee_id ?? null,
-      assignee_name: input.assignee_name ?? null,
-      assignee_status: input.assignee_status ?? null,
-      created_by: input.created_by,
-    } as any).select()
+  const payload: Database["public"]["Tables"]["tasks"]["Insert"] = {
+    project_id: input.project_id,
+    stage_id: input.stage_id,
+    title: input.title,
+    description: input.description ?? null,
+    status: input.status ?? "todo",
+    priority: input.priority ?? "medium",
+    due_date: input.due_date ?? null,
+    start_date: input.start_date ?? null,
+    parent_task_id: input.parent_task_id ?? null,
+    assignee_id: input.assignee_id ?? null,
+    assignee_name: input.assignee_name ?? null,
+    assignee_status: input.assignee_status ?? null,
+    created_by: input.created_by,
+  };
+  const { data, error } = await (supabase.from("tasks") as any)
+    .insert(payload)
+    .select()
     .single();
   if (error) {
     console.error("[supabase-data] createTask", error);
     return null;
   }
-  return dbToTask(data);
+  return dbToTask(data as DbTask);
 }
 
 export async function updateTask(id: string, patch: Partial<Task>): Promise<void> {
   const supabase = client();
-  const payload: any = {};
+  const payload: Database["public"]["Tables"]["tasks"]["Update"] = {};
   if (patch.title !== undefined) payload.title = patch.title;
   if (patch.description !== undefined) payload.description = patch.description;
   if (patch.status !== undefined) payload.status = patch.status;
   if (patch.priority !== undefined) payload.priority = patch.priority;
-  if (patch.stage_id !== undefined) payload.stage_id = patch.stage_id;
+  if (patch.stage_id !== undefined && patch.stage_id !== null) payload.stage_id = patch.stage_id;
   if (patch.progress !== undefined) payload.progress = patch.progress;
   if (patch.due_date !== undefined) payload.due_date = patch.due_date;
   if (patch.start_date !== undefined) payload.start_date = patch.start_date;
@@ -326,17 +267,17 @@ export async function updateTask(id: string, patch: Partial<Task>): Promise<void
   if (patch.assignee_name !== undefined) payload.assignee_name = patch.assignee_name;
   if (patch.assignee_status !== undefined) payload.assignee_status = patch.assignee_status;
 
-  const { error } = await supabase.from("tasks").update(payload).eq("id", id);
+  const { error } = await (supabase.from("tasks") as any).update(payload).eq("id", id);
   if (error) console.error("[supabase-data] updateTask", error);
 }
 
 export async function moveTaskToStage(taskId: string, stageId: string, position?: number): Promise<void> {
   const supabase = client();
-  const payload: any = { stage_id: stageId };
+  const payload: Database["public"]["Tables"]["tasks"]["Update"] = { stage_id: stageId };
   if (typeof position === "number") {
     payload.position = position;
   }
-  const { error } = await supabase.from("tasks").update(payload).eq("id", taskId);
+  const { error } = await (supabase.from("tasks") as any).update(payload).eq("id", taskId);
   if (error) console.error("[supabase-data] moveTaskToStage", error);
 }
 
@@ -354,31 +295,31 @@ export async function createStage(input: {
   wip_limit?: number | null;
 }): Promise<Stage | null> {
   const supabase = client();
-  const payload: any = {
+  const payload: Database["public"]["Tables"]["stages"]["Insert"] = {
     project_id: input.project_id,
     name: input.name,
     color: input.color ?? "#3b82f6",
     sort_order: input.sort_order,
     wip_limit: input.wip_limit ?? null,
   };
-  const { data, error } = await supabase.from("stages").insert(payload).select().single();
+  const { data, error } = await (supabase.from("stages") as any).insert(payload).select().single();
   if (error) {
     console.error("[supabase-data] createStage", error);
     return null;
   }
-  return dbToStage(data);
+  return dbToStage(data as DbStage);
 }
 
 export async function updateStage(id: string, patch: Partial<Stage>): Promise<void> {
   const supabase = client();
-  const payload: any = {
-    name: patch.name,
-    color: patch.color,
-    sort_order: patch.position,
-    is_done: patch.is_done,
-    wip_limit: (patch as any).wip_limit,
-  };
-  const { error } = await supabase.from("stages").update(payload).eq("id", id);
+  const payload: Database["public"]["Tables"]["stages"]["Update"] = {};
+  if (patch.name !== undefined) payload.name = patch.name;
+  if (patch.color !== undefined) payload.color = patch.color;
+  if (patch.position !== undefined) payload.sort_order = patch.position;
+  if (patch.is_done !== undefined) payload.is_done = patch.is_done;
+  if (patch.wip_limit !== undefined) payload.wip_limit = patch.wip_limit;
+
+  const { error } = await (supabase.from("stages") as any).update(payload).eq("id", id);
   if (error) console.error("[supabase-data] updateStage", error);
 }
 
@@ -395,14 +336,13 @@ export async function getCurrentWorkspaceId(): Promise<string | null> {
     console.error("[supabase-data] getCurrentUser", error);
     return null;
   }
-  // Auto-criado pelo handle_new_user trigger
   const { data: workspaces } = await supabase
     .from("workspaces")
     .select("id")
     .eq("owner_id", data.user.id)
     .limit(1)
     .single();
-  return workspaces?.id ?? null;
+  return (workspaces as { id: string } | null)?.id ?? null;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -414,7 +354,6 @@ export async function fetchProjectDependencies(
   projectId: string
 ): Promise<TaskDependency[]> {
   const supabase = client();
-  // 2 queries: tasks do projeto + deps onde task_id IN (tasks) OR depends_on_task_id IN (tasks)
   const { data: projectTasks, error: tasksErr } = await supabase
     .from("tasks")
     .select("id")
@@ -423,10 +362,9 @@ export async function fetchProjectDependencies(
     console.error("[supabase-data] fetchProjectDependencies (tasks)", tasksErr);
     return [];
   }
-  const taskIds = (projectTasks ?? []).map((t: { id: string }) => t.id);
+  const taskIds = ((projectTasks as { id: string }[] | null) ?? []).map((t) => t.id);
   if (taskIds.length === 0) return [];
 
-  // Busca deps onde task_id está nas tasks do projeto OU depends_on_task_id está
   const { data, error } = await supabase
     .from("task_dependencies")
     .select("*")
@@ -435,7 +373,7 @@ export async function fetchProjectDependencies(
     console.error("[supabase-data] fetchProjectDependencies", error);
     return [];
   }
-  return (data ?? []).map(dbToDependency);
+  return ((data as DbTaskDependency[] | null) ?? []).map(dbToDependency);
 }
 
 /** Cria uma dependência (task A depende de task B) */
@@ -448,20 +386,21 @@ export async function createTaskDependency(input: {
     throw new Error("Uma tarefa não pode depender de si mesma");
   }
   const supabase = client();
+  const payload: Database["public"]["Tables"]["task_dependencies"]["Insert"] = {
+    task_id: input.task_id,
+    depends_on_task_id: input.depends_on_task_id,
+    dependency_type: input.type ?? "FS",
+  };
   const { data, error } = await supabase
     .from("task_dependencies")
-    .insert({
-      task_id: input.task_id,
-      depends_on_task_id: input.depends_on_task_id,
-      dependency_type: input.type ?? "FS",
-    })
+    .insert(payload as any)
     .select("*")
     .single();
   if (error) {
     console.error("[supabase-data] createTaskDependency", error);
     throw new Error(error.message);
   }
-  return dbToDependency(data);
+  return dbToDependency(data as DbTaskDependency);
 }
 
 /** Remove uma dependência por id */
@@ -480,20 +419,17 @@ export function wouldCreateCycle(
   dependsOnTaskId: string,
   allDeps: TaskDependency[]
 ): boolean {
-  // Constroi mapa: task → [depends_on_task_ids]
   const adj = new Map<string, string[]>();
   for (const d of allDeps) {
     if (!adj.has(d.task_id)) adj.set(d.task_id, []);
     adj.get(d.task_id)!.push(d.depends_on_task_id);
   }
 
-  // BFS/DFS a partir de dependsOnTaskId; se chegar em taskId, há ciclo
-  // (porque taskId passaria a depender transitivamente de si mesmo)
   const visited = new Set<string>();
   const stack = [dependsOnTaskId];
   while (stack.length > 0) {
     const current = stack.pop()!;
-    if (current === taskId) return true; // ciclo detectado
+    if (current === taskId) return true;
     if (visited.has(current)) continue;
     visited.add(current);
     const next = adj.get(current) ?? [];

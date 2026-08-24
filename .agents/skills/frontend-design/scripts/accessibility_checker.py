@@ -74,7 +74,9 @@ def check_accessibility(file_path: Path) -> list[str]:
         content,
         re.DOTALL,
     )
-    for _, before, after in non_interactive_click:
+    for m in non_interactive_click:
+        before = m.group(2)
+        after = m.group(3)
         attributes = f"{before} {after}".lower()
         keyboard_enabled = "onkeydown=" in attributes or "onkeyup=" in attributes
         semantic_button = 'role="button"' in attributes or "role='button'" in attributes

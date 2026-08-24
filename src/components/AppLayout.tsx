@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
@@ -120,7 +121,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             title={productName}
           >
             <div className="h-8 w-8 shrink-0 rounded-lg overflow-hidden flex items-center justify-center bg-blue-500/10 p-0.5">
-              <img src="/icon.svg" alt="CHRONOS Logo" className="h-full w-full object-contain" />
+              <Image src="/icon.svg" alt="CHRONOS Logo" width={32} height={32} className="h-full w-full object-contain" />
             </div>
             {!isCollapsed && (
               <span className="text-lg font-bold tracking-tight truncate transition-opacity duration-200">
