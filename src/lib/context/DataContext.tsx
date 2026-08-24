@@ -328,16 +328,21 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         setUserId(ctx.userId);
         setWorkspaceId(ctx.workspaceId ?? "ws-local");
-        const data = await dataProvider.loadProjectsOnly();
+        const data = await dataProvider.load();
         if (cancelled) return;
         if (data) {
           setState({
             projects: data.projects,
-            stages: [],
-            tasks: [],
-            dependencies: [],
+            stages: data.stages,
+            tasks: data.tasks,
+            dependencies: data.dependencies,
             loading: false,
           });
+          const loaded: Record<string, boolean> = {};
+          data.projects.forEach((p) => {
+            loaded[p.id] = true;
+          });
+          setLoadedProjects(loaded);
         } else {
           setState((s) => ({ ...s, loading: false }));
         }

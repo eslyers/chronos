@@ -375,11 +375,16 @@ export default function KanbanPage() {
     moveTask,
     updateTask,
     loadProjectDetails,
+    loadAllProjectsDetails,
     isProjectLoaded,
   } = useData();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [loadingProject, setLoadingProject] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+
+  useEffect(() => {
+    loadAllProjectsDetails();
+  }, [loadAllProjectsDetails]);
 
   useEffect(() => {
     async function fetchDetails() {
@@ -579,11 +584,12 @@ export default function KanbanPage() {
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => {
             const projectStages = stages.filter((s) => s.project_id === project.id);
-            const projectTasksCount = tasks.filter((t) => t.project_id === project.id).length;
-            const doneCount = tasks.filter(
-              (t) => t.project_id === project.id && t.status === "done"
+            const projectTasks = tasks.filter((t) => t.project_id === project.id);
+            const projectTasksCount = projectTasks.length;
+            const doneCount = projectTasks.filter(
+              (t) => t.status === "done" || t.progress === 100
             ).length;
-            const progress = projectTasksCount ? Math.round((doneCount / projectTasksCount) * 100) : 0;
+            const progress = projectTasksCount ? Math.round((doneCount / projectTasksCount) * 100) : (project.progress || 0);
 
             return (
               <Card
@@ -621,7 +627,7 @@ export default function KanbanPage() {
                       <span>{projectTasksCount} entregáveis</span>
                       <span className="text-emerald-500">{progress}% concluído</span>
                     </div>
-                    <Progress value={progress} className="h-2 bg-emerald-500/20" />
+                    <Progress value={progress} className="h-2 bg-emerald-500/20" indicatorClassName={progress === 100 ? "bg-emerald-500" : undefined} />
                   </div>
                 </CardContent>
               </Card>

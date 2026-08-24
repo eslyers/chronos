@@ -167,11 +167,11 @@ export default function CalendarPage() {
       return d >= monthStart && d <= monthEnd;
     });
     const overdue = monthTasks.filter((t) => {
-      if (!t.due_date || t.status === "done") return false;
+      if (!t.due_date || t.status === "done" || t.progress === 100) return false;
       return new Date(t.due_date).getTime() < Date.now();
     }).length;
-    const due = monthTasks.filter((t) => t.status !== "done").length;
-    const done = monthTasks.filter((t) => t.status === "done").length;
+    const due = monthTasks.filter((t) => t.status !== "done" && t.progress !== 100).length;
+    const done = monthTasks.filter((t) => t.status === "done" || t.progress === 100).length;
     return { total: monthTasks.length, overdue, due, done };
   }, [visibleTasks, currentDate]);
 
@@ -439,20 +439,22 @@ export default function CalendarPage() {
 
                     <div className="space-y-1.5 flex-1">
                       {dayTasks.slice(0, 3).map((task) => {
-                        const isDone = task.status === "done";
+                        const isDone = task.status === "done" || task.progress === 100;
                         const project = projects.find((p) => p.id === task.project_id);
                         return (
                           <div
                             key={task.id}
                             onClick={() => router.push(`/app/projects/${task.project_id}?task=${task.id}`)}
                             className={`text-[10px] p-2 rounded-lg border-l-4 cursor-pointer hover:shadow-md transition-all space-y-1 ${
-                              PRIORITY_COLORS[task.priority] ?? "border-l-slate-400 bg-muted/40"
-                            } ${isDone ? "opacity-60 line-through" : ""}`}
+                              isDone
+                                ? "border-l-emerald-500 bg-emerald-500/10 text-foreground"
+                                : (PRIORITY_COLORS[task.priority] ?? "border-l-slate-400 bg-muted/40")
+                            }`}
                             title={`${task.title}${project ? ` (${project.name})` : ""}`}
                           >
                             <div className="font-semibold leading-tight line-clamp-1 flex items-center gap-1">
                               {isDone && <CheckCircle2 className="h-3 w-3 text-emerald-500 inline shrink-0" />}
-                              <span>{task.title}</span>
+                              <span className={isDone ? "text-foreground font-semibold" : ""}>{task.title}</span>
                             </div>
 
                             {/* Badge do Responsável + Nome do Projeto */}

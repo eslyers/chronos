@@ -178,11 +178,11 @@ export function ProjectStatusReportPDF({
   if (!open) return null;
 
   const totalTasks = tasks.length;
-  const doneTasks = tasks.filter((t) => t.status === "done").length;
-  const inProgressTasks = tasks.filter((t) => t.status === "in_progress").length;
-  const todoTasks = tasks.filter((t) => t.status === "todo" || t.status === "blocked" || !t.status).length;
+  const doneTasks = tasks.filter((t) => t.status === "done" || t.progress === 100).length;
+  const inProgressTasks = tasks.filter((t) => t.status === "in_progress" && t.progress < 100).length;
+  const todoTasks = tasks.filter((t) => (t.status === "todo" || t.status === "blocked" || !t.status) && t.progress !== 100).length;
   const overdueTasks = tasks.filter((t) => {
-    if (!t.due_date || t.status === "done") return false;
+    if (!t.due_date || t.status === "done" || t.progress === 100) return false;
     return new Date(t.due_date).getTime() < Date.now();
   }).length;
 
@@ -344,7 +344,7 @@ export function ProjectStatusReportPDF({
                 <div className="space-y-3">
                   {stages.map((stage) => {
                     const stageTasks = tasks.filter((t) => t.stage_id === stage.id);
-                    const stageDone = stageTasks.filter((t) => t.status === "done").length;
+                    const stageDone = stageTasks.filter((t) => t.status === "done" || t.progress === 100).length;
                     const stagePct =
                       stageTasks.length > 0
                         ? Math.round(
@@ -507,7 +507,7 @@ export function ProjectStatusReportPDF({
               </thead>
               <tbody className="divide-y divide-border/40">
                 {sortedTasks.map((task: Task) => {
-                  const isDone = task.status === "done";
+                  const isDone = task.status === "done" || task.progress === 100;
                   const isOverdue =
                     !isDone &&
                     task.due_date &&

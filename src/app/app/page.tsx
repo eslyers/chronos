@@ -55,10 +55,14 @@ const PRIORITY_LABELS: Record<
 
 export default function DashboardPage() {
   const { user, loading: userLoading } = useGlobal();
-  const { projects, tasks, getTasksByProject, loading: dataLoading } = useData();
+  const { projects, tasks, getTasksByProject, loading: dataLoading, loadAllProjectsDetails } = useData();
   const [upcomingTasks, setUpcomingTasks] = useState<UpcomingTask[]>([]);
   const [recentNotifications, setRecentNotifications] = useState<RecentNotification[]>([]);
   const [assigneeName, setAssigneeName] = useState<string>("Esly");
+
+  useEffect(() => {
+    loadAllProjectsDetails();
+  }, [loadAllProjectsDetails]);
 
   useEffect(() => {
     if (!user) return;
@@ -88,6 +92,7 @@ export default function DashboardPage() {
         (t) =>
           t.due_date &&
           t.status !== "done" &&
+          t.progress !== 100 &&
           new Date(t.due_date).getTime() > now - 86400000
       )
       .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime())
@@ -120,15 +125,16 @@ export default function DashboardPage() {
   const totalProjects = projects.length;
   const activeProjects = projects.filter((p) => p.status === "active").length;
   const totalTasks = tasks.length;
-  const completedTasks = tasks.filter((t) => t.status === "done").length;
+  const completedTasks = tasks.filter((t) => t.status === "done" || t.progress === 100).length;
   const overdueTasks = tasks.filter(
     (t) =>
       t.due_date &&
       new Date(t.due_date).getTime() < Date.now() &&
-      t.status !== "done"
+      t.status !== "done" &&
+      t.progress !== 100
   ).length;
   const dueSoonTasks = tasks.filter((t) => {
-    if (!t.due_date || t.status === "done") return false;
+    if (!t.due_date || t.status === "done" || t.progress === 100) return false;
     const diff = new Date(t.due_date).getTime() - Date.now();
     return diff > 0 && diff <= 86400000 * 3; // 3 dias
   }).length;
@@ -300,8 +306,8 @@ export default function DashboardPage() {
             {projects.slice(0, 4).map((project: Project) => {
               const projectTasksList = getTasksByProject(project.id);
               const total = projectTasksList.length;
-              const done = projectTasksList.filter((t) => t.status === "done").length;
-              const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+              const done = projectTasksList.filter((t) => t.status === "done" || t.progress === 100).length;
+              const pct = total > 0 ? Math.round((done / total) * 100) : (project.progress || 0);
 
               return (
                 <Card
@@ -319,7 +325,7 @@ export default function DashboardPage() {
                           {project.name}
                         </h3>
                       </div>
-                      <Badge variant="outline" className="text-[10px] font-mono">
+                      <Badge variant="outline" className={`text-[10px] font-mono ${pct === 100 ? "text-emerald-500 border-emerald-500/30 bg-emerald-500/10 font-bold" : ""}`}>
                         {pct}%
                       </Badge>
                     </div>
@@ -334,7 +340,7 @@ export default function DashboardPage() {
                       <span>{done}/{total} entregáveis</span>
                       <span>{project.target_date ? formatDate(project.target_date) : "Sem prazo"}</span>
                     </div>
-                    <Progress value={pct} className="h-1.5" />
+                    <Progress value={pct} className="h-1.5" indicatorClassName={pct === 100 ? "bg-emerald-500" : undefined} />
 
                     <div className="mt-4 flex items-center justify-between pt-1">
                       <Link

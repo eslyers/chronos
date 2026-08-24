@@ -180,8 +180,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   const formatDate = formatDateBR;
 
-  const completedTasks = allTasks.filter((t) => t.status === "done").length;
-  const projectProgress = allTasks.length > 0 ? Math.round((completedTasks / allTasks.length) * 100) : 0;
+  const completedTasks = allTasks.filter((t) => t.status === "done" || t.progress === 100).length;
+  const projectProgress = allTasks.length > 0 ? Math.round((completedTasks / allTasks.length) * 100) : (project.progress || 0);
 
   return (
     <div className="space-y-6">
@@ -235,12 +235,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <Card className="p-3">
             <div className="text-xs text-muted-foreground">Progresso</div>
-            <div className="text-2xl font-bold mt-1">{projectProgress}%</div>
-            <Progress value={projectProgress} className="mt-2" />
+            <div className={`text-2xl font-bold mt-1 ${projectProgress === 100 ? "text-emerald-500" : ""}`}>
+              {projectProgress}%
+            </div>
+            <Progress value={projectProgress} className="mt-2" indicatorClassName={projectProgress === 100 ? "bg-emerald-500" : undefined} />
           </Card>
           <Card className="p-3">
             <div className="text-xs text-muted-foreground">Tarefas</div>
-            <div className="text-2xl font-bold mt-1">
+            <div className={`text-2xl font-bold mt-1 ${completedTasks === allTasks.length && allTasks.length > 0 ? "text-emerald-500" : ""}`}>
               {completedTasks}/{allTasks.length}
             </div>
             <div className="text-xs text-muted-foreground mt-1">concluídas</div>

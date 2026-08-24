@@ -168,7 +168,7 @@ export default function ProjectsPage() {
           {filteredProjects.map((project) => {
             const projectTasks = getTasksByProject(project.id);
             const totalTasks = projectTasks.length;
-            const doneTasks = projectTasks.filter((t) => t.status === "done").length;
+            const doneTasks = projectTasks.filter((t) => t.status === "done" || t.progress === 100).length;
             const calculatedProgress =
               totalTasks > 0
                 ? Math.round((doneTasks / totalTasks) * 100)
@@ -269,7 +269,7 @@ export default function ProjectsPage() {
                         <span className="text-muted-foreground">Progresso Global</span>
                         <span className="font-mono text-foreground">{calculatedProgress}%</span>
                       </div>
-                      <Progress value={calculatedProgress} className="h-2 bg-muted/60" />
+                      <Progress value={calculatedProgress} className="h-2 bg-muted/60" indicatorClassName={calculatedProgress === 100 ? "bg-emerald-500" : undefined} />
                     </div>
 
                     {/* Task Stats & Target Date */}
