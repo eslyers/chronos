@@ -1,7 +1,7 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Gantt, ViewMode, type Task as GanttTask } from "gantt-task-react";
@@ -80,7 +80,7 @@ const PRIORITY_PALETTE: Record<string, { light: string; dark: string }> = {
   critical: { light: "#ef4444", dark: "#f87171" },
 };
 
-export default function TimelinePage() {
+function TimelineContent() {
   const searchParams = useSearchParams();
   const projectParam = searchParams ? searchParams.get("project") : null;
 
@@ -837,5 +837,24 @@ export default function TimelinePage() {
         );
       })()}
     </>
+  );
+}
+
+export default function TimelinePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center h-96 space-y-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 animate-pulse">
+            <Calendar className="h-6 w-6" />
+          </div>
+          <p className="text-sm font-semibold text-muted-foreground animate-pulse">
+            Carregando motor visual de cronograma...
+          </p>
+        </div>
+      }
+    >
+      <TimelineContent />
+    </Suspense>
   );
 }
