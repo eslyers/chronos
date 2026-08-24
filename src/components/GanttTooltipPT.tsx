@@ -55,9 +55,13 @@ export function GanttTooltipPT({
       {task.end.getTime() - task.start.getTime() !== 0 && (
         <p className="_29NTg">Duração: {days} dia(s)</p>
       )}
-      {!!task.progress && (
+      {task.progress === 100 ? (
+        <p className="_29NTg" style={{ color: "#10b981", fontWeight: 600 }}>
+          Status: Concluída (100%) ✓
+        </p>
+      ) : task.progress > 0 ? (
         <p className="_29NTg">Progresso: {task.progress}%</p>
-      )}
+      ) : null}
     </div>
   );
 }

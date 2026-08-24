@@ -245,13 +245,20 @@ export default function TimelinePage() {
               ? new Date(task.due_date)
               : new Date(start.getTime() + 7 * 86400000);
 
+            const isCompleted = task.status === "done" || task.progress === 100;
             const priority = task.priority as keyof typeof PRIORITY_PALETTE | undefined;
             const paletteForTask = priority && PRIORITY_PALETTE[priority]
               ? PRIORITY_PALETTE[priority]
               : null;
-            const barColor = paletteForTask
+            let barColor = paletteForTask
               ? (isDark ? paletteForTask.dark : paletteForTask.light)
               : (depth > 0 ? palette.projectBackground : palette.barBackground);
+            let barProgressColor = "#ffffff";
+
+            if (isCompleted) {
+              barColor = isDark ? "#059669" : "#10b981";
+              barProgressColor = isDark ? "#10b981" : "#34d399";
+            }
 
             // Indentação e indicador de Drill-down (▶ se fechado, ▼ se aberto, ↳ se filha final)
             const indent = depth > 0 ? "  ".repeat(depth) : "";
@@ -277,13 +284,14 @@ export default function TimelinePage() {
               styles: {
                 backgroundColor: barColor,
                 backgroundSelectedColor: barColor,
-                progressColor: "#ffffff",
-                progressSelectedColor: "#ffffff",
+                progressColor: barProgressColor,
+                progressSelectedColor: barProgressColor,
               },
               assigneeId: task.assignee_id,
               assigneeName: task.assignee_name,
               workspaceId: project.workspace_id,
-            } as GanttTask & { assigneeId?: string | null; assigneeName?: string | null; workspaceId?: string });
+              isDone: isCompleted,
+            } as GanttTask & { assigneeId?: string | null; assigneeName?: string | null; workspaceId?: string; isDone?: boolean });
 
             // Se a tarefa não estiver recolhida, renderiza as filhas de nível N+1 (drill-down)
             if (hasChildren && !isTaskCollapsed) {
@@ -303,9 +311,9 @@ export default function TimelinePage() {
   const stats = useMemo(() => {
     const totalProjects = projects.length;
     const allTasks = projects.flatMap((p) => getTasksByProject(p.id));
-    const completed = allTasks.filter((t) => t.status === "done").length;
+    const completed = allTasks.filter((t) => t.status === "done" || t.progress === 100).length;
     const overdue = allTasks.filter(
-      (t) => t.due_date && new Date(t.due_date) < new Date() && t.status !== "done"
+      (t) => t.due_date && new Date(t.due_date) < new Date() && t.status !== "done" && t.progress !== 100
     ).length;
 
     const completionRate = allTasks.length > 0 ? Math.round((completed / allTasks.length) * 100) : 0;
@@ -442,7 +450,7 @@ export default function TimelinePage() {
             </div>
           </div>
           <div className="mt-3 space-y-1">
-            <Progress value={stats.completionRate} className="h-1.5 bg-emerald-500/20" />
+            <Progress value={stats.completionRate} className="h-1.5 bg-emerald-500/20" indicatorClassName="bg-emerald-500" />
             <p className="text-[10px] text-muted-foreground text-right">{stats.completed} de {stats.totalTasks} concluídas</p>
           </div>
         </Card>

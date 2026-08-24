@@ -92,7 +92,10 @@ export function GanttTaskListTablePT({
           assigneeId?: string | null;
           assigneeName?: string | null;
           workspaceId?: string;
+          isDone?: boolean;
         };
+
+        const isTaskDone = (customTask.isDone || t.progress === 100) && t.type === "task";
 
         return (
           <div
@@ -133,8 +136,13 @@ export function GanttTaskListTablePT({
                   >
                     {expanderSymbol}
                   </div>
-                  <span className={`truncate ${t.type === "project" ? "font-bold select-none" : ""}`}>
-                    {t.name}
+                  <span className={`truncate flex items-center gap-1 ${t.type === "project" ? "font-bold select-none" : ""}`}>
+                    {isTaskDone && (
+                      <span className="text-emerald-500 font-bold text-xs shrink-0" title="Concluída (100%)">✓</span>
+                    )}
+                    <span className={isTaskDone ? "text-emerald-700 dark:text-emerald-400 font-medium" : ""}>
+                      {t.name}
+                    </span>
                   </span>
                   {t.type === "task" && <TaskIndicators taskId={t.id} />}
                 </div>

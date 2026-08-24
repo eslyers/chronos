@@ -49,8 +49,8 @@ function statusLabel(task: Task): string {
   const progress = task.progress ?? 0;
   const due = task.due_date ? new Date(task.due_date) : null;
   const now = new Date();
-  if (task.status === "done") return "Concluído";
-  if (due && due < now && progress < 100) return "Atrasado";
+  if (task.status === "done" || progress === 100) return "Concluído";
+  if (due && due < now) return "Atrasado";
   if (progress === 0) return "Não iniciado";
   return "Em progresso";
 }
