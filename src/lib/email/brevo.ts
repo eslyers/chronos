@@ -5,9 +5,13 @@
 // Docs: https://developers.brevo.com/reference/sendtransacemail
 // ─────────────────────────────────────────────────────────────
 
-const BREVO_API_KEY = process.env.BREVO_API_KEY ?? process.env.RESEND_API_KEY ?? "";
-const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL ?? "eslyers@gmail.com";
-const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME ?? "CHRONOS";
+function getBrevoConfig() {
+  return {
+    apiKey: process.env.BREVO_API_KEY ?? process.env.RESEND_API_KEY ?? "",
+    senderEmail: process.env.BREVO_SENDER_EMAIL ?? "ersilva@piccadilly.com.br",
+    senderName: process.env.BREVO_SENDER_NAME ?? "CHRONOS",
+  };
+}
 
 export interface EmailPayload {
   to: string;
@@ -25,7 +29,8 @@ export interface EmailResult {
 }
 
 export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
-  if (!BREVO_API_KEY) {
+  const { apiKey, senderEmail, senderName } = getBrevoConfig();
+  if (!apiKey) {
     return { success: false, error: "BREVO_API_KEY não configurada" };
   }
 
@@ -33,12 +38,12 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
     const response = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
-        "api-key": BREVO_API_KEY,
+        "api-key": apiKey,
         "Content-Type": "application/json",
         "Accept": "application/json",
       },
       body: JSON.stringify({
-        sender: { name: BREVO_SENDER_NAME, email: BREVO_SENDER_EMAIL },
+        sender: { name: senderName, email: senderEmail },
         to: [{ email: payload.to, name: payload.toName ?? payload.to.split("@")[0] }],
         subject: payload.subject,
         htmlContent: payload.html,
@@ -64,14 +69,19 @@ export async function sendEmailWithTags(
   payload: EmailPayload,
   tags: string[]
 ): Promise<EmailResult> {
+  const { apiKey, senderEmail, senderName } = getBrevoConfig();
+  if (!apiKey) {
+    return { success: false, error: "BREVO_API_KEY não configurada" };
+  }
+
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
-      "api-key": BREVO_API_KEY ?? "",
+      "api-key": apiKey,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      sender: { name: BREVO_SENDER_NAME, email: BREVO_SENDER_EMAIL },
+      sender: { name: senderName, email: senderEmail },
       to: [{ email: payload.to, name: payload.toName ?? payload.to.split("@")[0] }],
       subject: payload.subject,
       htmlContent: payload.html,

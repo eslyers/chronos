@@ -10,7 +10,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const TELEGRAM_BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 // Brevo (https://app.brevo.com/settings/keys/api) — transactional emails
 const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY") ?? "";
-const BREVO_SENDER_EMAIL = Deno.env.get("BREVO_SENDER_EMAIL") ?? "eslyers@gmail.com";
+const BREVO_SENDER_EMAIL = Deno.env.get("BREVO_SENDER_EMAIL") ?? "ersilva@piccadilly.com.br";
 const BREVO_SENDER_NAME = Deno.env.get("BREVO_SENDER_NAME") ?? "CHRONOS";
 // URL base do app — vem de env var pra funcionar em qualquer deploy
 // (Vercel production, Vercel preview, local, custom domain, etc)

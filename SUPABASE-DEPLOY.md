@@ -43,8 +43,8 @@ npx supabase secrets set TELEGRAM_BOT_TOKEN="123456789:ABCdefGHIjklMNOpqrsTUVwxy
 
 # Brevo API Key (criar conta em https://app.brevo.com/settings/keys/api)
 # Plano free: 300 emails/dia, sem precisar verificar domínio (só 1 email remetente)
-npx supabase secrets set BREVO_API_KEY="xkeysib-xxxxxxxxxxxxx..."
-npx supabase secrets set BREVO_SENDER_EMAIL="eslyers@gmail.com"
+npx supabase secrets set BREVO_API_KEY="xsmtpsib-..."
+npx supabase secrets set BREVO_SENDER_EMAIL="ersilva@piccadilly.com.br"
 npx supabase secrets set BREVO_SENDER_NAME="CHRONOS"
 npx supabase secrets set APP_URL="https://chronos-temp.vercel.app"
 ```
