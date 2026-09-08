@@ -83,6 +83,7 @@ export default function UsersPage() {
     const createdAt = new Date().toISOString();
 
     try {
+      let createdToken = token;
       if (supabaseMode) {
         const res = await fetch("/api/users/invite", {
           method: "POST",
@@ -91,6 +92,7 @@ export default function UsersPage() {
         });
         const data = await res.json();
         if (!res.ok) return { success: false, error: data.error || "Erro ao convidar" };
+        if (data.invite?.token) createdToken = data.invite.token;
       } else {
         demoInvites.create({
           token,
@@ -108,7 +110,7 @@ export default function UsersPage() {
       }
 
       await reload();
-      return { success: true };
+      return { success: true, token: createdToken };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : "Erro" };
     }

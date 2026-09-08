@@ -47,6 +47,14 @@ interface MembersTableProps {
 export function MembersTable({ members, invites, isOwner, onRemove, onRevokeInvite, onResendInvite }: MembersTableProps) {
   const [removeTarget, setRemoveTarget] = React.useState<Member | null>(null);
   const [revokeTarget, setRevokeTarget] = React.useState<InviteToken | null>(null);
+  const [copiedToken, setCopiedToken] = React.useState<string | null>(null);
+
+  function handleCopyInviteLink(token: string) {
+    const url = `${window.location.origin}/auth/invite/${token}`;
+    navigator.clipboard.writeText(url);
+    setCopiedToken(token);
+    setTimeout(() => setCopiedToken(null), 2500);
+  }
 
   if (members.length === 0 && invites.length === 0) {
     return (
@@ -156,13 +164,32 @@ export function MembersTable({ members, invites, isOwner, onRemove, onRevokeInvi
                 expira {new Date(invite.expires_at).toLocaleDateString("pt-BR")}
               </td>
               <td className="px-4 py-3 text-right">
-                <div className="flex justify-end gap-1">
+                <div className="flex justify-end items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleCopyInviteLink(invite.token)}
+                    className="h-8 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-500/10 gap-1.5"
+                    title="Copiar link direto do convite para a área de transferência"
+                  >
+                    {copiedToken === invite.token ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-500" />
+                        <span className="text-emerald-500 font-semibold">Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        <span>Copiar link</span>
+                      </>
+                    )}
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() => onResendInvite(invite.token)}
-                    className="h-8 text-xs"
-                    title="Reenviar convite"
+                    className="h-8 text-xs hover:bg-muted"
+                    title="Reenviar convite por email"
                   >
                     Reenviar
                   </Button>

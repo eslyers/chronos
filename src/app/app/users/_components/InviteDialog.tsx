@@ -11,6 +11,8 @@ import {
   User,
   Eye,
   Send,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +24,7 @@ interface InviteDialogProps {
   onOpenChange: (open: boolean) => void;
   onInvite: (params: { email: string; role: WorkspaceRole; sendEmail: boolean }) => Promise<{
     success: boolean;
+    token?: string;
     error?: string;
   }>;
 }
@@ -53,6 +56,8 @@ export function InviteDialog({ open, onOpenChange, onInvite }: InviteDialogProps
   const [sendEmail, setSendEmail] = React.useState(true);
   const [loading, setLoading] = React.useState(false);
   const [result, setResult] = React.useState<{ success: boolean; error?: string } | null>(null);
+  const [createdToken, setCreatedToken] = React.useState<string | null>(null);
+  const [copied, setCopied] = React.useState(false);
 
   React.useEffect(() => {
     if (!open) {
@@ -60,6 +65,8 @@ export function InviteDialog({ open, onOpenChange, onInvite }: InviteDialogProps
       setRole("member");
       setSendEmail(true);
       setResult(null);
+      setCreatedToken(null);
+      setCopied(false);
     }
   }, [open]);
 
@@ -71,8 +78,12 @@ export function InviteDialog({ open, onOpenChange, onInvite }: InviteDialogProps
     }
     setLoading(true);
     setResult(null);
+    setCreatedToken(null);
     const res = await onInvite({ email, role, sendEmail });
     setResult(res);
+    if (res.token) {
+      setCreatedToken(res.token);
+    }
     setLoading(false);
   }
 
@@ -216,11 +227,36 @@ export function InviteDialog({ open, onOpenChange, onInvite }: InviteDialogProps
 
           {/* Result feedback */}
           {result?.success && (
-            <div className="flex items-start gap-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 p-3.5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-emerald-300 font-medium">
-                Convite gerado com sucesso! {sendEmail ? "Email enviado via Brevo." : "Compartilhe o link manualmente."}
-              </p>
+            <div className="space-y-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 p-3.5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="flex items-start gap-2.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs sm:text-sm text-emerald-300 font-medium">
+                  Convite gerado com sucesso! {sendEmail ? "Email enviado via Brevo." : "Compartilhe o link manualmente."}
+                </p>
+              </div>
+              {createdToken && (
+                <div className="flex items-center gap-2 pt-1">
+                  <Input
+                    readOnly
+                    value={`${typeof window !== "undefined" ? window.location.origin : ""}/auth/invite/${createdToken}`}
+                    className="text-xs font-mono h-8 bg-background/80"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      const url = `${window.location.origin}/auth/invite/${createdToken}`;
+                      navigator.clipboard.writeText(url);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    className="h-8 px-2.5 text-xs shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white gap-1"
+                  >
+                    {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    <span>{copied ? "Copiado!" : "Copiar link"}</span>
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
