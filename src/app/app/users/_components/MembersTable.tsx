@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Trash2, Shield, User as UserIcon, Eye, Mail, Clock } from "lucide-react";
+import { Trash2, Shield, User as UserIcon, Eye, Mail, Clock, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
