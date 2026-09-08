@@ -2,7 +2,6 @@
 
 import React, { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   DndContext,
   DragEndEvent,
@@ -43,6 +42,8 @@ import { TaskIndicators } from "@/components/TaskIndicators";
 import { ImportProjectButton } from "@/components/ImportProjectButton";
 import { ProjectAnalyticsDialog } from "@/components/ProjectAnalyticsDialog";
 import { sortTasksWithHierarchy } from "@/lib/task-sorting";
+import { KanbanSkeleton } from "@/components/skeletons/KanbanSkeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type TaskLike = {
   id: string;
@@ -341,13 +342,23 @@ function StageColumn({
       <div className="p-3 space-y-3 flex-1 min-h-[260px] max-h-[640px] overflow-y-auto">
         {tasks.length === 0 ? (
           <div
-            className={`border-2 border-dashed rounded-xl py-12 px-4 text-center transition-colors ${
-              isOver ? "border-blue-500 bg-blue-500/5 text-blue-500" : "border-border/60 text-muted-foreground"
+            className={`border-2 border-dashed rounded-xl py-10 px-4 text-center transition-colors flex flex-col items-center justify-center ${
+              isOver ? "border-blue-500 bg-blue-500/5 text-blue-500" : "border-border/60 hover:border-border text-muted-foreground"
             }`}
           >
             <p className="text-xs font-semibold">
               {isOver ? "Solte para mover aqui ✨" : "Nenhuma tarefa nesta etapa"}
             </p>
+            {!isOver && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onAddTask}
+                className="mt-2 text-[11px] text-blue-500 hover:text-blue-400 font-semibold h-7 px-2.5 hover:bg-blue-500/10 gap-1"
+              >
+                <Plus className="h-3 w-3" /> Adicionar tarefa
+              </Button>
+            )}
           </div>
         ) : (
           tasks.map((task) => (
@@ -513,16 +524,7 @@ export default function KanbanPage() {
   };
 
   if (loading || loadingProject) {
-    return (
-      <div className="flex flex-col items-center justify-center h-96 space-y-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 animate-pulse">
-          <KanbanSquare className="h-6 w-6" />
-        </div>
-        <p className="text-sm font-semibold text-muted-foreground animate-pulse">
-          Carregando fluxo de execução do Kanban...
-        </p>
-      </div>
-    );
+    return <KanbanSkeleton />;
   }
 
   if (projects.length === 0) {
@@ -537,22 +539,14 @@ export default function KanbanPage() {
             Acompanhe o fluxo de execução em colunas interativas
           </p>
         </div>
-        <Card className="border-dashed border-2 p-8">
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center space-y-4">
-            <div className="p-4 rounded-2xl bg-blue-500/10 text-blue-500">
-              <KanbanSquare className="h-10 w-10" />
-            </div>
-            <h2 className="text-2xl font-bold tracking-tight">Nenhum projeto cadastrado</h2>
-            <p className="text-sm text-muted-foreground max-w-md">
-              Crie seu primeiro projeto no workspace para visualizar e gerenciar o Kanban.
-            </p>
-            <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white font-semibold">
-              <Link href="/app/projects">
-                <Plus className="mr-2 h-4 w-4" /> Ir para Projetos
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={KanbanSquare}
+          title="Nenhum projeto cadastrado"
+          description="Crie seu primeiro projeto no workspace para visualizar e gerenciar as etapas do Kanban em tempo real."
+          actionLabel="Ir para Projetos"
+          onAction={() => router.push("/app/projects")}
+          actionIcon={Plus}
+        />
       </div>
     );
   }
@@ -738,13 +732,14 @@ export default function KanbanPage() {
 
       {/* Board DnD Columns */}
       {projectStages.length === 0 ? (
-        <Card className="border-dashed border-2 p-8">
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <p className="text-muted-foreground font-semibold">
-              Este projeto não tem etapas configuradas no momento.
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={KanbanSquare}
+          title="Nenhuma etapa configurada"
+          description="Este projeto não possui colunas/etapas de fluxo de trabalho configuradas. Adicione etapas para habilitar o quadro."
+          actionLabel="Gerenciar Etapas"
+          onAction={() => router.push("/app/projects")}
+          actionIcon={Plus}
+        />
       ) : (
         <DndContext
           sensors={sensors}

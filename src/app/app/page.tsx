@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   Calendar,
   Bell,
-  Loader2,
   Plus,
   ArrowUpRight,
   Activity,
@@ -23,6 +22,8 @@ import { useGlobal } from "@/lib/context/GlobalContext";
 import { useData, type Project } from "@/lib/context/DataContext";
 import { createSPAClient } from "@/lib/supabase/client";
 import { formatDateBR, daysUntil as getDaysUntilDiff } from "@/lib/utils";
+import { DashboardSkeleton } from "@/components/skeletons/DashboardSkeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type UpcomingTask = {
   id: string;
@@ -113,12 +114,7 @@ export default function DashboardPage() {
   }, [user, tasks, projects]);
 
   if (userLoading || dataLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-96 gap-3 text-muted-foreground">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-        <p className="text-sm font-medium">Carregando indicadores do workspace...</p>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   // Compute stats
@@ -363,14 +359,16 @@ export default function DashboardPage() {
           </div>
 
           {projects.length === 0 && (
-            <Card className="p-8 text-center border-dashed border-border/80">
-              <FolderKanban className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-              <h3 className="font-bold text-sm">Nenhum projeto encontrado</h3>
-              <p className="text-xs text-muted-foreground mt-1 mb-4">Crie seu primeiro projeto para começar a monitorar o cronograma.</p>
-              <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-                <Link href="/app/projects">+ Criar Projeto</Link>
-              </Button>
-            </Card>
+            <EmptyState
+              icon={FolderKanban}
+              title="Nenhum projeto encontrado"
+              description="Crie seu primeiro projeto para começar a monitorar o cronograma e os indicadores de fechamento."
+              actionLabel="Criar Projeto"
+              onAction={() => {
+                window.location.href = "/app/projects";
+              }}
+              actionIcon={Plus}
+            />
           )}
         </div>
 

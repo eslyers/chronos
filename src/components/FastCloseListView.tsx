@@ -81,6 +81,11 @@ export function FastCloseListView({
                   <span className="text-sm font-bold text-foreground">
                     {headerInfo.formattedDate} — {headerInfo.weekdayName}
                   </span>
+                  {headerInfo.holidayName && (
+                    <Badge variant="outline" className="text-[11px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30">
+                      🎉 {headerInfo.holidayName}
+                    </Badge>
+                  )}
                   {isD0 && (
                     <span className="text-xs font-bold text-pink-600 dark:text-pink-400 flex items-center gap-1">
                       <Lock className="h-3.5 w-3.5" />

@@ -22,7 +22,6 @@ import {
   Copy,
   Sparkles,
   GripVertical,
-  Loader2,
   Calendar as CalendarIcon,
   Filter,
   FolderKanban,
@@ -43,6 +42,7 @@ import { TaskIndicators } from "@/components/TaskIndicators";
 import { CopyClosingDialog } from "@/components/CopyClosingDialog";
 import { ImportClosingSpreadsheetDialog } from "@/components/ImportClosingSpreadsheetDialog";
 import { WorkdayConfigDialog } from "@/components/WorkdayConfigDialog";
+import { FastCloseSkeleton } from "@/components/skeletons/FastCloseSkeleton";
 import { FastCloseListView } from "@/components/FastCloseListView";
 import {
   getClosingD0Date,
@@ -212,6 +212,11 @@ function WorkdayColumn({
             <span className="text-xs font-bold text-foreground">
               {headerInfo.formattedDate} — {headerInfo.weekdayName}
             </span>
+            {headerInfo.holidayName && (
+              <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 truncate max-w-[170px]" title={headerInfo.holidayName}>
+                🎉 {headerInfo.holidayName}
+              </span>
+            )}
             {isD0 && (
               <span className="text-[10px] font-bold text-pink-600 dark:text-pink-400 uppercase tracking-wider">
                 Trava do ERP / Cut-off
@@ -247,8 +252,16 @@ function WorkdayColumn({
         ))}
 
         {tasks.length === 0 && (
-          <div className="h-32 border-2 border-dashed border-border/60 rounded-xl flex items-center justify-center text-[11px] text-muted-foreground font-medium p-4 text-center">
-            Nenhuma rotina para {headerInfo.badge}
+          <div className="h-32 border-2 border-dashed border-border/60 hover:border-border rounded-xl flex flex-col items-center justify-center text-[11px] text-muted-foreground font-medium p-3 text-center transition-colors">
+            <span>Nenhuma rotina para {headerInfo.badge}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onAddTask}
+              className="mt-1.5 text-[11px] text-blue-500 hover:text-blue-400 font-semibold h-7 px-2 hover:bg-blue-500/10 gap-1"
+            >
+              <Plus className="h-3 w-3" /> Adicionar rotina
+            </Button>
           </div>
         )}
       </div>
@@ -257,7 +270,18 @@ function WorkdayColumn({
 }
 
 export default function FastCloseCockpitPage() {
-  const { tasks, projects, loading, createTask, updateTask, deleteTask, createProject } = useData();
+  const {
+    tasks,
+    projects,
+    loading,
+    createTask,
+    updateTask,
+    deleteTask,
+    createProject,
+    loadProjectDetails,
+    loadAllProjectsDetails,
+    isProjectLoaded,
+  } = useData();
 
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1); // 1-12
@@ -320,6 +344,18 @@ export default function FastCloseCockpitPage() {
     localStorage.setItem(`fastclose_config_${selectedProjectId}`, payload);
     localStorage.setItem(`fastclose_config_global`, payload);
   };
+
+  // Carregar detalhes das tarefas sob demanda com suporte a cache
+  useEffect(() => {
+    async function ensureProjectData() {
+      if (selectedProjectId === "all") {
+        await loadAllProjectsDetails();
+      } else if (!isProjectLoaded(selectedProjectId)) {
+        await loadProjectDetails(selectedProjectId);
+      }
+    }
+    ensureProjectData();
+  }, [selectedProjectId, isProjectLoaded, loadProjectDetails, loadAllProjectsDetails]);
 
   // Filtrar apenas projetos do escopo de Fechamento / Controladoria
   const closingProjects = useMemo(() => {
@@ -560,14 +596,7 @@ export default function FastCloseCockpitPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center space-y-3">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto" />
-          <p className="text-xs font-semibold text-muted-foreground">Carregando Cockpit de Fechamento...</p>
-        </div>
-      </div>
-    );
+    return <FastCloseSkeleton />;
   }
 
   return (

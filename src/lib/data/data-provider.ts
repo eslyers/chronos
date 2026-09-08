@@ -6,6 +6,7 @@ import {
   fetchAllStages,
   fetchAllTasks,
   fetchAllDependencies,
+  fetchProjectsBatchDetails,
   createProject as supabaseCreateProject,
   createDefaultStages,
   updateProject as supabaseUpdateProject,
@@ -88,6 +89,11 @@ export const dataProvider = {
     const taskIds = tasks.map((t) => t.id);
     const dependencies = await fetchAllDependencies(taskIds);
     return { stages, tasks, dependencies };
+  },
+
+  loadProjectsBatch: async (projectIds: string[]) => {
+    if (getDataLayer() !== "supabase") return null;
+    return await fetchProjectsBatchDetails(projectIds);
   },
 
   createProject: async (input: {

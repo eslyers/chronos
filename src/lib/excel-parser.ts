@@ -302,7 +302,15 @@ function sanitizeCell(value: unknown): { value: string | number | null; cellErro
     return { value: value.toISOString().slice(0, 10), cellError: false };
   }
   // Primitivos OK
-  if (typeof value === "string") return { value: value.trim(), cellError: false };
+  if (typeof value === "string") {
+    let clean = value.trim();
+    // Proteção contra Formula Injection (CSV / Excel Injection):
+    // Prefixa células iniciadas com '=', '+', '-', '@' com apóstrofo para evitar execução em softwares de planilha
+    if (/^[=+\-@]/.test(clean)) {
+      clean = `'${clean}`;
+    }
+    return { value: clean, cellError: false };
+  }
   if (typeof value === "number") return { value, cellError: false };
   if (typeof value === "boolean") return { value: value ? "true" : "false", cellError: false };
   // Fallback: stringify (objetos literais, arrays raros, etc)

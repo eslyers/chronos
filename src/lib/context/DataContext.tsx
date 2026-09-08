@@ -322,27 +322,23 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     async function init() {
-      // Modo PRODUÇÃO: Supabase real
+      // Modo PRODUÇÃO: Supabase real (inicialização rápida)
       if (getDataLayer() === "supabase") {
         const ctx = await loadWorkspaceContext();
         if (cancelled) return;
         setUserId(ctx.userId);
         setWorkspaceId(ctx.workspaceId ?? "ws-local");
-        const data = await dataProvider.load();
+        const data = await dataProvider.loadProjectsOnly();
         if (cancelled) return;
-        if (data) {
+        if (data && data.projects) {
           setState({
             projects: data.projects,
-            stages: data.stages,
-            tasks: data.tasks,
-            dependencies: data.dependencies,
+            stages: [],
+            tasks: [],
+            dependencies: [],
             loading: false,
           });
-          const loaded: Record<string, boolean> = {};
-          data.projects.forEach((p) => {
-            loaded[p.id] = true;
-          });
-          setLoadedProjects(loaded);
+          setLoadedProjects({});
         } else {
           setState((s) => ({ ...s, loading: false }));
         }
@@ -389,28 +385,24 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
         const loadedIds = Object.keys(loadedProjects).filter((id) => loadedProjects[id]);
         if (loadedIds.length > 0) {
-          await Promise.all(
-            loadedIds.map(async (projectId) => {
-              const details = await dataProvider.loadProjectDetails(projectId);
-              if (details) {
-                setState((prev) => {
-                  const filteredStages = prev.stages.filter((s) => s.project_id !== projectId);
-                  const filteredTasks = prev.tasks.filter((t) => t.project_id !== projectId);
-                  const detailTaskIds = details.tasks.map((t) => t.id);
-                  const filteredDeps = prev.dependencies.filter(
-                    (d) => !detailTaskIds.includes(d.task_id)
-                  );
+          const details = await dataProvider.loadProjectsBatch(loadedIds);
+          if (details) {
+            setState((prev) => {
+              const filteredStages = prev.stages.filter((s) => !loadedIds.includes(s.project_id));
+              const filteredTasks = prev.tasks.filter((t) => !loadedIds.includes(t.project_id));
+              const detailTaskIds = new Set(details.tasks.map((t) => t.id));
+              const filteredDeps = prev.dependencies.filter(
+                (d) => !detailTaskIds.has(d.task_id)
+              );
 
-                  return {
-                    ...prev,
-                    stages: [...filteredStages, ...details.stages],
-                    tasks: [...filteredTasks, ...details.tasks],
-                    dependencies: [...filteredDeps, ...details.dependencies],
-                  };
-                });
-              }
-            })
-          );
+              return {
+                ...prev,
+                stages: [...filteredStages, ...details.stages],
+                tasks: [...filteredTasks, ...details.tasks],
+                dependencies: [...filteredDeps, ...details.dependencies],
+              };
+            });
+          }
         }
       }
       return;
@@ -782,31 +774,33 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (pendingIds.length === 0) return;
 
     try {
-      await Promise.all(
-        pendingIds.map(async (projectId) => {
-          const details = await dataProvider.loadProjectDetails(projectId);
-          if (details) {
-            setState((prev) => {
-              const filteredStages = prev.stages.filter((s) => s.project_id !== projectId);
-              const filteredTasks = prev.tasks.filter((t) => t.project_id !== projectId);
-              const detailTaskIds = details.tasks.map((t) => t.id);
-              const filteredDeps = prev.dependencies.filter(
-                (d) => !detailTaskIds.includes(d.task_id)
-              );
+      const details = await dataProvider.loadProjectsBatch(pendingIds);
+      if (details) {
+        setState((prev) => {
+          const filteredStages = prev.stages.filter((s) => !pendingIds.includes(s.project_id));
+          const filteredTasks = prev.tasks.filter((t) => !pendingIds.includes(t.project_id));
+          const detailTaskIds = new Set(details.tasks.map((t) => t.id));
+          const filteredDeps = prev.dependencies.filter(
+            (d) => !detailTaskIds.has(d.task_id)
+          );
 
-              return {
-                ...prev,
-                stages: [...filteredStages, ...details.stages],
-                tasks: [...filteredTasks, ...details.tasks],
-                dependencies: [...filteredDeps, ...details.dependencies],
-              };
-            });
-            setLoadedProjects((prev) => ({ ...prev, [projectId]: true }));
-          }
-        })
-      );
+          return {
+            ...prev,
+            stages: [...filteredStages, ...details.stages],
+            tasks: [...filteredTasks, ...details.tasks],
+            dependencies: [...filteredDeps, ...details.dependencies],
+          };
+        });
+        setLoadedProjects((prev) => {
+          const updated = { ...prev };
+          pendingIds.forEach((id) => {
+            updated[id] = true;
+          });
+          return updated;
+        });
+      }
     } catch (error) {
-      console.error("[DataContext] Error loading all projects details:", error);
+      console.error("[DataContext] Error loading all projects details in batch:", error);
     }
   }, [state.projects, loadedProjects]);
 

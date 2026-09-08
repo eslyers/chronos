@@ -142,6 +142,23 @@ export async function fetchAllDependencies(taskIds: string[]): Promise<TaskDepen
   return ((data as DbTaskDependency[] | null) ?? []).map(dbToDependency);
 }
 
+export async function fetchProjectsBatchDetails(projectIds: string[]): Promise<{
+  stages: Stage[];
+  tasks: Task[];
+  dependencies: TaskDependency[];
+}> {
+  if (projectIds.length === 0) {
+    return { stages: [], tasks: [], dependencies: [] };
+  }
+  const [stages, tasks] = await Promise.all([
+    fetchAllStages(projectIds),
+    fetchAllTasks(projectIds),
+  ]);
+  const taskIds = tasks.map((t) => t.id);
+  const dependencies = await fetchAllDependencies(taskIds);
+  return { stages, tasks, dependencies };
+}
+
 export async function createProject(input: {
   name: string;
   description?: string | null;

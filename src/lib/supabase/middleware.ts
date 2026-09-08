@@ -7,8 +7,14 @@ export async function updateSession(request: NextRequest) {
         request,
     })
 
-    // Sem env vars configuradas (preview sem Supabase), pula auth check
+    // Sem env vars configuradas (preview sem Supabase)
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+        // Em produção, nunca permite bypass em rotas privadas /app
+        if (process.env.NODE_ENV === 'production' && request.nextUrl.pathname.startsWith('/app')) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/auth/login'
+            return NextResponse.redirect(url)
+        }
         return supabaseResponse
     }
 
@@ -45,7 +51,13 @@ export async function updateSession(request: NextRequest) {
             return NextResponse.redirect(url)
         }
     } catch (error) {
-        console.error('[Middleware] Supabase session check error, bypassing:', error)
+        console.error('[Middleware] Supabase session check error:', error)
+        // Redireciona para login em rotas privadas se houver falha na verificação de sessão
+        if (request.nextUrl.pathname.startsWith('/app')) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/auth/login'
+            return NextResponse.redirect(url)
+        }
     }
 
     return supabaseResponse
