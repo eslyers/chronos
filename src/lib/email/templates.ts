@@ -234,9 +234,9 @@ export function inviteEmailTemplate(params: {
 }): { subject: string; html: string } {
   const roleLabel: Record<string, string> = { admin: "Administrador", member: "Membro", viewer: "Visualizador" };
 
-  const subject = `🎉 Você foi convidado(a) para o workspace ${params.workspaceName} no CHRONOS`;
+  const subject = `CHRONOS — Convite de acesso ao workspace ${params.workspaceName}`;
   const html = baseHtml({
-    badge: { color: "#22c55e", label: "🎉 Convite" },
+    badge: { color: "#22c55e", label: "Convite de Acesso" },
     title: `Você foi convidado(a)!`,
     ctaUrl: params.inviteUrl,
     ctaLabel: "Aceitar convite →",

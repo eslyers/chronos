@@ -105,7 +105,8 @@ export async function POST(request: NextRequest) {
     let emailError: string | undefined;
 
     if (send_email) {
-      const inviteUrl = `${APP_BASE_URL}/auth/invite/${invite.token}`;
+      const appUrl = request.nextUrl.origin || APP_BASE_URL;
+      const inviteUrl = `${appUrl}/auth/invite/${invite.token}`;
       const invitedByName = profile?.full_name || profile?.email?.split("@")[0] || "Alguém";
       const template = inviteEmailTemplate({
         inviteeEmail: invite.email,
@@ -118,9 +119,9 @@ export async function POST(request: NextRequest) {
 
       const result = await sendEmail({
         to: invite.email,
+        toName: email.split("@")[0],
         subject: template.subject,
         html: template.html,
-        replyTo: user.email ?? undefined,
       });
 
       emailSent = result.success;

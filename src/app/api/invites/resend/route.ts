@@ -100,7 +100,8 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Enviar email via Brevo ──
-    const inviteUrl = `${APP_BASE_URL}/auth/invite/${token}`;
+    const appUrl = request.nextUrl.origin || APP_BASE_URL;
+    const inviteUrl = `${appUrl}/auth/invite/${token}`;
     const invitedByName = profile?.full_name || profile?.email?.split("@")[0] || "Alguém";
     const template = inviteEmailTemplate({
       inviteeEmail: invite.email,
@@ -113,9 +114,9 @@ export async function POST(request: NextRequest) {
 
     const result = await sendEmail({
       to: invite.email,
-      subject: `[Reenvio] ${template.subject}`,
+      toName: invite.email.split("@")[0],
+      subject: template.subject,
       html: template.html,
-      replyTo: user.email ?? undefined,
     });
 
     if (!result.success) {

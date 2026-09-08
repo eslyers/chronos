@@ -35,6 +35,19 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
   }
 
   try {
+    const body: Record<string, unknown> = {
+      sender: { name: senderName, email: senderEmail },
+      to: [{ email: payload.to, name: payload.toName ?? payload.to.split("@")[0] }],
+      subject: payload.subject,
+      htmlContent: payload.html,
+    };
+    if (payload.text) {
+      body.textContent = payload.text;
+    }
+    if (payload.replyTo) {
+      body.replyTo = { email: payload.replyTo };
+    }
+
     const response = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: {
@@ -42,14 +55,7 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
         "Content-Type": "application/json",
         "Accept": "application/json",
       },
-      body: JSON.stringify({
-        sender: { name: senderName, email: senderEmail },
-        to: [{ email: payload.to, name: payload.toName ?? payload.to.split("@")[0] }],
-        subject: payload.subject,
-        htmlContent: payload.html,
-        textContent: payload.text ?? payload.html.replace(/<[^>]+>/g, ""),
-        replyTo: payload.replyTo ? { email: payload.replyTo } : undefined,
-      }),
+      body: JSON.stringify(body),
     });
 
     const data = await response.json() as { messageId?: string; message?: string; code?: string };
@@ -74,21 +80,25 @@ export async function sendEmailWithTags(
     return { success: false, error: "BREVO_API_KEY não configurada" };
   }
 
-  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: {
-      "api-key": apiKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+    const body: Record<string, unknown> = {
       sender: { name: senderName, email: senderEmail },
       to: [{ email: payload.to, name: payload.toName ?? payload.to.split("@")[0] }],
       subject: payload.subject,
       htmlContent: payload.html,
-      textContent: payload.text ?? payload.html.replace(/<[^>]+>/g, ""),
-      tags: tags.map((t) => t.slice(0, 30)), // Brevo limita tag name a 30 chars
-    }),
-  });
+      tags: tags.map((t) => t.slice(0, 30)),
+    };
+    if (payload.text) {
+      body.textContent = payload.text;
+    }
+
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
 
   const data = await response.json() as { messageId?: string; message?: string };
   if (!response.ok) {
