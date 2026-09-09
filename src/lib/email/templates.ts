@@ -32,7 +32,7 @@ function baseHtml(opts: {
     : "";
 
   const cta = opts.ctaUrl
-    ? `<a href="${opts.ctaUrl}" style="display:block;background:linear-gradient(135deg,#f97316,#ea580c);color:white;text-align:center;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:15px;margin-bottom:24px">${opts.ctaLabel ?? "Acessar CHRONOS →"}</a>`
+    ? `<a href="${opts.ctaUrl}" style="display:block;background:${BRAND_GRADIENT};color:white;text-align:center;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:15px;margin-bottom:24px">${opts.ctaLabel ?? "Acessar CHRONOS →"}</a>`
     : "";
 
   const footer = opts.footer ??
@@ -46,7 +46,7 @@ function baseHtml(opts: {
 </head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
   <div style="max-width:600px;margin:0 auto;padding:32px 16px">
-    <div style="background:linear-gradient(135deg,#f97316,#ea580c);border-radius:12px 12px 0 0;padding:28px 32px;color:white">
+    <div style="background:${BRAND_GRADIENT};border-radius:12px 12px 0 0;padding:28px 32px;color:white">
       <div style="font-size:14px;opacity:0.9;margin-bottom:6px">🕐 CHRONOS</div>
       <h1 style="margin:0;font-size:22px;font-weight:700">${escapeHtml(opts.title)}</h1>
     </div>

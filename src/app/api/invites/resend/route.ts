@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
     // ── Enviar email via Brevo ──
     const origin = request.nextUrl.origin;
     const isLocalhost = origin.includes("localhost") || origin.includes("127.0.0.1");
-    const appUrl = isLocalhost ? (process.env.NEXT_PUBLIC_APP_URL || "https://chronos-temp.vercel.app") : origin;
+    const appUrl = isLocalhost ? APP_BASE_URL : origin;
     const inviteUrl = `${appUrl}/auth/invite/${token}`;
     const invitedByName = profile?.full_name || profile?.email?.split("@")[0] || "Alguém";
     const template = inviteEmailTemplate({
