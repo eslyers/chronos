@@ -76,10 +76,14 @@ export function InviteDialog({ open, onOpenChange, onInvite }: InviteDialogProps
       setResult({ success: false, error: "Email inválido" });
       return;
     }
+    const normalizedEmail = email.trim().toLowerCase().endsWith("@piccadilly.com")
+      ? email.trim().replace(/@piccadilly\.com$/i, "@piccadilly.com.br")
+      : email.trim();
+
     setLoading(true);
     setResult(null);
     setCreatedToken(null);
-    const res = await onInvite({ email, role, sendEmail });
+    const res = await onInvite({ email: normalizedEmail, role, sendEmail });
     setResult(res);
     if (res.token) {
       setCreatedToken(res.token);
@@ -147,6 +151,18 @@ export function InviteDialog({ open, onOpenChange, onInvite }: InviteDialogProps
               disabled={loading}
               className="h-10 bg-card/60 border-border/60 focus-visible:ring-blue-500/40 focus-visible:border-blue-500/60"
             />
+            {email.toLowerCase().endsWith("@piccadilly.com") && (
+              <p className="text-xs text-amber-500 mt-1.5 flex items-center gap-1 font-medium">
+                <span>⚠️ O domínio corporativo é <strong>.com.br</strong>.</span>
+                <button
+                  type="button"
+                  onClick={() => setEmail(email.replace(/@piccadilly\.com$/i, "@piccadilly.com.br"))}
+                  className="underline hover:text-amber-400 ml-1 font-bold"
+                >
+                  Corrigir para @piccadilly.com.br
+                </button>
+              </p>
+            )}
             <p className="text-xs text-muted-foreground mt-1.5">
               Pode ser alguém que ainda não tem conta — o email ficará vinculado ao aceitar.
             </p>

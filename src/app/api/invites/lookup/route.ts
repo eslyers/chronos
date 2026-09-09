@@ -37,10 +37,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Convite não encontrado" }, { status: 404 });
     }
 
-    // Pega nome do workspace + info de quem convidou (paralelo)
-    const [{ data: workspace }, { data: inviterProfile }] = await Promise.all([
+    // Pega nome do workspace + info de quem convidou + verifica se usuário já existe
+    const [{ data: workspace }, { data: inviterProfile }, { data: existingProfile }] = await Promise.all([
       adminClient.from("workspaces").select("name").eq("id", invite.workspace_id).maybeSingle(),
       adminClient.from("profiles").select("full_name, email").eq("id", invite.invited_by).maybeSingle(),
+      adminClient.from("profiles").select("id").eq("email", invite.email).maybeSingle(),
     ]);
 
     return NextResponse.json({
@@ -53,6 +54,7 @@ export async function GET(request: NextRequest) {
         expires_at: invite.expires_at,
         invited_by_name: inviterProfile?.full_name ?? null,
         invited_by_email: inviterProfile?.email ?? "",
+        user_exists: !!existingProfile,
       },
     });
   } catch (err) {

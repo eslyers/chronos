@@ -30,6 +30,7 @@ interface InviteInfo {
   expires_at: string;
   invited_by_name: string | null;
   invited_by_email: string;
+  user_exists?: boolean;
 }
 
 const ROLE_LABEL: Record<InviteInfo["role"], string> = {
@@ -39,8 +40,8 @@ const ROLE_LABEL: Record<InviteInfo["role"], string> = {
 };
 
 const ROLE_DESC: Record<InviteInfo["role"], string> = {
-  admin: "Pode convidar, criar e editar tudo no workspace",
-  member: "Pode criar e editar tarefas, mas não gerenciar membros",
+  admin: "Pode gerenciar tarefas, etapas e cronograma",
+  member: "Pode criar, atualizar tarefas e interagir no kanban",
   viewer: "Pode apenas visualizar tarefas e cronogramas",
 };
 
@@ -51,6 +52,7 @@ function InvitePageInner({ token }: { token: string }) {
   const [invite, setInvite] = useState<InviteInfo | null>(null);
   const [loadingInvite, setLoadingInvite] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [showSetup, setShowSetup] = useState(false);
 
   // ── Form de signup ──
   const [password, setPassword] = useState("");
@@ -73,7 +75,6 @@ function InvitePageInner({ token }: { token: string }) {
 
     async function loadInvite() {
       try {
-        // Server-side fetch via POST pra evitar expor admin key
         const res = await fetch(`/api/invites/lookup?token=${encodeURIComponent(token)}`);
         const json = await res.json();
         if (cancelled) return;
@@ -134,7 +135,7 @@ function InvitePageInner({ token }: { token: string }) {
       // Usuário já existe: redirecionar para login
       if (acceptRes.status === 409 && acceptRes.headers.get("X-Existing-User") === "true") {
         setFormError(
-          "Este email já possui uma conta. Use o botão 'Já tenho conta → Fazer login' abaixo."
+          "Este email já possui uma conta. Clique abaixo para fazer login diretamente."
         );
         setSubmitting(false);
         return;
@@ -167,12 +168,11 @@ function InvitePageInner({ token }: { token: string }) {
     }
   }
 
-
   // ── Render: loading ──────────────────────────────────────────
   if (loadingInvite) {
     return (
-      <div className="text-center space-y-4">
-        <div className="text-5xl">⏳</div>
+      <div className="text-center space-y-4 py-8">
+        <div className="text-4xl animate-bounce">⏳</div>
         <p className="text-sm text-muted-foreground">Carregando convite…</p>
       </div>
     );
@@ -181,7 +181,7 @@ function InvitePageInner({ token }: { token: string }) {
   // ── Render: erro de convite ──────────────────────────────────
   if (loadError || !invite) {
     return (
-      <div className="space-y-6 text-center">
+      <div className="space-y-6 text-center py-4">
         <div className="text-5xl">❌</div>
         <h2 className="text-2xl font-semibold">Convite inválido</h2>
         <Alert variant="destructive">
@@ -192,7 +192,7 @@ function InvitePageInner({ token }: { token: string }) {
         </p>
         <Link
           href="/auth/login"
-          className="text-sm text-primary-600 hover:text-primary-500"
+          className="text-sm text-primary-600 hover:text-primary-500 font-medium"
         >
           Ir para login
         </Link>
@@ -209,13 +209,13 @@ function InvitePageInner({ token }: { token: string }) {
     };
     const info = statusLabel[invite.status] ?? statusLabel.expired!;
     return (
-      <div className="space-y-6 text-center">
+      <div className="space-y-6 text-center py-4">
         <div className="text-5xl">{info.emoji}</div>
         <h2 className="text-2xl font-semibold">Convite {invite.status}</h2>
         <p className="text-sm text-muted-foreground">{info.msg}</p>
         <Link
           href="/auth/login"
-          className="text-sm text-primary-600 hover:text-primary-500"
+          className="text-sm text-primary-600 hover:text-primary-500 font-medium"
         >
           Ir para login
         </Link>
@@ -223,7 +223,115 @@ function InvitePageInner({ token }: { token: string }) {
     );
   }
 
-  // ── Render: form de signup ──────────────────────────────────
+  // ── Render: Passo 1 (Welcome Card - sem inputs de senha para bots) ─────────────────
+  if (!showSetup && !invite.user_exists) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center space-y-2">
+          <Link href="/" className="inline-flex items-center gap-2 text-2xl font-bold">
+            <span className="text-3xl">🕐</span>
+            <span>CHRONOS</span>
+          </Link>
+          <p className="text-sm text-muted-foreground">Acesso ao Workspace Liberado</p>
+        </div>
+
+        <div className="rounded-xl border border-border/80 bg-card/60 p-5 space-y-4 shadow-sm">
+          <div className="flex items-center gap-3 pb-3 border-b border-border/50">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500 font-bold text-xl">
+              🏢
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-foreground truncate">{invite.workspace_name}</p>
+              <p className="text-xs text-muted-foreground">
+                Liberado por {invite.invited_by_name || invite.invited_by_email.split("@")[0]}
+              </p>
+            </div>
+            <span
+              className={
+                "text-xs px-2.5 py-1 rounded-full font-medium " +
+                (invite.role === "admin"
+                  ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                  : invite.role === "member"
+                  ? "bg-orange-500/15 text-orange-700 dark:text-orange-300"
+                  : "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300")
+              }
+            >
+              {ROLE_LABEL[invite.role]}
+            </span>
+          </div>
+
+          <div className="text-sm text-muted-foreground space-y-1.5">
+            <p>Seu email <strong>{invite.email}</strong> foi autorizado para colaborar no cronograma contábil e tarefas deste workspace.</p>
+            <p className="text-xs text-muted-foreground/80">{ROLE_DESC[invite.role]}</p>
+          </div>
+
+          <Button
+            onClick={() => setShowSetup(true)}
+            className="w-full bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-medium py-2.5 shadow-sm"
+          >
+            Continuar e Definir Senha →
+          </Button>
+        </div>
+
+        <p className="text-center text-xs text-muted-foreground">
+          Já possui conta?{" "}
+          <Link
+            href={`/auth/login?email=${encodeURIComponent(invite.email)}`}
+            className="text-orange-600 dark:text-orange-400 hover:underline font-medium"
+          >
+            Faça login diretamente
+          </Link>
+        </p>
+      </div>
+    );
+  }
+
+  // ── Render: Usuário já possui conta prévia ───────────────────────
+  if (invite.user_exists) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center space-y-2">
+          <Link href="/" className="inline-flex items-center gap-2 text-2xl font-bold">
+            <span className="text-3xl">🕐</span>
+            <span>CHRONOS</span>
+          </Link>
+          <p className="text-sm text-muted-foreground">Bem-vindo(a) de volta!</p>
+        </div>
+
+        <div className="rounded-xl border border-border/80 bg-card/60 p-5 space-y-4 shadow-sm">
+          <div className="flex items-center gap-3 pb-3 border-b border-border/50">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 font-bold text-xl">
+              ✨
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-foreground truncate">{invite.workspace_name}</p>
+              <p className="text-xs text-muted-foreground">
+                Convidado por {invite.invited_by_name || invite.invited_by_email.split("@")[0]}
+              </p>
+            </div>
+            <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-orange-500/15 text-orange-700 dark:text-orange-300">
+              {ROLE_LABEL[invite.role]}
+            </span>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            Identificamos que <strong>{invite.email}</strong> já possui cadastro no CHRONOS. Basta fazer login para acessar o novo workspace.
+          </p>
+
+          <Button
+            asChild
+            className="w-full bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-medium py-2.5 shadow-sm"
+          >
+            <Link href={`/auth/login?email=${encodeURIComponent(invite.email)}`}>
+              Fazer Login e Acessar Workspace →
+            </Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render: Passo 2 (Formulário de definição de senha) ──────────
   return (
     <div className="space-y-6">
       <div className="text-center space-y-2">
@@ -231,33 +339,17 @@ function InvitePageInner({ token }: { token: string }) {
           <span className="text-3xl">🕐</span>
           <span>CHRONOS</span>
         </Link>
-        <p className="text-sm text-muted-foreground">Você foi convidado para um workspace</p>
+        <p className="text-sm text-muted-foreground">Configure sua senha de acesso</p>
       </div>
 
-      {/* Card de info do convite */}
       <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
-        <div className="flex items-center gap-3">
-          <div className="text-3xl">📨</div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold truncate">{invite.workspace_name}</p>
-            <p className="text-xs text-muted-foreground">
-              Convidado por {invite.invited_by_name || invite.invited_by_email.split("@")[0]}
-            </p>
-          </div>
-          <span
-            className={
-              "text-xs px-2 py-1 rounded font-medium " +
-              (invite.role === "admin"
-                ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
-                : invite.role === "member"
-                ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
-                : "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300")
-            }
-          >
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Workspace</span>
+          <span className="text-xs px-2 py-0.5 rounded font-medium bg-orange-500/15 text-orange-700 dark:text-orange-300">
             {ROLE_LABEL[invite.role]}
           </span>
         </div>
-        <p className="text-xs text-muted-foreground">{ROLE_DESC[invite.role]}</p>
+        <p className="font-semibold text-foreground truncate">{invite.workspace_name}</p>
       </div>
 
       {formError && (
@@ -331,20 +423,34 @@ function InvitePageInner({ token }: { token: string }) {
           />
         </div>
 
-        <Button type="submit" disabled={submitting} className="w-full">
-          {submitting ? "Aceitando convite…" : "Aceitar convite e criar conta"}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setShowSetup(false)}
+            disabled={submitting}
+            className="w-1/3"
+          >
+            Voltar
+          </Button>
+          <Button
+            type="submit"
+            disabled={submitting}
+            className="w-2/3 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white"
+          >
+            {submitting ? "Criando conta…" : "Concluir e Entrar"}
+          </Button>
+        </div>
       </form>
 
       <p className="text-center text-xs text-muted-foreground">
         Já tem conta?{" "}
         <Link
           href={`/auth/login?email=${encodeURIComponent(invite.email)}`}
-          className="text-primary-600 hover:text-primary-500 font-medium"
+          className="text-orange-600 dark:text-orange-400 hover:underline font-medium"
         >
           Faça login
-        </Link>{" "}
-        — o convite será aplicado automaticamente após o login.
+        </Link>
       </p>
     </div>
   );

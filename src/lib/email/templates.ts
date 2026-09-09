@@ -4,10 +4,10 @@
 // Todos retornam { subject, html } prontos pra sendEmail()
 // ─────────────────────────────────────────────────────────────
 
-const BRAND_GRADIENT = "linear-gradient(135deg,#3b82f6,#1e40af)";
+const BRAND_GRADIENT = "linear-gradient(135deg,#f97316,#ea580c)";
 const CRITICAL = "#ef4444";
-const HIGH = "#1e40af";
-const MEDIUM = "#3b82f6";
+const HIGH = "#ea580c";
+const MEDIUM = "#f97316";
 const LOW = "#22c55e";
 
 function escapeHtml(text: string): string {
@@ -32,11 +32,11 @@ function baseHtml(opts: {
     : "";
 
   const cta = opts.ctaUrl
-    ? `<a href="${opts.ctaUrl}" style="display:block;background:${BRAND_GRADIENT};color:white;text-align:center;text-decoration:none;padding:16px 32px;border-radius:8px;font-weight:600;font-size:16px;margin-bottom:24px">${opts.ctaLabel ?? "Ver no CHRONOS →"}</a>`
+    ? `<a href="${opts.ctaUrl}" style="display:block;background:linear-gradient(135deg,#f97316,#ea580c);color:white;text-align:center;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:600;font-size:15px;margin-bottom:24px">${opts.ctaLabel ?? "Acessar CHRONOS →"}</a>`
     : "";
 
   const footer = opts.footer ??
-    `<p style="margin:0;color:#94a3b8;font-size:12px;text-align:center">Enviado automaticamente pelo CHRONOS · Sistema de Gestão de Cronograma</p>`;
+    `<p style="margin:0;color:#94a3b8;font-size:12px;text-align:center">Enviado automaticamente pelo CHRONOS · Gestão de Fechamento Contábil</p>`;
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -46,9 +46,9 @@ function baseHtml(opts: {
 </head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
   <div style="max-width:600px;margin:0 auto;padding:32px 16px">
-    <div style="background:${BRAND_GRADIENT};border-radius:12px 12px 0 0;padding:32px;color:white">
-      <div style="font-size:14px;opacity:0.9;margin-bottom:8px">🕐 CHRONOS</div>
-      <h1 style="margin:0;font-size:24px;font-weight:700">${escapeHtml(opts.title)}</h1>
+    <div style="background:linear-gradient(135deg,#f97316,#ea580c);border-radius:12px 12px 0 0;padding:28px 32px;color:white">
+      <div style="font-size:14px;opacity:0.9;margin-bottom:6px">🕐 CHRONOS</div>
+      <h1 style="margin:0;font-size:22px;font-weight:700">${escapeHtml(opts.title)}</h1>
     </div>
     <div style="background:white;border-radius:0 0 12px 12px;padding:32px;border:1px solid #e2e8f0;border-top:none">
       ${badge}
@@ -76,7 +76,7 @@ export function taskDueEmailTemplate(params: {
   const color = hoursUntil <= 0 ? CRITICAL : hoursUntil <= 24 ? HIGH : MEDIUM;
   const label = hoursUntil <= 0 ? "VENCE HOJE!" : hoursUntil <= 24 ? "Vence em 24h" : `Vence em ${hoursUntil}h`;
 
-  const subject = `🕐 CHRONOS — ${label}: ${taskTitle}`;
+  const subject = `🕐 [CHRONOS] ${label}: ${taskTitle}`;
   const html = baseHtml({
     badge: { color, label },
     title: "Lembrete de Tarefa",
@@ -123,9 +123,9 @@ export function taskAssignedEmailTemplate(params: {
   const priorityColor: Record<string, string> = { critical: CRITICAL, high: HIGH, medium: MEDIUM, low: LOW };
   const priorityLabel: Record<string, string> = { critical: "Crítica", high: "Alta", medium: "Média", low: "Baixa" };
 
-  const subject = `📋 CHRONOS — Você foi atribuído: ${params.taskTitle}`;
+  const subject = `📥 [CHRONOS] Nova tarefa atribuída: ${params.taskTitle}`;
   const html = baseHtml({
-    badge: { color: priorityColor[params.priority], label: "📋 Nova tarefa atribuída" },
+    badge: { color: priorityColor[params.priority], label: "Nova tarefa atribuída" },
     title: "Nova tarefa atribuída",
     ctaUrl: params.taskUrl,
     ctaLabel: "Ver tarefa →",
@@ -173,7 +173,7 @@ export function statusChangedEmailTemplate(params: {
   const statusEmoji: Record<string, string> = {
     todo: "⭕", in_progress: "🟡", review: "🟣", done: "✅", blocked: "🚫",
   };
-  const subject = `🔄 CHRONOS — Status: ${params.taskTitle}`;
+  const subject = `🔄 [CHRONOS] Status atualizado: ${params.taskTitle}`;
   const html = baseHtml({
     title: "Status atualizado",
     ctaUrl: params.taskUrl,
@@ -185,7 +185,7 @@ export function statusChangedEmailTemplate(params: {
         <span style="font-size:14px;color:#1e293b;font-weight:700">${statusEmoji[params.newStatus] ?? "•"} ${escapeHtml(params.newStatus)}</span>
       </div>
       ${params.changedBy ? `<p style="margin:0 0 16px;color:#64748b;font-size:14px">Movido por <strong>${escapeHtml(params.changedBy)}</strong></p>` : ""}
-      ${params.comment ? `<blockquote style="margin:0 0 16px;padding:12px 16px;border-left:3px solid #3b82f6;background:#eff6ff;color:#1e293b;font-size:14px">${escapeHtml(params.comment)}</blockquote>` : ""}
+      ${params.comment ? `<blockquote style="margin:0 0 16px;padding:12px 16px;border-left:3px solid #f97316;background:#fff7ed;color:#1e293b;font-size:14px">${escapeHtml(params.comment)}</blockquote>` : ""}
       <p style="margin:0;color:#64748b;font-size:14px">📁 <strong>${escapeHtml(params.projectName)}</strong></p>
     `,
   });
@@ -206,23 +206,23 @@ export function commentAddedEmailTemplate(params: {
     ? params.commentText.slice(0, 500) + "..."
     : params.commentText;
 
-  const subject = `💬 CHRONOS — Novo comentário: ${params.taskTitle}`;
+  const subject = `💬 [CHRONOS] Novo comentário: ${params.taskTitle}`;
   const html = baseHtml({
-    badge: { color: "#8b5cf6", label: "💬 Novo comentário" },
+    badge: { color: "#f97316", label: "Novo comentário" },
     title: "Novo comentário",
     ctaUrl: params.taskUrl,
     ctaLabel: "Responder no CHRONOS →",
     bodyHtml: `
       <h2 style="margin:0 0 16px;font-size:20px;color:#1e293b;font-weight:600">${escapeHtml(params.taskTitle)}</h2>
       <p style="margin:0 0 12px;color:#64748b;font-size:14px"><strong>${escapeHtml(params.commentAuthor)}</strong> comentou em <strong>${escapeHtml(params.projectName)}</strong>:</p>
-      <blockquote style="margin:0 0 24px;padding:16px 20px;border-left:3px solid #8b5cf6;background:#faf5ff;color:#1e293b;font-size:15px;line-height:1.6;white-space:pre-wrap">${escapeHtml(truncatedText)}</blockquote>
+      <blockquote style="margin:0 0 24px;padding:16px 20px;border-left:3px solid #f97316;background:#fff7ed;color:#1e293b;font-size:15px;line-height:1.6;white-space:pre-wrap">${escapeHtml(truncatedText)}</blockquote>
     `,
   });
   return { subject, html };
 }
 
 // ─────────────────────────────────────────────────────────────
-// 5. WORKSPACE INVITE — convite pra entrar no workspace
+// 5. WORKSPACE ACCESS / INVITE — acesso liberado ao workspace
 // ─────────────────────────────────────────────────────────────
 export function inviteEmailTemplate(params: {
   inviteeEmail: string;
@@ -234,48 +234,45 @@ export function inviteEmailTemplate(params: {
 }): { subject: string; html: string } {
   const roleLabel: Record<string, string> = { admin: "Administrador", member: "Membro", viewer: "Visualizador" };
 
-  const subject = `CHRONOS — Convite de acesso ao workspace ${params.workspaceName}`;
+  const subject = `📋 [CHRONOS] Acesso ao workspace: ${params.workspaceName}`;
   const html = baseHtml({
-    badge: { color: "#22c55e", label: "Convite de Acesso" },
-    title: `Você foi convidado(a)!`,
+    badge: { color: "#f97316", label: "Acesso Liberado" },
+    title: `Acesso ao Workspace`,
     ctaUrl: params.inviteUrl,
-    ctaLabel: "Aceitar convite →",
+    ctaLabel: "Acessar CHRONOS →",
     footer: `
       <p style="margin:0 0 8px;color:#64748b;font-size:13px;text-align:center">
-        Este convite expira em <strong>${params.expiresInHours} horas</strong>.
+        Este link expira em <strong>${params.expiresInHours} horas</strong>.
       </p>
       <p style="margin:0;color:#94a3b8;font-size:12px;text-align:center">
-        Se você não esperava esse convite, pode ignorar este email com segurança.
+        Enviado pelo CHRONOS · Gestão de Fechamento Contábil
       </p>
     `,
     bodyHtml: `
-      <h2 style="margin:0 0 16px;font-size:22px;color:#1e293b;font-weight:600">
-        Olá! 👋
+      <h2 style="margin:0 0 16px;font-size:20px;color:#1e293b;font-weight:600">
+        Olá!
       </h2>
       <p style="margin:0 0 24px;color:#1e293b;font-size:15px;line-height:1.6">
-        <strong>${escapeHtml(params.invitedByName)}</strong> convidou você para participar do workspace
-        <strong>${escapeHtml(params.workspaceName)}</strong> como <strong>${roleLabel[params.role]}</strong>.
+        Seu acesso ao workspace <strong>${escapeHtml(params.workspaceName)}</strong> no CHRONOS foi liberado por <strong>${escapeHtml(params.invitedByName)}</strong>.
       </p>
       <div style="background:#f8fafc;border-radius:8px;padding:20px;margin-bottom:24px">
-        <p style="margin:0 0 12px;font-size:14px;color:#64748b">📋 Detalhes do convite:</p>
         <table style="width:100%;border-collapse:collapse;font-size:14px">
           <tr>
-            <td style="color:#64748b;padding:4px 0">📁 Workspace</td>
+            <td style="color:#64748b;padding:6px 0">📁 Workspace</td>
             <td style="color:#1e293b;font-weight:600;text-align:right">${escapeHtml(params.workspaceName)}</td>
           </tr>
           <tr>
-            <td style="color:#64748b;padding:4px 0">👤 Email</td>
+            <td style="color:#64748b;padding:6px 0">👤 Usuário</td>
             <td style="color:#1e293b;font-weight:600;text-align:right">${escapeHtml(params.inviteeEmail)}</td>
           </tr>
           <tr>
-            <td style="color:#64748b;padding:4px 0">🔑 Papel</td>
+            <td style="color:#64748b;padding:6px 0">🔑 Papel</td>
             <td style="color:#1e293b;font-weight:600;text-align:right">${roleLabel[params.role]}</td>
           </tr>
         </table>
       </div>
       <p style="margin:0 0 24px;color:#64748b;font-size:14px;line-height:1.6">
-        Ao aceitar, você terá acesso ao cronograma, kanban, calendário e templates do workspace.
-        Se decidir criar uma conta, seu email <strong>${escapeHtml(params.inviteeEmail)}</strong> já ficará vinculado automaticamente.
+        Você pode acompanhar os prazos do fechamento contábil, kanban e tarefas da equipe.
       </p>
     `,
   });
