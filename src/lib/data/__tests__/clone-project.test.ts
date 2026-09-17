@@ -12,6 +12,7 @@ describe("Project Cloning Logic", () => {
     start_date: "2026-09-01",
     target_date: "2026-09-30",
     progress: 45,
+    track_time: true,
     created_at: "2026-09-01T00:00:00Z",
     updated_at: "2026-09-01T00:00:00Z",
   };

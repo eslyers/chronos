@@ -494,7 +494,15 @@ export default function FastCloseCockpitPage() {
         progress: 0,
       });
     } else {
-      setCompletingTask(task);
+      const taskProject = projects.find((p) => p.id === task.project_id);
+      if (taskProject?.track_time === false) {
+        await updateTask(task.id, {
+          status: "done",
+          progress: 100,
+        });
+      } else {
+        setCompletingTask(task);
+      }
     }
   };
 

@@ -32,6 +32,7 @@ import { createSPAClient } from "@/lib/supabase/client";
 import { DatePicker } from "@/components/ui/date-picker";
 import { TaskCommentsSection } from "@/components/task-dialog/TaskCommentsSection";
 import { TaskAttachmentsSection } from "@/components/task-dialog/TaskAttachmentsSection";
+import { parseDurationToHours, formatHoursToHHMM, formatHoursBadge } from "@/lib/duration";
 
 interface TaskDialogProps {
   open: boolean;
@@ -91,6 +92,7 @@ export function TaskDialog({
   const {
     createTask,
     updateTask,
+    getProject,
     getStagesByProject,
     getTasksByProject,
     getTaskComments,
@@ -113,6 +115,10 @@ export function TaskDialog({
     [projectId, getTasksByProject]
   );
   const isEdit = !!task;
+
+  const currentProjectId = projectId || task?.project_id;
+  const currentProject = currentProjectId ? getProject(currentProjectId) : undefined;
+  const trackTime = currentProject ? currentProject.track_time !== false : true;
 
   // Evita auto-referência na lista de tarefas pai
   const parentTaskOptions = useMemo<Task[]>(
@@ -261,8 +267,8 @@ export function TaskDialog({
       setProgress(task.progress ?? 0);
       setStartDate(task.start_date ? task.start_date.split("T")[0] : "");
       setDueDate(task.due_date ? task.due_date.split("T")[0] : "");
-      setEstimatedHours(task.estimated_hours != null ? String(task.estimated_hours) : "");
-      setActualHours(task.actual_hours != null ? String(task.actual_hours) : "");
+      setEstimatedHours(task.estimated_hours != null ? formatHoursToHHMM(task.estimated_hours) : "");
+      setActualHours(task.actual_hours != null ? formatHoursToHHMM(task.actual_hours) : "");
 
       const currentAssigneeId = (task as unknown as { assignee_id?: string | null }).assignee_id ?? "";
       const currentAssigneeName = task.assignee_name ?? null;
@@ -379,8 +385,8 @@ export function TaskDialog({
         calculatedStatus = progress > 0 ? "in_progress" : "todo";
       }
 
-      const parsedEst = estimatedHours.trim() ? parseFloat(estimatedHours.replace(",", ".")) : null;
-      const parsedAct = actualHours.trim() ? parseFloat(actualHours.replace(",", ".")) : null;
+      const parsedEst = parseDurationToHours(estimatedHours);
+      const parsedAct = parseDurationToHours(actualHours);
 
       const taskData: Partial<Task> = {
         title: title.trim(),
@@ -392,8 +398,8 @@ export function TaskDialog({
         progress,
         start_date: startDate ? new Date(startDate).toISOString() : null,
         due_date: dueDate ? new Date(dueDate).toISOString() : null,
-        estimated_hours: parsedEst !== null && !isNaN(parsedEst) ? parsedEst : null,
-        actual_hours: parsedAct !== null && !isNaN(parsedAct) ? parsedAct : null,
+        estimated_hours: trackTime && parsedEst !== null && !isNaN(parsedEst) ? parsedEst : null,
+        actual_hours: trackTime && parsedAct !== null && !isNaN(parsedAct) ? parsedAct : null,
         assignee_id: assigneeMode === "member" && assigneeId ? assigneeId : null,
         assignee_name: assigneeMode === "custom" && assigneeName ? assigneeName.trim() : null,
         assignee_status: assigneeStatus as Task["assignee_status"],
@@ -749,7 +755,7 @@ export function TaskDialog({
             </div>
 
             {/* Datas & Carga de Trabalho Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className={`grid grid-cols-1 ${trackTime ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-3`}>
               <div className="space-y-1.5">
                 <label htmlFor="task-start" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                   <Calendar className="h-3.5 w-3.5 text-blue-500" />
@@ -774,31 +780,39 @@ export function TaskDialog({
                   placeholder="Prazo"
                 />
               </div>
-              <div className="space-y-1.5">
-                <label htmlFor="task-estimated-hours" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-blue-500" />
-                  Horas Est.
-                </label>
-                <div className="relative">
-                  <input
-                    id="task-estimated-hours"
-                    type="text"
-                    inputMode="decimal"
-                    pattern="[0-9]*[.,]?[0-9]*"
-                    autoComplete="off"
-                    value={estimatedHours}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9.,]/g, "");
-                      setEstimatedHours(val);
-                    }}
-                    placeholder="ex: 8"
-                    className="flex h-11 w-full rounded-xl border border-input bg-background text-foreground dark:text-zinc-100 pl-3.5 pr-14 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all shadow-xs"
-                  />
-                  <span className="absolute right-3 top-3 text-xs text-muted-foreground font-semibold pointer-events-none select-none">
-                    horas
-                  </span>
+              {trackTime && (
+                <div className="space-y-1.5">
+                  <label htmlFor="task-estimated-hours" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-blue-500" />
+                    Horas Est.
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="task-estimated-hours"
+                      type="text"
+                      autoComplete="off"
+                      value={estimatedHours}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9:hmHM.,\s]/g, "");
+                        setEstimatedHours(val);
+                      }}
+                      onBlur={() => {
+                        if (estimatedHours.trim()) {
+                          const parsed = parseDurationToHours(estimatedHours);
+                          if (parsed !== null) {
+                            setEstimatedHours(formatHoursToHHMM(parsed));
+                          }
+                        }
+                      }}
+                      placeholder="ex: 36h:25m ou 08:00"
+                      className="flex h-11 w-full rounded-xl border border-input bg-background text-foreground dark:text-zinc-100 pl-3.5 pr-16 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-mono font-medium transition-all shadow-xs"
+                    />
+                    <span className="absolute right-3 top-3 text-[11px] text-muted-foreground font-mono font-semibold pointer-events-none select-none">
+                      HH:MM
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Slider de Progresso */}
@@ -863,13 +877,13 @@ export function TaskDialog({
               {progress === 100 && (
                 <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  Concluída — informe abaixo as horas reais gastas
+                  {trackTime ? "Concluída — informe abaixo as horas reais gastas" : "Tarefa Concluída"}
                 </p>
               )}
             </div>
 
             {/* Bloco de Horas Reais Gastas (Ativado na Conclusão da Tarefa) */}
-            {(progress === 100 || stages.find((s) => s.id === stageId)?.is_done || task?.status === "done") && (
+            {trackTime && (progress === 100 || stages.find((s) => s.id === stageId)?.is_done || task?.status === "done") && (
               <div className="p-4 rounded-2xl border border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-950/20 space-y-3 animate-fadeIn">
                 <div className="flex items-center justify-between">
                   <label
@@ -889,20 +903,26 @@ export function TaskDialog({
                 </p>
 
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                  <div className="relative w-full sm:w-48">
+                  <div className="relative w-full sm:w-56">
                     <input
                       id="task-actual-hours"
                       type="text"
-                      inputMode="decimal"
-                      pattern="[0-9]*[.,]?[0-9]*"
                       autoComplete="off"
-                      placeholder="ex: 7.5"
+                      placeholder="ex: 36h:25m ou 08:00"
                       value={actualHours}
-                      onChange={(e) => setActualHours(e.target.value.replace(/[^0-9.,]/g, ""))}
-                      className="flex h-11 w-full rounded-xl border border-emerald-500/50 bg-background text-foreground dark:text-zinc-100 pl-3.5 pr-14 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 font-semibold transition-all shadow-xs"
+                      onChange={(e) => setActualHours(e.target.value.replace(/[^0-9:hmHM.,\s]/g, ""))}
+                      onBlur={() => {
+                        if (actualHours.trim()) {
+                          const parsed = parseDurationToHours(actualHours);
+                          if (parsed !== null) {
+                            setActualHours(formatHoursToHHMM(parsed));
+                          }
+                        }
+                      }}
+                      className="flex h-11 w-full rounded-xl border border-emerald-500/50 bg-background text-foreground dark:text-zinc-100 pl-3.5 pr-16 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 font-mono font-semibold transition-all shadow-xs"
                     />
-                    <span className="absolute right-3 top-3 text-xs text-muted-foreground font-semibold pointer-events-none select-none">
-                      horas
+                    <span className="absolute right-3 top-3 text-[11px] text-muted-foreground font-mono font-semibold pointer-events-none select-none">
+                      HH:MM
                     </span>
                   </div>
 
@@ -912,16 +932,17 @@ export function TaskDialog({
                       onClick={() => setActualHours(estimatedHours)}
                       className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline inline-flex items-center gap-1 self-start sm:self-center cursor-pointer"
                     >
-                      Copiar horas estimadas ({estimatedHours}h)
+                      Copiar horas estimadas ({estimatedHours})
                     </button>
                   )}
 
                   {(() => {
-                    const est = parseFloat(estimatedHours.replace(",", "."));
-                    const act = parseFloat(actualHours.replace(",", "."));
-                    if (!isNaN(est) && !isNaN(act) && est > 0 && act > 0) {
+                    const est = parseDurationToHours(estimatedHours);
+                    const act = parseDurationToHours(actualHours);
+                    if (est !== null && act !== null && est > 0 && act > 0) {
                       const diff = act - est;
                       const pct = Math.round(((act - est) / est) * 100);
+                      const diffFormatted = formatHoursBadge(Math.abs(diff));
                       if (diff === 0) {
                         return (
                           <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
@@ -931,13 +952,13 @@ export function TaskDialog({
                       } else if (diff < 0) {
                         return (
                           <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
-                            🚀 {Math.abs(diff).toFixed(1)}h a menos que o estimado ({Math.abs(pct)}% economia)
+                            🚀 {diffFormatted} a menos que o estimado ({Math.abs(pct)}% economia)
                           </span>
                         );
                       } else {
                         return (
                           <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg">
-                            ⏱️ +{diff.toFixed(1)}h a mais que o estimado (+{pct}%)
+                            ⏱️ +{diffFormatted} a mais que o estimado (+{pct}%)
                           </span>
                         );
                       }

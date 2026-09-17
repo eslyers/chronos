@@ -46,6 +46,7 @@ import { sortTasksWithHierarchy } from "@/lib/task-sorting";
 import { KanbanSkeleton } from "@/components/skeletons/KanbanSkeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Task } from "@/lib/context/DataContext";
+import { formatHoursBadge } from "@/lib/duration";
 
 type TaskLike = {
   id: string;
@@ -102,12 +103,14 @@ function TaskCard({
   isDone,
   router,
   isOverlay = false,
+  trackTime = true,
 }: {
   task: TaskLike;
   projectId: string;
   isDone: boolean;
   router: ReturnType<typeof useRouter>;
   isOverlay?: boolean;
+  trackTime?: boolean;
 }) {
   const { attributes, listeners, setNodeRef: setDraggableRef, isDragging } = useDraggable({
     id: task.id,
@@ -215,17 +218,17 @@ function TaskCard({
               </span>
             )}
 
-            {task.estimated_hours != null && (
-              <span className="text-[11px] inline-flex items-center gap-1 text-muted-foreground font-mono" title={`Estimado: ${task.estimated_hours} horas`}>
+            {trackTime && task.estimated_hours != null && (
+              <span className="text-[11px] inline-flex items-center gap-1 text-muted-foreground font-mono" title={`Estimado: ${formatHoursBadge(task.estimated_hours)}`}>
                 <Clock className="h-3 w-3 text-blue-500" />
-                {task.estimated_hours}h
+                {formatHoursBadge(task.estimated_hours)}
               </span>
             )}
 
-            {isTaskDone && task.actual_hours != null && (
-              <span className="text-[11px] inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold font-mono bg-emerald-500/15 px-1.5 py-0.5 rounded" title={`Executado: ${task.actual_hours} horas reais`}>
+            {trackTime && isTaskDone && task.actual_hours != null && (
+              <span className="text-[11px] inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold font-mono bg-emerald-500/15 px-1.5 py-0.5 rounded" title={`Executado: ${formatHoursBadge(task.actual_hours)} reais`}>
                 <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                {task.actual_hours}h real
+                {formatHoursBadge(task.actual_hours)} real
               </span>
             )}
           </div>
@@ -268,6 +271,7 @@ function StageColumn({
   isDone,
   router,
   onAddTask,
+  trackTime = true,
 }: {
   stage: StageLike;
   tasks: TaskLike[];
@@ -275,6 +279,7 @@ function StageColumn({
   isDone: boolean;
   router: ReturnType<typeof useRouter>;
   onAddTask: () => void;
+  trackTime?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -386,6 +391,7 @@ function StageColumn({
               projectId={projectId}
               isDone={isDone}
               router={router}
+              trackTime={trackTime}
             />
           ))
         )}
@@ -510,9 +516,16 @@ export default function KanbanPage() {
         }
       }
 
-      // Se moveu para uma coluna concluída e a tarefa ainda não tinha horas reais apontadas
-      if (targetStage?.is_done && !movedTask.actual_hours) {
-        setCompletingTask({ task: movedTask as Task, targetStageName: targetStage.name });
+      // Se moveu para uma coluna concluída
+      if (targetStage?.is_done) {
+        const currentProject = projects.find((p) => p.id === selectedProjectId);
+        const shouldTrackTime = currentProject ? currentProject.track_time !== false : true;
+
+        if (shouldTrackTime && !movedTask.actual_hours) {
+          setCompletingTask({ task: movedTask as Task, targetStageName: targetStage.name });
+        } else {
+          await updateTask(taskId, { status: "done", progress: 100 });
+        }
       }
     }
 
@@ -821,6 +834,7 @@ export default function KanbanPage() {
                     projectId={project.id}
                     isDone={stage.is_done}
                     router={router}
+                    trackTime={project.track_time !== false}
                     onAddTask={() => {
                       setDefaultStageId(stage.id);
                       setCreateOpen(true);
@@ -844,6 +858,7 @@ export default function KanbanPage() {
                   projectId={project.id}
                   isDone={stage.is_done}
                   router={router}
+                  trackTime={project.track_time !== false}
                   onAddTask={() => {
                     setDefaultStageId(stage.id);
                     setCreateOpen(true);
@@ -862,6 +877,7 @@ export default function KanbanPage() {
                   projectStages.find((s) => s.id === activeTask.stage_id)?.is_done ?? false
                 }
                 router={router}
+                trackTime={project.track_time !== false}
                 isOverlay
               />
             ) : null}

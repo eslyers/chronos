@@ -17,6 +17,7 @@ import {
   CircleDot,
   CheckCircle2,
   X,
+  Clock,
 } from "lucide-react";
 import { useData, type Project } from "@/lib/context/DataContext";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -72,6 +73,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
   const [status, setStatus] = useState<"active" | "completed" | "archived">("active");
   const [startDate, setStartDate] = useState("");
   const [targetDate, setTargetDate] = useState("");
+  const [trackTime, setTrackTime] = useState(true);
 
   const [stagesMode, setStagesMode] = useState<StagesMode>("default");
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
@@ -116,6 +118,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
         setStatus(project.status);
         setStartDate(project.start_date ? project.start_date.split("T")[0] : "");
         setTargetDate(project.target_date ? project.target_date.split("T")[0] : "");
+        setTrackTime(project.track_time !== false);
       } else {
         setName("");
         setDescription("");
@@ -123,6 +126,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
         setStatus("active");
         setStartDate(new Date().toISOString().split("T")[0]);
         setTargetDate("");
+        setTrackTime(true);
         setStagesMode("default");
         setSelectedTemplateId("");
         setStageDrafts(defaultStagesAsDrafts());
@@ -192,6 +196,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
         status,
         start_date: startDate ? new Date(startDate).toISOString() : null,
         target_date: targetDate ? new Date(targetDate).toISOString() : null,
+        track_time: trackTime,
       };
 
       if (isEdit && project) {
@@ -378,6 +383,47 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
               </select>
             </div>
           )}
+
+          {/* Controle de Tempo e Horas */}
+          <div className="p-3.5 rounded-xl border border-border bg-card/60 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
+                  <Clock className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <label htmlFor="project-track-time" className="text-xs font-bold text-foreground cursor-pointer block">
+                    Controle de Tempo e Horas
+                  </label>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    Habilitar estimativas de horas, horas gastas reais e carga de trabalho
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                id="project-track-time"
+                role="switch"
+                aria-checked={trackTime}
+                onClick={() => setTrackTime(!trackTime)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  trackTime ? "bg-blue-600" : "bg-muted-foreground/30"
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                    trackTime ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+            {!trackTime && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-1.5 rounded-lg border border-amber-500/20 font-medium">
+                ℹ️ Com o controle desativado, os campos de horas estimadas e reais ficarão ocultos nas tarefas.
+              </p>
+            )}
+          </div>
 
           {/* Escolha de Etapas (só ao criar novo) */}
           {!isEdit && (

@@ -65,6 +65,7 @@ export type Project = {
   start_date: string | null;
   target_date: string | null;
   progress: number;
+  track_time: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -115,6 +116,7 @@ export type CloneProjectOptions = {
   resetStatus?: boolean;
   keepAssignees?: boolean;
   shiftDates?: boolean;
+  trackTime?: boolean;
 };
 
 type DataContextType = DataState & {
@@ -195,6 +197,7 @@ function seedMockData(): DataState {
     start_date: new Date(now.getTime() - 14 * 86400000).toISOString(),
     target_date: new Date(now.getTime() + 30 * 86400000).toISOString(),
     progress: 35,
+    track_time: true,
     created_at: now.toISOString(),
     updated_at: now.toISOString(),
   };
@@ -210,6 +213,7 @@ function seedMockData(): DataState {
     start_date: new Date(now.getTime() - 7 * 86400000).toISOString(),
     target_date: new Date(now.getTime() + 60 * 86400000).toISOString(),
     progress: 12,
+    track_time: true,
     created_at: now.toISOString(),
     updated_at: now.toISOString(),
   };
@@ -445,6 +449,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         name: data.name ?? "Novo Projeto",
         description: data.description ?? undefined,
         color: data.color,
+        track_time: data.track_time !== false,
         templateId: data.templateId,
         customStages: data.customStages,
       });
@@ -473,6 +478,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       start_date: data.start_date ?? null,
       target_date: data.target_date ?? null,
       progress: 0,
+      track_time: data.track_time !== false,
       created_at: now,
       updated_at: now,
     };
@@ -929,6 +935,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         color: options.color || sourceProject.color || "#3b82f6",
         start_date: optionStartClean || (options.shiftDates ? optionStartClean : sourceStartClean) || undefined,
         target_date: optionTargetClean || (options.shiftDates ? optionTargetClean : sourceTargetClean) || undefined,
+        track_time: options.trackTime !== undefined ? options.trackTime : (sourceProject.track_time !== false),
         customStages: customStages.length > 0 ? customStages : undefined,
       });
 

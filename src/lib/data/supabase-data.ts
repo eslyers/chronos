@@ -22,7 +22,7 @@ type DbStage = Database["public"]["Tables"]["stages"]["Row"];
 type DbTask = Database["public"]["Tables"]["tasks"]["Row"];
 type DbTaskDependency = Database["public"]["Tables"]["task_dependencies"]["Row"];
 
-function dbToProject(d: DbProject): Project {
+export function dbToProject(d: DbProject): Project {
   return {
     id: d.id,
     workspace_id: d.workspace_id,
@@ -33,6 +33,7 @@ function dbToProject(d: DbProject): Project {
     status: d.status as Project["status"],
     start_date: d.start_date,
     target_date: d.target_date,
+    track_time: (d as unknown as { track_time?: boolean }).track_time !== false,
     progress: 0,
     created_at: d.created_at,
     updated_at: d.updated_at,
@@ -167,6 +168,7 @@ export async function createProject(input: {
   color?: string;
   workspace_id: string;
   created_by: string;
+  track_time?: boolean;
 }): Promise<Project | null> {
   const supabase = client();
   const payload: Database["public"]["Tables"]["projects"]["Insert"] = {
@@ -174,6 +176,7 @@ export async function createProject(input: {
     name: input.name,
     description: input.description ?? null,
     color: input.color ?? "#3b82f6",
+    track_time: input.track_time !== false,
     created_by: input.created_by,
   };
   const { data, error } = await supabase
@@ -217,6 +220,7 @@ export async function updateProject(id: string, patch: Partial<Project>): Promis
   if (patch.status !== undefined) payload.status = patch.status;
   if (patch.start_date !== undefined) payload.start_date = patch.start_date;
   if (patch.target_date !== undefined) payload.target_date = patch.target_date;
+  if (patch.track_time !== undefined) payload.track_time = patch.track_time;
 
   const { error } = await (supabase.from("projects") as any).update(payload).eq("id", id);
   if (error) console.error("[supabase-data] updateProject", error);

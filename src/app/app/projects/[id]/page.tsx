@@ -212,14 +212,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
           <div className="flex flex-row items-center gap-3 shrink-0 flex-wrap">
-            <Button
-              onClick={() => setWorkloadOpen(true)}
-              variant="outline"
-              className="h-10 px-3.5 text-xs font-bold border-border bg-background hover:bg-muted gap-2"
-            >
-              <Gauge className="h-4 w-4 text-blue-500" />
-              Carga da Equipe
-            </Button>
+            {project.track_time !== false && (
+              <Button
+                onClick={() => setWorkloadOpen(true)}
+                variant="outline"
+                className="h-10 px-3.5 text-xs font-bold border-border bg-background hover:bg-muted gap-2"
+              >
+                <Gauge className="h-4 w-4 text-blue-500" />
+                Carga da Equipe
+              </Button>
+            )}
             <Button
               onClick={() => setAnalyticsOpen(true)}
               variant="outline"

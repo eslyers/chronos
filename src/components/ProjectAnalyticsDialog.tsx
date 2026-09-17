@@ -38,6 +38,7 @@ import {
   Hourglass,
 } from "lucide-react";
 import { useData, type Stage } from "@/lib/context/DataContext";
+import { formatHoursBadge } from "@/lib/duration";
 
 interface ProjectAnalyticsDialogProps {
   open: boolean;
@@ -301,17 +302,17 @@ export function ProjectAnalyticsDialog({
               </div>
               <div className="flex items-baseline justify-between">
                 <span className="text-2xl font-bold font-mono text-foreground">
-                  {metrics.totalEstimatedHours}h
+                  {formatHoursBadge(metrics.totalEstimatedHours) || "0h"}
                 </span>
                 {metrics.totalActualHours > 0 && (
                   <span className="text-xs font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                    {metrics.totalActualHours}h real
+                    {formatHoursBadge(metrics.totalActualHours)} real
                   </span>
                 )}
               </div>
               <p className="text-[11px] text-muted-foreground">
                 {metrics.totalActualHours > 0
-                  ? `Previsto: ${metrics.totalEstimatedHours}h • Real: ${metrics.totalActualHours}h`
+                  ? `Previsto: ${formatHoursBadge(metrics.totalEstimatedHours)} • Real: ${formatHoursBadge(metrics.totalActualHours)}`
                   : "Carga total alocada no cronograma"}
               </p>
             </CardContent>

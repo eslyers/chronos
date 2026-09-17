@@ -8,6 +8,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Task } from "@/lib/context/DataContext";
+import { parseDurationToHours, formatHoursToHHMM, formatHoursBadge } from "@/lib/duration";
 
 interface CompleteTaskDialogProps {
   open: boolean;
@@ -48,7 +49,7 @@ export function CompleteTaskDialog({
     prevOpenRef.current = true;
     prevTaskIdRef.current = task.id;
 
-    setActualHours(task.actual_hours != null ? String(task.actual_hours) : "");
+    setActualHours(task.actual_hours != null ? formatHoursToHHMM(task.actual_hours) : "");
     setTimeout(() => {
       inputRef.current?.focus();
       inputRef.current?.select();
@@ -78,7 +79,7 @@ export function CompleteTaskDialog({
   if (!open || !task) return null;
 
   const estimatedHours = task.estimated_hours != null ? task.estimated_hours : null;
-  const parsedAct = actualHours.trim() ? parseFloat(actualHours.replace(",", ".")) : null;
+  const parsedAct = parseDurationToHours(actualHours);
   const validActual = parsedAct !== null && !isNaN(parsedAct) ? parsedAct : null;
 
   async function handleSave(withHours: boolean) {
@@ -147,7 +148,7 @@ export function CompleteTaskDialog({
             {estimatedHours != null && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1">
                 <Clock className="h-3.5 w-3.5 text-blue-500" />
-                <span>Horas Estimadas: <strong>{estimatedHours}h</strong></span>
+                <span>Horas Estimadas: <strong>{formatHoursToHHMM(estimatedHours)}</strong></span>
               </div>
             )}
           </div>
@@ -165,10 +166,10 @@ export function CompleteTaskDialog({
               {estimatedHours != null && !actualHours && (
                 <button
                   type="button"
-                  onClick={() => setActualHours(String(estimatedHours))}
+                  onClick={() => setActualHours(formatHoursToHHMM(estimatedHours))}
                   className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                 >
-                  Usar estimada ({estimatedHours}h)
+                  Usar estimada ({formatHoursBadge(estimatedHours)})
                 </button>
               )}
             </label>
@@ -178,22 +179,28 @@ export function CompleteTaskDialog({
                 ref={inputRef}
                 id="actual-hours-input"
                 type="text"
-                inputMode="decimal"
-                pattern="[0-9]*[.,]?[0-9]*"
                 autoComplete="off"
-                placeholder={estimatedHours ? `ex: ${estimatedHours}` : "ex: 8"}
+                placeholder={estimatedHours ? `ex: ${formatHoursToHHMM(estimatedHours)}` : "ex: 36h:25m ou 08:00"}
                 value={actualHours}
-                onChange={(e) => setActualHours(e.target.value.replace(/[^0-9.,]/g, ""))}
+                onChange={(e) => setActualHours(e.target.value.replace(/[^0-9:hmHM.,\s]/g, ""))}
+                onBlur={() => {
+                  if (actualHours.trim()) {
+                    const parsed = parseDurationToHours(actualHours);
+                    if (parsed !== null) {
+                      setActualHours(formatHoursToHHMM(parsed));
+                    }
+                  }
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
                     handleSave(true);
                   }
                 }}
-                className="flex h-11 w-full rounded-xl border border-emerald-500/50 bg-background text-foreground dark:text-zinc-100 pl-3.5 pr-14 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 font-bold transition-all shadow-xs"
+                className="flex h-11 w-full rounded-xl border border-emerald-500/50 bg-background text-foreground dark:text-zinc-100 pl-3.5 pr-16 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 font-mono font-bold transition-all shadow-xs"
               />
-              <span className="absolute right-3 top-3 text-xs text-muted-foreground font-semibold pointer-events-none select-none">
-                horas
+              <span className="absolute right-3 top-3 text-[11px] text-muted-foreground font-mono font-semibold pointer-events-none select-none">
+                HH:MM
               </span>
             </div>
 
@@ -201,23 +208,24 @@ export function CompleteTaskDialog({
             {(() => {
               if (estimatedHours != null && validActual !== null && validActual > 0) {
                 const diff = validActual - estimatedHours;
-                const pct = Math.round((diff / estimatedHours) * 100);
+                const pct = Math.round(((validActual - estimatedHours) / estimatedHours) * 100);
+                const diffFormatted = formatHoursBadge(Math.abs(diff));
                 if (diff === 0) {
                   return (
                     <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                      ✓ Feito exatamente no prazo previsto ({estimatedHours}h).
+                      ✓ Feito exatamente no prazo previsto ({formatHoursBadge(estimatedHours)}).
                     </p>
                   );
                 } else if (diff < 0) {
                   return (
                     <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                      🚀 Economia de {Math.abs(diff).toFixed(1)}h ({Math.abs(pct)}% mais rápido que o previsto).
+                      🚀 Economia de {diffFormatted} ({Math.abs(pct)}% mais rápido que o previsto).
                     </p>
                   );
                 } else {
                   return (
                     <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">
-                      ⏱️ Excedeu em +{diff.toFixed(1)}h (+{pct}% do tempo estimado).
+                      ⏱️ Excedeu em +{diffFormatted} (+{pct}% do tempo estimado).
                     </p>
                   );
                 }

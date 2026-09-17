@@ -5,8 +5,9 @@ import { CheckCircle2, Circle, Flag, Edit, Trash2, User, Lock } from "lucide-rea
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import type { Task } from "@/lib/context/DataContext";
+import { useData, type Task } from "@/lib/context/DataContext";
 import { formatWorkdayColumnHeader } from "@/lib/business-days";
+import { formatHoursBadge } from "@/lib/duration";
 
 interface FastCloseListViewProps {
   workdayOffsets: number[];
@@ -43,6 +44,8 @@ export function FastCloseListView({
   onDeleteTask,
   onAddTaskToOffset,
 }: FastCloseListViewProps) {
+  const { getProject } = useData();
+
   return (
     <div className="space-y-6">
       {workdayOffsets.map((offset) => {
@@ -182,17 +185,26 @@ export function FastCloseListView({
                       )}
 
                       {/* Horas Estimadas / Reais */}
-                      {task.estimated_hours != null && (
-                        <div className="text-[11px] font-mono text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md flex items-center gap-1" title={`Horas estimadas: ${task.estimated_hours}h`}>
-                          <span>{task.estimated_hours}h est.</span>
-                        </div>
-                      )}
-                      {isDone && task.actual_hours != null && (
-                        <div className="text-[11px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-md flex items-center gap-1" title={`Horas reais executadas: ${task.actual_hours}h`}>
-                          <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                          <span>{task.actual_hours}h real</span>
-                        </div>
-                      )}
+                      {(() => {
+                        const project = task.project_id ? getProject(task.project_id) : undefined;
+                        const trackTime = project ? project.track_time !== false : true;
+                        if (!trackTime) return null;
+                        return (
+                          <>
+                            {task.estimated_hours != null && (
+                              <div className="text-[11px] font-mono text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md flex items-center gap-1" title={`Horas estimadas: ${formatHoursBadge(task.estimated_hours)}`}>
+                                <span>{formatHoursBadge(task.estimated_hours)} est.</span>
+                              </div>
+                            )}
+                            {isDone && task.actual_hours != null && (
+                              <div className="text-[11px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-md flex items-center gap-1" title={`Horas reais executadas: ${formatHoursBadge(task.actual_hours)}`}>
+                                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                                <span>{formatHoursBadge(task.actual_hours)} real</span>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
 
                       {/* Progresso */}
                       <div className="w-24 space-y-1 hidden md:block">

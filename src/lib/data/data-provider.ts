@@ -101,6 +101,7 @@ export const dataProvider = {
     description?: string;
     color?: string;
     templateId?: string;
+    track_time?: boolean;
     customStages?: Array<{ name: string; color: string; sort_order: number; wip_limit?: number | null; is_done?: boolean }>;
     useDefaultStages?: boolean;
   }) => {
@@ -113,6 +114,7 @@ export const dataProvider = {
       color: input.color,
       workspace_id: workspaceId,
       created_by: userId,
+      track_time: input.track_time,
     });
     if (!project) return null;
 

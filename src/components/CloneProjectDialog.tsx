@@ -63,6 +63,7 @@ export function CloneProjectDialog({
   const [resetStatus, setResetStatus] = useState(true);
   const [keepAssignees, setKeepAssignees] = useState(true);
   const [shiftDates, setShiftDates] = useState(true);
+  const [trackTime, setTrackTime] = useState(true);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -80,6 +81,7 @@ export function CloneProjectDialog({
       setResetStatus(true);
       setKeepAssignees(true);
       setShiftDates(false);
+      setTrackTime(project.track_time !== false);
       setError("");
       setClonedSuccess(null);
     }
@@ -109,6 +111,7 @@ export function CloneProjectDialog({
         resetStatus,
         keepAssignees,
         shiftDates,
+        trackTime,
       });
 
       // Dispara Toast visual global no canto da tela
@@ -438,6 +441,25 @@ export function CloneProjectDialog({
                     </div>
                   </label>
                 )}
+
+                {/* Habilitar / Desabilitar Controle de Tempo */}
+                <label className="flex items-start gap-3 p-3 rounded-xl border border-border/80 bg-muted/20 hover:bg-muted/30 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={trackTime}
+                    onChange={(e) => setTrackTime(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div className="text-xs">
+                    <div className="font-semibold text-foreground flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-blue-500" />
+                      Habilitar Controle de Tempo e Horas
+                    </div>
+                    <p className="text-muted-foreground mt-0.5">
+                      Permite registrar horas estimadas e horas reais gastas no projeto duplicado.
+                    </p>
+                  </div>
+                </label>
               </div>
             </div>
 

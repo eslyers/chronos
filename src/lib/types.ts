@@ -70,6 +70,7 @@ export type Database = {
           status: 'active' | 'on_hold' | 'archived' | 'completed'
           start_date: string | null
           target_date: string | null
+          track_time: boolean
           created_by: string | null
           created_at: string
           updated_at: string
@@ -83,6 +84,7 @@ export type Database = {
           status?: 'active' | 'on_hold' | 'archived' | 'completed'
           start_date?: string | null
           target_date?: string | null
+          track_time?: boolean
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -96,6 +98,7 @@ export type Database = {
           status?: 'active' | 'on_hold' | 'archived' | 'completed'
           start_date?: string | null
           target_date?: string | null
+          track_time?: boolean
           created_by?: string | null
           created_at?: string
           updated_at?: string
