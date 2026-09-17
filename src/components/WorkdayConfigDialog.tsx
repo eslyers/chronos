@@ -62,7 +62,6 @@ export function WorkdayConfigDialog({
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onOpenChange(false); }}
     >
       <div
         role="dialog"
@@ -129,7 +128,7 @@ export function WorkdayConfigDialog({
                 value={newOffsetInput}
                 onChange={(e) => setNewOffsetInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleAddOffset(); }}
-                className="flex-1 h-9 rounded-lg border border-input bg-card text-foreground dark:bg-zinc-900 dark:text-zinc-100 px-3 text-xs font-semibold focus:ring-2 focus:ring-purple-500"
+                className="flex-1 h-9 rounded-lg border border-input bg-card text-foreground dark:bg-zinc-900 dark:text-zinc-100 px-3 text-xs font-semibold focus:ring-2 focus:ring-purple-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
               <Button
                 type="button"

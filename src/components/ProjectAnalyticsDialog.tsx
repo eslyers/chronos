@@ -78,6 +78,7 @@ export function ProjectAnalyticsDialog({
     overdue: number;
     onTime: number;
     totalEstimatedHours: number;
+    totalActualHours: number;
     bottleneckStage: { stage: Stage; count: number; isWipExceeded: boolean } | null;
   }>(() => {
     const total = tasks.length;
@@ -93,6 +94,7 @@ export function ProjectAnalyticsDialog({
     const onTime = total - overdue;
 
     const totalEstimatedHours = tasks.reduce((sum, t) => sum + (t.estimated_hours || 0), 0);
+    const totalActualHours = tasks.reduce((sum, t) => sum + (t.actual_hours || 0), 0);
 
     // Gargalo (Estágio com mais tarefas acumuladas ou WIP excedido)
     type BottleneckInfo = { stage: Stage; count: number; isWipExceeded: boolean };
@@ -119,6 +121,7 @@ export function ProjectAnalyticsDialog({
       overdue,
       onTime,
       totalEstimatedHours,
+      totalActualHours,
       bottleneckStage,
     };
   }, [tasks, stages]);
@@ -300,8 +303,17 @@ export function ProjectAnalyticsDialog({
                 <span className="text-2xl font-bold font-mono text-foreground">
                   {metrics.totalEstimatedHours}h
                 </span>
+                {metrics.totalActualHours > 0 && (
+                  <span className="text-xs font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                    {metrics.totalActualHours}h real
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] text-muted-foreground">Carga total alocada no cronograma</p>
+              <p className="text-[11px] text-muted-foreground">
+                {metrics.totalActualHours > 0
+                  ? `Previsto: ${metrics.totalEstimatedHours}h • Real: ${metrics.totalActualHours}h`
+                  : "Carga total alocada no cronograma"}
+              </p>
             </CardContent>
           </Card>
 

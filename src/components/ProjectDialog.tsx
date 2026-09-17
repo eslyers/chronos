@@ -226,9 +226,6 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6"
       style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onOpenChange(false);
-      }}
     >
       <div
         role="dialog"

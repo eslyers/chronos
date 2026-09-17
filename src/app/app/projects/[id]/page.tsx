@@ -2,13 +2,15 @@
 
 import { useState, use, useEffect, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Calendar, MoreVertical, CornerDownRight, FolderTree, FileText, BarChart3, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, MoreVertical, CornerDownRight, FolderTree, FileText, BarChart3, CheckCircle2, Copy, Gauge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useData, type Task } from "@/lib/context/DataContext";
 import { ProjectDialog } from "@/components/ProjectDialog";
+import { CloneProjectDialog } from "@/components/CloneProjectDialog";
+import { ProjectWorkloadDialog } from "@/components/ProjectWorkloadDialog";
 import { TaskDialog } from "@/components/TaskDialog";
 import { TaskAssignee } from "@/components/TaskAssignee";
 import { ImportProjectButton } from "@/components/ImportProjectButton";
@@ -64,6 +66,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [deleteTaskTarget, setDeleteTaskTarget] = useState<Task | null>(null);
   const [showReportPDF, setShowReportPDF] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [cloneOpen, setCloneOpen] = useState(false);
+  const [workloadOpen, setWorkloadOpen] = useState(false);
   const processedTaskIdRef = useRef<string | null>(null);
 
   // Deep-link: se URL tem ?task=<id>, abre o dialog da task e scrolla ate ela sem travar
@@ -209,6 +213,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </div>
           <div className="flex flex-row items-center gap-3 shrink-0 flex-wrap">
             <Button
+              onClick={() => setWorkloadOpen(true)}
+              variant="outline"
+              className="h-10 px-3.5 text-xs font-bold border-border bg-background hover:bg-muted gap-2"
+            >
+              <Gauge className="h-4 w-4 text-blue-500" />
+              Carga da Equipe
+            </Button>
+            <Button
               onClick={() => setAnalyticsOpen(true)}
               variant="outline"
               className="h-10 px-3.5 text-xs font-bold border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 gap-2"
@@ -223,6 +235,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             >
               <FileText className="h-4 w-4" />
               Gerar Status Report (PDF)
+            </Button>
+            <Button
+              onClick={() => setCloneOpen(true)}
+              variant="outline"
+              className="h-10 px-3.5 text-xs font-bold border-border bg-background hover:bg-muted gap-2"
+            >
+              <Copy className="h-4 w-4 text-blue-500" />
+              Clonar Projeto
             </Button>
             <ImportProjectButton mode="single" project={project} />
             <Button variant="outline" onClick={() => setEditOpen(true)}>
@@ -500,6 +520,23 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           open={analyticsOpen}
           onOpenChange={setAnalyticsOpen}
           projectId={project.id}
+        />
+      )}
+
+      {project && (
+        <CloneProjectDialog
+          open={cloneOpen}
+          onOpenChange={setCloneOpen}
+          project={project}
+        />
+      )}
+
+      {project && (
+        <ProjectWorkloadDialog
+          open={workloadOpen}
+          onOpenChange={setWorkloadOpen}
+          project={project}
+          tasks={allTasks}
         />
       )}
     </div>

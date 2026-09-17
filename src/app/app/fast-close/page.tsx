@@ -38,6 +38,7 @@ import { Progress } from "@/components/ui/progress";
 import { useData, type Task } from "@/lib/context/DataContext";
 import { TaskAssignee } from "@/components/TaskAssignee";
 import { TaskDialog } from "@/components/TaskDialog";
+import { CompleteTaskDialog } from "@/components/CompleteTaskDialog";
 import { TaskIndicators } from "@/components/TaskIndicators";
 import { CopyClosingDialog } from "@/components/CopyClosingDialog";
 import { ImportClosingSpreadsheetDialog } from "@/components/ImportClosingSpreadsheetDialog";
@@ -301,6 +302,7 @@ export default function FastCloseCockpitPage() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [defaultTaskDueDate, setDefaultTaskDueDate] = useState<string | undefined>(undefined);
+  const [completingTask, setCompletingTask] = useState<Task | null>(null);
 
   // Fechar dropdown de ações ao clicar fora
   useEffect(() => {
@@ -415,7 +417,9 @@ export default function FastCloseCockpitPage() {
 
     scopedTasks.forEach((t) => {
       if (!t.due_date && !t.start_date) return;
-      const tDate = new Date((t.due_date || t.start_date) + "T00:00:00");
+      const raw = (t.due_date || t.start_date || "").split("T")[0];
+      const tDate = new Date(raw + "T00:00:00");
+      if (isNaN(tDate.getTime())) return;
       
       if (tDate.getMonth() + 1 === selectedMonth && tDate.getFullYear() === selectedYear) {
         const offset = getWorkdayOffsetFromDate(tDate, selectedYear, selectedMonth, useD0);
@@ -484,10 +488,14 @@ export default function FastCloseCockpitPage() {
   // Alternar conclusão rápida de tarefa
   const handleToggleTaskComplete = async (task: Task) => {
     const isCurrentlyDone = task.status === "done" || task.progress === 100;
-    await updateTask(task.id, {
-      status: isCurrentlyDone ? "todo" : "done",
-      progress: isCurrentlyDone ? 0 : 100,
-    });
+    if (isCurrentlyDone) {
+      await updateTask(task.id, {
+        status: "todo",
+        progress: 0,
+      });
+    } else {
+      setCompletingTask(task);
+    }
   };
 
   // Excluir tarefa
@@ -555,7 +563,8 @@ export default function FastCloseCockpitPage() {
     const sourceTasksToCopy = scopedTasks.filter((t) => params.selectedTaskIds.includes(t.id));
 
     for (const t of sourceTasksToCopy) {
-      const originalDate = new Date((t.due_date || t.start_date || lastDayOfMonth.toISOString()) + "T00:00:00");
+      const raw = (t.due_date || t.start_date || lastDayOfMonth.toISOString()).split("T")[0];
+      const originalDate = new Date(raw + "T00:00:00");
       const offset = getWorkdayOffsetFromDate(originalDate, params.sourceYear, params.sourceMonth, useD0);
       const newTargetDate = getCalculatedWorkdayDate(params.targetYear, params.targetMonth, offset, useD0);
       const isoDate = newTargetDate.toISOString().split("T")[0];
@@ -937,6 +946,25 @@ export default function FastCloseCockpitPage() {
           setUseD0(newUseD0);
           setCustomOffsets(newOffsets);
           saveProjectConfig(newUseD0, newOffsets, offsetRange);
+        }}
+      />
+
+      {/* Modal de Conclusão de Tarefa: Registro de Horas Reais */}
+      <CompleteTaskDialog
+        open={!!completingTask}
+        onOpenChange={(open) => {
+          if (!open) setCompletingTask(null);
+        }}
+        task={completingTask}
+        onConfirm={async (actualHours) => {
+          if (completingTask) {
+            await updateTask(completingTask.id, {
+              status: "done",
+              progress: 100,
+              ...(actualHours !== null ? { actual_hours: actualHours } : {}),
+            });
+            setCompletingTask(null);
+          }
         }}
       />
     </div>

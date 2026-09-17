@@ -148,3 +148,35 @@ export function useToast() {
 
   return { toasts, addToast, dismiss };
 }
+
+/* ───── Global Toast Context & Provider ───── */
+
+interface ToastContextType {
+  toasts: ToastItem[];
+  addToast: (toast: Omit<ToastItem, "id">) => string;
+  dismiss: (id: string) => void;
+}
+
+const ToastContext = React.createContext<ToastContextType | null>(null);
+
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const toastState = useToast();
+  return (
+    <ToastContext.Provider value={toastState}>
+      {children}
+      <ToastContainer toasts={toastState.toasts} onDismiss={toastState.dismiss} />
+    </ToastContext.Provider>
+  );
+}
+
+export function useGlobalToast() {
+  const ctx = React.useContext(ToastContext);
+  if (!ctx) {
+    return {
+      toasts: [],
+      addToast: () => "",
+      dismiss: () => {},
+    };
+  }
+  return ctx;
+}

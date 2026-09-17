@@ -68,6 +68,8 @@ function dbToTask(d: DbTask): Task {
     assignee_status: (d.assignee_status as Task["assignee_status"]) ?? null,
     position: d.position ?? 0,
     parent_task_id: d.parent_task_id ?? null,
+    estimated_hours: (d as any).estimated_hours ?? null,
+    actual_hours: (d as any).actual_hours ?? null,
     created_at: d.created_at,
     updated_at: d.updated_at,
   };
@@ -235,6 +237,8 @@ export async function createTask(input: {
   priority?: Task["priority"];
   due_date?: string | null;
   start_date?: string | null;
+  estimated_hours?: number | null;
+  actual_hours?: number | null;
   parent_task_id?: string | null;
   assignee_id?: string | null;
   assignee_name?: string | null;
@@ -251,16 +255,29 @@ export async function createTask(input: {
     priority: input.priority ?? "medium",
     due_date: input.due_date ?? null,
     start_date: input.start_date ?? null,
+    estimated_hours: input.estimated_hours ?? null,
+    actual_hours: input.actual_hours ?? null,
     parent_task_id: input.parent_task_id ?? null,
     assignee_id: input.assignee_id ?? null,
     assignee_name: input.assignee_name ?? null,
     assignee_status: input.assignee_status ?? null,
     created_by: input.created_by,
   };
-  const { data, error } = await (supabase.from("tasks") as any)
+  let { data, error } = await (supabase.from("tasks") as any)
     .insert(payload)
     .select()
     .single();
+
+  if (error && error.message?.includes("actual_hours")) {
+    delete (payload as any).actual_hours;
+    const retry = await (supabase.from("tasks") as any)
+      .insert(payload)
+      .select()
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
+
   if (error) {
     console.error("[supabase-data] createTask", error);
     return null;
@@ -279,12 +296,19 @@ export async function updateTask(id: string, patch: Partial<Task>): Promise<void
   if (patch.progress !== undefined) payload.progress = patch.progress;
   if (patch.due_date !== undefined) payload.due_date = patch.due_date;
   if (patch.start_date !== undefined) payload.start_date = patch.start_date;
+  if (patch.estimated_hours !== undefined) payload.estimated_hours = patch.estimated_hours;
+  if (patch.actual_hours !== undefined) payload.actual_hours = patch.actual_hours;
   if (patch.parent_task_id !== undefined) payload.parent_task_id = patch.parent_task_id;
   if (patch.assignee_id !== undefined) payload.assignee_id = patch.assignee_id;
   if (patch.assignee_name !== undefined) payload.assignee_name = patch.assignee_name;
   if (patch.assignee_status !== undefined) payload.assignee_status = patch.assignee_status;
 
-  const { error } = await (supabase.from("tasks") as any).update(payload).eq("id", id);
+  let { error } = await (supabase.from("tasks") as any).update(payload).eq("id", id);
+  if (error && error.message?.includes("actual_hours")) {
+    delete (payload as any).actual_hours;
+    const retry = await (supabase.from("tasks") as any).update(payload).eq("id", id);
+    error = retry.error;
+  }
   if (error) console.error("[supabase-data] updateTask", error);
 }
 

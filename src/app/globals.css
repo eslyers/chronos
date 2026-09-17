@@ -70,6 +70,18 @@ select option {
   color: #f8fafc !important;
 }
 
+/* Remover setas nativas de seleção/incremento de valor em inputs numéricos (Chrome, Edge, Safari, Firefox) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
+}
+
 @layer base {
   * {
     @apply border-border;

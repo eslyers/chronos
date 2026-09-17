@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   X,
   UserCircle2,
@@ -19,10 +19,12 @@ import {
   MessageSquare,
   Paperclip,
   Sparkles,
+  Clock,
 } from "lucide-react";
 import {
   useData,
   type Task,
+  type Stage,
   type TaskComment,
   type TaskAttachment,
 } from "@/lib/context/DataContext";
@@ -71,11 +73,11 @@ const PRIORITIES = [
   },
 ] as const;
 
-const DEFAULT_KANBAN_STAGES = [
-  { id: "todo", name: "A Fazer" },
-  { id: "in_progress", name: "Em Andamento" },
-  { id: "review", name: "Em Revisão" },
-  { id: "done", name: "Concluído" },
+const DEFAULT_KANBAN_STAGES: Array<{ id: string; name: string; is_done: boolean }> = [
+  { id: "todo", name: "A Fazer", is_done: false },
+  { id: "in_progress", name: "Em Andamento", is_done: false },
+  { id: "review", name: "Em Revisão", is_done: false },
+  { id: "done", name: "Concluído", is_done: true },
 ];
 
 export function TaskDialog({
@@ -98,14 +100,24 @@ export function TaskDialog({
     addTaskAttachment,
     deleteTaskAttachment,
   } = useData();
-  const projectStages = projectId ? getStagesByProject(projectId) : [];
-  const stages = projectStages.length > 0 ? projectStages : DEFAULT_KANBAN_STAGES;
-  const projectTasks = projectId ? getTasksByProject(projectId) : [];
+  const projectStages = useMemo<Stage[]>(
+    () => (projectId ? getStagesByProject(projectId) : []),
+    [projectId, getStagesByProject]
+  );
+  const stages = useMemo<Array<{ id: string; name: string; is_done?: boolean }>>(
+    () => (projectStages.length > 0 ? projectStages : DEFAULT_KANBAN_STAGES),
+    [projectStages]
+  );
+  const projectTasks = useMemo<Task[]>(
+    () => (projectId ? getTasksByProject(projectId) : []),
+    [projectId, getTasksByProject]
+  );
   const isEdit = !!task;
 
   // Evita auto-referência na lista de tarefas pai
-  const parentTaskOptions = projectTasks.filter(
-    (t) => !isEdit || (t.id !== task?.id && t.parent_task_id !== task?.id)
+  const parentTaskOptions = useMemo<Task[]>(
+    () => projectTasks.filter((t: Task) => !isEdit || (t.id !== task?.id && t.parent_task_id !== task?.id)),
+    [projectTasks, isEdit, task?.id]
   );
 
   const [title, setTitle] = useState("");
@@ -116,6 +128,8 @@ export function TaskDialog({
   const [progress, setProgress] = useState(0);
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [estimatedHours, setEstimatedHours] = useState("");
+  const [actualHours, setActualHours] = useState("");
   const [assigneeMode, setAssigneeMode] = useState<"member" | "custom">("member");
   const [assigneeId, setAssigneeId] = useState<string>("");
   const [assigneeName, setAssigneeName] = useState<string | null>(null);
@@ -125,6 +139,10 @@ export function TaskDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [inviting, setInviting] = useState(false);
+
+  // Rastreadores para inicializar o form apenas na abertura real (impede reset ao digitar)
+  const prevOpenRef = useRef(false);
+  const prevTaskIdRef = useRef<string | null>(null);
 
   // Abas
   const [activeTab, setActiveTab] = useState<"details" | "comments" | "attachments">("details");
@@ -214,9 +232,25 @@ export function TaskDialog({
     };
   }, [open, projectId]);
 
-  // Sincronizar campos do formulário
+  // Sincronizar campos do formulário (apenas na abertura real ou ao trocar de tarefa)
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      prevOpenRef.current = false;
+      prevTaskIdRef.current = null;
+      return;
+    }
+
+    const currentTaskId = task?.id ?? "new";
+    const isNewlyOpened = !prevOpenRef.current;
+    const isDifferentTask = currentTaskId !== prevTaskIdRef.current;
+
+    // Se já estava aberto e é a mesma tarefa, NÃO reseta os campos enquanto o usuário digita
+    if (!isNewlyOpened && !isDifferentTask) {
+      return;
+    }
+
+    prevOpenRef.current = true;
+    prevTaskIdRef.current = currentTaskId;
 
     if (task) {
       setTitle(task.title ?? "");
@@ -227,6 +261,8 @@ export function TaskDialog({
       setProgress(task.progress ?? 0);
       setStartDate(task.start_date ? task.start_date.split("T")[0] : "");
       setDueDate(task.due_date ? task.due_date.split("T")[0] : "");
+      setEstimatedHours(task.estimated_hours != null ? String(task.estimated_hours) : "");
+      setActualHours(task.actual_hours != null ? String(task.actual_hours) : "");
 
       const currentAssigneeId = (task as unknown as { assignee_id?: string | null }).assignee_id ?? "";
       const currentAssigneeName = task.assignee_name ?? null;
@@ -255,6 +291,8 @@ export function TaskDialog({
       setProgress(0);
       setStartDate(new Date().toISOString().split("T")[0]);
       setDueDate(defaultDueDate || "");
+      setEstimatedHours("");
+      setActualHours("");
       setAssigneeMode("member");
       setAssigneeId("");
       setAssigneeName(null);
@@ -341,6 +379,9 @@ export function TaskDialog({
         calculatedStatus = progress > 0 ? "in_progress" : "todo";
       }
 
+      const parsedEst = estimatedHours.trim() ? parseFloat(estimatedHours.replace(",", ".")) : null;
+      const parsedAct = actualHours.trim() ? parseFloat(actualHours.replace(",", ".")) : null;
+
       const taskData: Partial<Task> = {
         title: title.trim(),
         description: description.trim() || null,
@@ -351,6 +392,8 @@ export function TaskDialog({
         progress,
         start_date: startDate ? new Date(startDate).toISOString() : null,
         due_date: dueDate ? new Date(dueDate).toISOString() : null,
+        estimated_hours: parsedEst !== null && !isNaN(parsedEst) ? parsedEst : null,
+        actual_hours: parsedAct !== null && !isNaN(parsedAct) ? parsedAct : null,
         assignee_id: assigneeMode === "member" && assigneeId ? assigneeId : null,
         assignee_name: assigneeMode === "custom" && assigneeName ? assigneeName.trim() : null,
         assignee_status: assigneeStatus as Task["assignee_status"],
@@ -384,21 +427,14 @@ export function TaskDialog({
   return (
     <div
       role="presentation"
-      tabIndex={-1}
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs"
-      onClick={() => onOpenChange(false)}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") onOpenChange(false);
-      }}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="task-dialog-title"
-        tabIndex={-1}
         className="relative w-full sm:max-w-lg bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden h-[92vh] sm:h-auto max-h-[92vh] sm:max-h-[90vh] flex flex-col animate-fadeIn"
         onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600/10 via-blue-500/5 to-transparent border-b border-border p-6 shrink-0 relative">
@@ -517,7 +553,7 @@ export function TaskDialog({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 autoComplete="off"
-                className="flex h-11 w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-all font-medium"
+                className="flex h-11 w-full rounded-xl border border-input bg-background text-foreground dark:text-zinc-100 px-3.5 py-2 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-all font-medium"
               />
             </div>
 
@@ -533,7 +569,7 @@ export function TaskDialog({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
-                className="flex min-h-[90px] w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-all resize-none leading-relaxed font-medium"
+                className="flex min-h-[90px] w-full rounded-xl border border-input bg-background text-foreground dark:text-zinc-100 px-3.5 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-all resize-none leading-relaxed font-medium"
               />
             </div>
 
@@ -712,31 +748,56 @@ export function TaskDialog({
               </div>
             </div>
 
-            {/* Datas Grid */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Datas & Carga de Trabalho Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <label htmlFor="task-start" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                   <Calendar className="h-3.5 w-3.5 text-blue-500" />
-                  Data de Início
+                  Data Início
                 </label>
                 <DatePicker
                   id="task-start"
                   value={startDate}
                   onChange={(val) => setStartDate(val)}
-                  placeholder="Selecione início"
+                  placeholder="Início"
                 />
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="task-due" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                   <Calendar className="h-3.5 w-3.5 text-blue-500" />
-                  Data Limite (Prazo)
+                  Prazo Final
                 </label>
                 <DatePicker
                   id="task-due"
                   value={dueDate}
                   onChange={(val) => setDueDate(val)}
-                  placeholder="Selecione prazo"
+                  placeholder="Prazo"
                 />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="task-estimated-hours" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5 text-blue-500" />
+                  Horas Est.
+                </label>
+                <div className="relative">
+                  <input
+                    id="task-estimated-hours"
+                    type="text"
+                    inputMode="decimal"
+                    pattern="[0-9]*[.,]?[0-9]*"
+                    autoComplete="off"
+                    value={estimatedHours}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9.,]/g, "");
+                      setEstimatedHours(val);
+                    }}
+                    placeholder="ex: 8"
+                    className="flex h-11 w-full rounded-xl border border-input bg-background text-foreground dark:text-zinc-100 pl-3.5 pr-14 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all shadow-xs"
+                  />
+                  <span className="absolute right-3 top-3 text-xs text-muted-foreground font-semibold pointer-events-none select-none">
+                    horas
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -747,9 +808,31 @@ export function TaskDialog({
                   <BarChart3 className="h-3.5 w-3.5 text-blue-500" />
                   Progresso da Tarefa
                 </span>
-                <span className="text-sm font-extrabold text-blue-600 dark:text-blue-400 font-mono">
-                  {progress}%
-                </span>
+                <div className="flex items-center gap-2">
+                  {progress < 100 ? (
+                    <button
+                      type="button"
+                      onClick={() => setProgress(100)}
+                      className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1 border border-emerald-500/20 shadow-xs cursor-pointer"
+                      title="Marcar tarefa como 100% concluída"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                      Concluir (100%)
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setProgress(90)}
+                      className="text-[11px] font-bold text-muted-foreground hover:text-foreground bg-muted hover:bg-muted/80 px-2.5 py-1 rounded-lg transition-colors border border-border/60 cursor-pointer"
+                      title="Reabrir tarefa em andamento"
+                    >
+                      Reabrir Tarefa
+                    </button>
+                  )}
+                  <span className="text-sm font-extrabold text-blue-600 dark:text-blue-400 font-mono">
+                    {progress}%
+                  </span>
+                </div>
               </div>
 
               <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
@@ -780,10 +863,90 @@ export function TaskDialog({
               {progress === 100 && (
                 <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  Concluída — ao salvar a tarefa será marcada como entregue
+                  Concluída — informe abaixo as horas reais gastas
                 </p>
               )}
             </div>
+
+            {/* Bloco de Horas Reais Gastas (Ativado na Conclusão da Tarefa) */}
+            {(progress === 100 || stages.find((s) => s.id === stageId)?.is_done || task?.status === "done") && (
+              <div className="p-4 rounded-2xl border border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-950/20 space-y-3 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <label
+                    htmlFor="task-actual-hours"
+                    className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    Horas Reais Gastas (Execução)
+                  </label>
+                  <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    Tarefa Concluída 🎉
+                  </span>
+                </div>
+
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Informe a quantidade de horas que foram efetivamente trabalhadas nesta atividade para apuração real de carga e prazos.
+                </p>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="relative w-full sm:w-48">
+                    <input
+                      id="task-actual-hours"
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9]*[.,]?[0-9]*"
+                      autoComplete="off"
+                      placeholder="ex: 7.5"
+                      value={actualHours}
+                      onChange={(e) => setActualHours(e.target.value.replace(/[^0-9.,]/g, ""))}
+                      className="flex h-11 w-full rounded-xl border border-emerald-500/50 bg-background text-foreground dark:text-zinc-100 pl-3.5 pr-14 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 font-semibold transition-all shadow-xs"
+                    />
+                    <span className="absolute right-3 top-3 text-xs text-muted-foreground font-semibold pointer-events-none select-none">
+                      horas
+                    </span>
+                  </div>
+
+                  {estimatedHours.trim() && !actualHours && (
+                    <button
+                      type="button"
+                      onClick={() => setActualHours(estimatedHours)}
+                      className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 hover:underline inline-flex items-center gap-1 self-start sm:self-center cursor-pointer"
+                    >
+                      Copiar horas estimadas ({estimatedHours}h)
+                    </button>
+                  )}
+
+                  {(() => {
+                    const est = parseFloat(estimatedHours.replace(",", "."));
+                    const act = parseFloat(actualHours.replace(",", "."));
+                    if (!isNaN(est) && !isNaN(act) && est > 0 && act > 0) {
+                      const diff = act - est;
+                      const pct = Math.round(((act - est) / est) * 100);
+                      if (diff === 0) {
+                        return (
+                          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
+                            ✓ Concluído exatamente no tempo estimado!
+                          </span>
+                        );
+                      } else if (diff < 0) {
+                        return (
+                          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
+                            🚀 {Math.abs(diff).toFixed(1)}h a menos que o estimado ({Math.abs(pct)}% economia)
+                          </span>
+                        );
+                      } else {
+                        return (
+                          <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg">
+                            ⏱️ +{diff.toFixed(1)}h a mais que o estimado (+{pct}%)
+                          </span>
+                        );
+                      }
+                    }
+                    return null;
+                  })()}
+                </div>
+              </div>
+            )}
 
             {/* Erro */}
             {error && (

@@ -153,6 +153,7 @@ export type Database = {
           due_date: string | null
           progress: number
           estimated_hours: number | null
+          actual_hours: number | null
           created_by: string | null
           created_at: string
           updated_at: string
@@ -174,6 +175,7 @@ export type Database = {
           due_date?: string | null
           progress?: number
           estimated_hours?: number | null
+          actual_hours?: number | null
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -195,6 +197,7 @@ export type Database = {
           due_date?: string | null
           progress?: number
           estimated_hours?: number | null
+          actual_hours?: number | null
           created_by?: string | null
           created_at?: string
           updated_at?: string

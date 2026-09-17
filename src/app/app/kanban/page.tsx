@@ -38,12 +38,14 @@ import { Progress } from "@/components/ui/progress";
 import { useData } from "@/lib/context/DataContext";
 import { TaskAssignee } from "@/components/TaskAssignee";
 import { TaskDialog } from "@/components/TaskDialog";
+import { CompleteTaskDialog } from "@/components/CompleteTaskDialog";
 import { TaskIndicators } from "@/components/TaskIndicators";
 import { ImportProjectButton } from "@/components/ImportProjectButton";
 import { ProjectAnalyticsDialog } from "@/components/ProjectAnalyticsDialog";
 import { sortTasksWithHierarchy } from "@/lib/task-sorting";
 import { KanbanSkeleton } from "@/components/skeletons/KanbanSkeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Task } from "@/lib/context/DataContext";
 
 type TaskLike = {
   id: string;
@@ -54,6 +56,8 @@ type TaskLike = {
   status?: string;
   due_date: string | null;
   progress: number;
+  estimated_hours?: number | null;
+  actual_hours?: number | null;
   assignee_id: string | null;
   assignee_name?: string | null;
   parent_task_id?: string | null;
@@ -208,6 +212,20 @@ function TaskCard({
                 <Clock className="h-3 w-3" />
                 {formatDate(task.due_date)}
                 {overdue && " (atrasado)"}
+              </span>
+            )}
+
+            {task.estimated_hours != null && (
+              <span className="text-[11px] inline-flex items-center gap-1 text-muted-foreground font-mono" title={`Estimado: ${task.estimated_hours} horas`}>
+                <Clock className="h-3 w-3 text-blue-500" />
+                {task.estimated_hours}h
+              </span>
+            )}
+
+            {isTaskDone && task.actual_hours != null && (
+              <span className="text-[11px] inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold font-mono bg-emerald-500/15 px-1.5 py-0.5 rounded" title={`Executado: ${task.actual_hours} horas reais`}>
+                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                {task.actual_hours}h real
               </span>
             )}
           </div>
@@ -413,6 +431,8 @@ export default function KanbanPage() {
   const [wipWarning, setWipWarning] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [defaultStageId, setDefaultStageId] = useState<string | null>(null);
+  const [activeMobileStageId, setActiveMobileStageId] = useState<string | null>(null);
+  const [completingTask, setCompletingTask] = useState<{ task: Task; targetStageName: string } | null>(null);
 
   const projectStages = useMemo(() => {
     if (!selectedProjectId) return [];
@@ -420,8 +440,6 @@ export default function KanbanPage() {
       .filter((s) => s.project_id === selectedProjectId)
       .sort((a, b) => a.position - b.position);
   }, [stages, selectedProjectId]);
-
-  const [activeMobileStageId, setActiveMobileStageId] = useState<string | null>(null);
 
   useEffect(() => {
     if (projectStages.length > 0) {
@@ -490,6 +508,11 @@ export default function KanbanPage() {
             `⚠️ Atenção: O estágio "${targetStage.name}" ultrapassará o limite WIP de ${targetStage.wip_limit} tarefas (${currentTasksInTarget + 1}/${targetStage.wip_limit}).`
           );
         }
+      }
+
+      // Se moveu para uma coluna concluída e a tarefa ainda não tinha horas reais apontadas
+      if (targetStage?.is_done && !movedTask.actual_hours) {
+        setCompletingTask({ task: movedTask as Task, targetStageName: targetStage.name });
       }
     }
 
@@ -870,6 +893,25 @@ export default function KanbanPage() {
         open={analyticsOpen}
         onOpenChange={setAnalyticsOpen}
         projectId={project.id}
+      />
+
+      <CompleteTaskDialog
+        open={!!completingTask}
+        onOpenChange={(open) => {
+          if (!open) setCompletingTask(null);
+        }}
+        task={completingTask?.task ?? null}
+        targetStageName={completingTask?.targetStageName}
+        onConfirm={async (actualHours) => {
+          if (completingTask) {
+            await updateTask(completingTask.task.id, {
+              status: "done",
+              progress: 100,
+              ...(actualHours !== null ? { actual_hours: actualHours } : {}),
+            });
+            setCompletingTask(null);
+          }
+        }}
       />
     </div>
   );

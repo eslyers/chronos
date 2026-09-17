@@ -181,6 +181,19 @@ export function FastCloseListView({
                         <span className="text-[11px] text-muted-foreground/60 italic">Sem responsável</span>
                       )}
 
+                      {/* Horas Estimadas / Reais */}
+                      {task.estimated_hours != null && (
+                        <div className="text-[11px] font-mono text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md flex items-center gap-1" title={`Horas estimadas: ${task.estimated_hours}h`}>
+                          <span>{task.estimated_hours}h est.</span>
+                        </div>
+                      )}
+                      {isDone && task.actual_hours != null && (
+                        <div className="text-[11px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 px-2 py-0.5 rounded-md flex items-center gap-1" title={`Horas reais executadas: ${task.actual_hours}h`}>
+                          <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                          <span>{task.actual_hours}h real</span>
+                        </div>
+                      )}
+
                       {/* Progresso */}
                       <div className="w-24 space-y-1 hidden md:block">
                         <Progress value={task.progress} className="h-1.5" />

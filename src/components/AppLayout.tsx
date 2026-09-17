@@ -21,6 +21,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarClock,
+  Gauge,
 } from "lucide-react";
 import { useGlobal } from "@/lib/context/GlobalContext";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -80,6 +81,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "Fechamento (Fast Close)", href: "/app/fast-close", icon: CalendarClock },
     { name: "Cronograma", href: "/app/timeline", icon: Clock },
     { name: "Kanban", href: "/app/kanban", icon: KanbanSquare },
+    { name: "Carga de Trabalho", href: "/app/workload", icon: Gauge },
     { name: "Calendário", href: "/app/calendar", icon: CalendarDays },
     { name: "Templates", href: "/app/templates", icon: Library },
     { name: "Equipe", href: "/app/users", icon: Users },

@@ -849,7 +849,7 @@ function PreviewRow({
               value={eff.level ?? ""}
               placeholder="—"
               onChange={(e) => onUpdate(row.index, { level: e.target.value ? Number(e.target.value) : 0 })}
-              className="w-14 bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 text-xs text-muted-foreground"
+              className="w-14 bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 text-xs text-muted-foreground [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
           </td>
         )}

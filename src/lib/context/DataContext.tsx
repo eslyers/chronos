@@ -6,6 +6,7 @@ import React, {
   useEffect,
   useState,
   useCallback,
+  useRef,
 } from "react";
 import {
   dataProvider,
@@ -43,6 +44,7 @@ export type Task = {
   start_date: string | null; // ISO
   due_date: string | null; // ISO
   estimated_hours?: number | null;
+  actual_hours?: number | null;
   assignee_id: string | null;
   assignee_name: string | null; // texto original quando assignee não é membro
   assignee_status: "pending" | "invited" | null;
@@ -102,9 +104,23 @@ type DataState = {
   loading: boolean;
 };
 
+export type CloneProjectOptions = {
+  name: string;
+  description?: string;
+  color?: string;
+  startDate?: string;
+  targetDate?: string;
+  cloneTasks?: boolean;
+  cloneDependencies?: boolean;
+  resetStatus?: boolean;
+  keepAssignees?: boolean;
+  shiftDates?: boolean;
+};
+
 type DataContextType = DataState & {
   // Projects
   createProject: (data: Partial<Project> & { templateId?: string; customStages?: Array<{ name: string; color: string; sort_order: number; wip_limit?: number | null; is_done?: boolean }> }) => Promise<Project>;
+  cloneProject: (sourceProjectId: string, options: CloneProjectOptions) => Promise<Project>;
   updateProject: (id: string, data: Partial<Project>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   // Stages
@@ -314,6 +330,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     dependencies: [],
     loading: true,
   });
+  const stateRef = useRef<DataState>(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
   const [userId, setUserId] = useState<string>(USER_ID);
   const [workspaceId, setWorkspaceId] = useState<string>("ws-local");
   const [loadedProjects, setLoadedProjects] = useState<Record<string, boolean>>({});
@@ -435,7 +456,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           stages: [...prev.stages, ...stages],
         }));
         setLoadedProjects((prev) => ({ ...prev, [project.id]: true }));
-        return project;
+        return Object.assign(project, { stages });
       }
     }
 
@@ -456,7 +477,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       updated_at: now,
     };
 
-    const stages = defaultStagesForProject(project.id);
+    const stages: Stage[] =
+      data.customStages && data.customStages.length > 0
+        ? data.customStages.map((cs, idx) => ({
+            id: generateId("stage"),
+            project_id: project.id,
+            name: cs.name,
+            color: cs.color,
+            position: cs.sort_order ?? idx,
+            is_done: cs.is_done ?? false,
+          }))
+        : defaultStagesForProject(project.id);
 
     setState((prev) => ({
       ...prev,
@@ -464,7 +495,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       stages: [...prev.stages, ...stages],
     }));
     setLoadedProjects((prev) => ({ ...prev, [project.id]: true }));
-    return project;
+    return Object.assign(project, { stages });
   }, [userId, workspaceId]);
 
   const updateProject = useCallback(async (id: string, data: Partial<Project>) => {
@@ -559,6 +590,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         priority: data.priority ?? "medium",
         due_date: data.due_date ?? undefined,
         start_date: data.start_date ?? undefined,
+        estimated_hours: data.estimated_hours ?? undefined,
+        actual_hours: data.actual_hours ?? undefined,
         parent_task_id: data.parent_task_id ?? undefined,
         assignee_id: data.assignee_id ?? undefined,
         assignee_name: data.assignee_name ?? undefined,
@@ -585,6 +618,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       progress: initialProgress,
       start_date: data.start_date ?? null,
       due_date: data.due_date ?? null,
+      estimated_hours: data.estimated_hours ?? null,
+      actual_hours: data.actual_hours ?? null,
       assignee_id: data.assignee_id ?? userId,
       assignee_name: data.assignee_name ?? null,
       assignee_status: data.assignee_status ?? null,
@@ -811,6 +846,270 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [loadedProjects]
   );
 
+  const cloneProject = useCallback(
+    async (sourceProjectId: string, options: CloneProjectOptions): Promise<Project> => {
+      // 1. Obter dados completos do projeto de origem (stages, tasks, dependencies)
+      let sourceTasks: Task[] = [];
+      let sourceStages: Stage[] = [];
+      let sourceDeps: TaskDependency[] = [];
+
+      if (getDataLayer() === "supabase") {
+        try {
+          const details = await dataProvider.loadProjectDetails(sourceProjectId);
+          if (details) {
+            sourceStages = details.stages;
+            sourceTasks = details.tasks;
+            sourceDeps = details.dependencies;
+
+            // Sincroniza o state com os detalhes do projeto de origem
+            setState((prev) => {
+              const filteredStages = prev.stages.filter((s) => s.project_id !== sourceProjectId);
+              const filteredTasks = prev.tasks.filter((t) => t.project_id !== sourceProjectId);
+              const detailTaskIds = new Set(details.tasks.map((t) => t.id));
+              const filteredDeps = prev.dependencies.filter((d) => !detailTaskIds.has(d.task_id));
+              return {
+                ...prev,
+                stages: [...filteredStages, ...details.stages],
+                tasks: [...filteredTasks, ...details.tasks],
+                dependencies: [...filteredDeps, ...details.dependencies],
+              };
+            });
+            setLoadedProjects((prev) => ({ ...prev, [sourceProjectId]: true }));
+          }
+        } catch (err) {
+          console.error("[cloneProject] Error fetching source project details from Supabase:", err);
+        }
+      }
+
+      const currentState = stateRef.current || state;
+
+      // Fallback para state se não veio do Supabase
+      if (sourceStages.length === 0) {
+        sourceStages = currentState.stages
+          .filter((s) => s.project_id === sourceProjectId)
+          .sort((a, b) => a.position - b.position);
+      }
+      if (sourceTasks.length === 0) {
+        sourceTasks = currentState.tasks.filter((t) => t.project_id === sourceProjectId);
+      }
+      if (sourceDeps.length === 0) {
+        sourceDeps = currentState.dependencies.filter((d) =>
+          sourceTasks.some((st) => st.id === d.task_id)
+        );
+      }
+
+      const sourceProject = currentState.projects.find((p) => p.id === sourceProjectId);
+      if (!sourceProject) throw new Error("Projeto de origem não encontrado");
+
+      const normalizeDateOnly = (dateStr: string | null | undefined): string | null => {
+        if (!dateStr) return null;
+        const clean = dateStr.split("T")[0].trim();
+        if (!clean || !/^\d{4}-\d{2}-\d{2}$/.test(clean)) return null;
+        return clean;
+      };
+
+      const sourceStartClean = normalizeDateOnly(sourceProject.start_date);
+      const sourceTargetClean = normalizeDateOnly(sourceProject.target_date);
+      const optionStartClean = normalizeDateOnly(options.startDate);
+      const optionTargetClean = normalizeDateOnly(options.targetDate);
+
+      const customStages = sourceStages.map((s) => ({
+        name: s.name,
+        color: s.color,
+        sort_order: s.position,
+        wip_limit: s.wip_limit,
+        is_done: s.is_done,
+      }));
+
+      // 2. Criar novo projeto com os estágios correspondentes
+      const newProject = await createProject({
+        name: options.name,
+        description:
+          options.description !== undefined ? options.description : sourceProject.description ?? undefined,
+        color: options.color || sourceProject.color || "#3b82f6",
+        start_date: optionStartClean || (options.shiftDates ? optionStartClean : sourceStartClean) || undefined,
+        target_date: optionTargetClean || (options.shiftDates ? optionTargetClean : sourceTargetClean) || undefined,
+        customStages: customStages.length > 0 ? customStages : undefined,
+      });
+
+      // 3. Obter os novos estágios do novo projeto
+      let newStages: Stage[] = ((newProject as unknown as { stages?: Stage[] }).stages) || [];
+      if (newStages.length === 0 && getDataLayer() === "supabase") {
+        const newDetails = await dataProvider.loadProjectDetails(newProject.id);
+        if (newDetails && newDetails.stages.length > 0) {
+          newStages = newDetails.stages;
+        }
+      }
+      if (newStages.length === 0) {
+        newStages = (stateRef.current?.stages || state.stages).filter(
+          (s) => s.project_id === newProject.id
+        );
+      }
+
+      // Mapeamento de estágios: antigo ID -> novo ID
+      const stageIdMap = new Map<string, string>();
+      sourceStages.forEach((oldStage, idx) => {
+        const matchingNewStage =
+          newStages.find((ns) => ns.name.trim().toLowerCase() === oldStage.name.trim().toLowerCase()) ||
+          newStages[idx] ||
+          newStages[0];
+        if (matchingNewStage) {
+          stageIdMap.set(oldStage.id, matchingNewStage.id);
+        }
+      });
+
+      // 4. Clonar tarefas se solicitado
+      const createdNewTasks: Task[] = [];
+      const taskIdMap = new Map<string, string>();
+
+      if (options.cloneTasks !== false && sourceTasks.length > 0) {
+        let dateOffsetDays = 0;
+        if (options.shiftDates && optionStartClean && sourceStartClean) {
+          const oldStart = new Date(sourceStartClean + "T00:00:00").getTime();
+          const newStart = new Date(optionStartClean + "T00:00:00").getTime();
+          if (!isNaN(oldStart) && !isNaN(newStart)) {
+            dateOffsetDays = Math.round((newStart - oldStart) / (1000 * 60 * 60 * 24));
+          }
+        }
+        if (isNaN(dateOffsetDays)) {
+          dateOffsetDays = 0;
+        }
+
+        const shiftDateString = (dateStr: string | null | undefined): string | undefined => {
+          if (!dateStr) return undefined;
+          const clean = normalizeDateOnly(dateStr);
+          if (!clean) return undefined;
+          if (!dateOffsetDays || dateOffsetDays === 0) return clean;
+          const d = new Date(clean + "T00:00:00");
+          if (isNaN(d.getTime())) return clean;
+          d.setDate(d.getDate() + dateOffsetDays);
+          if (isNaN(d.getTime())) return clean;
+          return d.toISOString().split("T")[0];
+        };
+
+        const rootTasks = sourceTasks.filter((t) => !t.parent_task_id);
+        const subtasks = sourceTasks.filter((t) => !!t.parent_task_id);
+
+        // Clona tarefas raiz
+        for (const t of rootTasks) {
+          const targetStageId =
+            (t.stage_id ? stageIdMap.get(t.stage_id) : null) ||
+            newStages[0]?.id ||
+            null;
+
+          const created = await createTask({
+            project_id: newProject.id,
+            stage_id: targetStageId,
+            title: t.title,
+            description: t.description,
+            priority: t.priority,
+            status: options.resetStatus ? "todo" : t.status,
+            progress: options.resetStatus ? 0 : t.progress,
+            start_date: shiftDateString(t.start_date),
+            due_date: shiftDateString(t.due_date),
+            estimated_hours: t.estimated_hours,
+            actual_hours: options.resetStatus ? null : (t.actual_hours ?? null),
+            assignee_id: options.keepAssignees ? t.assignee_id : null,
+            assignee_name: options.keepAssignees ? t.assignee_name : null,
+            position: t.position,
+            parent_task_id: null,
+          });
+
+          if (created) {
+            taskIdMap.set(t.id, created.id);
+            createdNewTasks.push(created);
+          }
+        }
+
+        // Clona subtarefas
+        for (const t of subtasks) {
+          const targetStageId =
+            (t.stage_id ? stageIdMap.get(t.stage_id) : null) ||
+            newStages[0]?.id ||
+            null;
+          const newParentId = t.parent_task_id
+            ? taskIdMap.get(t.parent_task_id) || null
+            : null;
+
+          const created = await createTask({
+            project_id: newProject.id,
+            stage_id: targetStageId,
+            title: t.title,
+            description: t.description,
+            priority: t.priority,
+            status: options.resetStatus ? "todo" : t.status,
+            progress: options.resetStatus ? 0 : t.progress,
+            start_date: shiftDateString(t.start_date),
+            due_date: shiftDateString(t.due_date),
+            estimated_hours: t.estimated_hours,
+            actual_hours: options.resetStatus ? null : (t.actual_hours ?? null),
+            assignee_id: options.keepAssignees ? t.assignee_id : null,
+            assignee_name: options.keepAssignees ? t.assignee_name : null,
+            position: t.position,
+            parent_task_id: newParentId,
+          });
+
+          if (created) {
+            taskIdMap.set(t.id, created.id);
+            createdNewTasks.push(created);
+          }
+        }
+
+        // Clona dependências
+        if (options.cloneDependencies !== false && sourceDeps.length > 0) {
+          for (const dep of sourceDeps) {
+            const newTaskId = taskIdMap.get(dep.task_id);
+            const newDependsOnTaskId = taskIdMap.get(dep.depends_on_task_id);
+            if (newTaskId && newDependsOnTaskId) {
+              try {
+                await addDependency(newTaskId, newDependsOnTaskId, dep.type);
+              } catch (err) {
+                console.warn("[cloneProject] Could not clone dependency:", err);
+              }
+            }
+          }
+        }
+      }
+
+      // 5. Consolidar o novo projeto, estágios e tarefas diretamente no state e storage
+      setState((prev) => {
+        const existingTaskIds = new Set(prev.tasks.map((t) => t.id));
+        const missingTasks = createdNewTasks.filter((t) => !existingTaskIds.has(t.id));
+
+        const existingStageIds = new Set(prev.stages.map((s) => s.id));
+        const missingStages = newStages.filter((s) => !existingStageIds.has(s.id));
+
+        const nextState: DataState = {
+          ...prev,
+          projects: prev.projects.some((p) => p.id === newProject.id)
+            ? prev.projects
+            : [newProject, ...prev.projects],
+          stages: [...prev.stages, ...missingStages],
+          tasks: [...prev.tasks, ...missingTasks],
+        };
+
+        if (getDataLayer() === "local") {
+          saveToStorage(nextState);
+        }
+
+        return nextState;
+      });
+
+      setLoadedProjects((prev) => ({
+        ...prev,
+        [newProject.id]: true,
+      }));
+
+      return newProject;
+    },
+    [
+      state,
+      createProject,
+      createTask,
+      addDependency,
+    ]
+  );
+
   // ── Comments & Attachments (Proposta 4) ─────────────────────
   const getTaskComments = useCallback(async (taskId: string): Promise<TaskComment[]> => {
     if (getDataLayer() === "supabase") {
@@ -978,6 +1277,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       value={{
         ...state,
         createProject,
+        cloneProject,
         updateProject,
         deleteProject,
         createStage,

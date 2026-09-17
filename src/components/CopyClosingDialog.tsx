@@ -50,7 +50,9 @@ export function CopyClosingDialog({
   const availableSourceTasks = useMemo(() => {
     return tasks.filter((t) => {
       if (!t.due_date && !t.start_date) return true;
-      const refDate = new Date((t.due_date || t.start_date) + "T00:00:00");
+      const raw = (t.due_date || t.start_date || "").split("T")[0];
+      const refDate = new Date(raw + "T00:00:00");
+      if (isNaN(refDate.getTime())) return true;
       return refDate.getMonth() + 1 === sourceMonth && refDate.getFullYear() === sourceYear;
     });
   }, [tasks, sourceMonth, sourceYear]);
@@ -106,7 +108,6 @@ export function CopyClosingDialog({
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onOpenChange(false); }}
     >
       <div
         role="dialog"
