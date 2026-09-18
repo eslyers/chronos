@@ -102,6 +102,20 @@ export async function fetchAllProjects(): Promise<Project[]> {
   return ((data as DbProject[] | null) ?? []).map(dbToProject);
 }
 
+export async function fetchProjectById(id: string): Promise<Project | null> {
+  const supabase = client();
+  const { data, error } = await supabase
+    .from("projects")
+    .select("*")
+    .eq("id", id)
+    .limit(1);
+  if (error || !data || data.length === 0) {
+    if (error) console.error("[supabase-data] fetchProjectById", error);
+    return null;
+  }
+  return dbToProject(data[0] as DbProject);
+}
+
 export async function fetchAllStages(projectIds: string[]): Promise<Stage[]> {
   if (projectIds.length === 0) return [];
   const supabase = client();
@@ -166,24 +180,62 @@ export async function createProject(input: {
   name: string;
   description?: string | null;
   color?: string;
+  start_date?: string | null;
+  target_date?: string | null;
   workspace_id: string;
-  created_by: string;
+  created_by?: string | null;
   track_time?: boolean;
 }): Promise<Project | null> {
   const supabase = client();
-  const payload: Database["public"]["Tables"]["projects"]["Insert"] = {
+  const payload: Record<string, any> = {
     workspace_id: input.workspace_id,
     name: input.name,
     description: input.description ?? null,
     color: input.color ?? "#3b82f6",
-    track_time: input.track_time !== false,
-    created_by: input.created_by,
   };
-  const { data, error } = await supabase
-    .from("projects")
-    .insert(payload as any)
+
+  if (input.created_by) {
+    payload.created_by = input.created_by;
+  }
+  if (input.start_date) {
+    payload.start_date = input.start_date.split("T")[0];
+  }
+  if (input.target_date) {
+    payload.target_date = input.target_date.split("T")[0];
+  }
+  if (input.track_time !== undefined) {
+    payload.track_time = input.track_time !== false;
+  }
+
+  let { data, error } = await (supabase.from("projects") as any)
+    .insert(payload)
     .select()
     .single();
+
+  // Se a coluna track_time não existe no Postgres remoto do Supabase:
+  if (error && (error.message?.includes("track_time") || error.code === "42703" || error.code === "PGRST204")) {
+    console.warn("[supabase-data] createProject: coluna track_time ausente no banco, retentando sem track_time");
+    delete payload.track_time;
+    const retry = await (supabase.from("projects") as any)
+      .insert(payload)
+      .select()
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
+
+  // Se falhou por conta do created_by (ex: FK constraint para auth.users):
+  if (error && (error.message?.includes("created_by") || error.code === "23503")) {
+    console.warn("[supabase-data] createProject: erro em created_by, retentando sem created_by");
+    delete payload.created_by;
+    const retry = await (supabase.from("projects") as any)
+      .insert(payload)
+      .select()
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
+
   if (error) {
     console.error("[supabase-data] createProject", error);
     return null;
@@ -282,6 +334,18 @@ export async function createTask(input: {
     error = retry.error;
   }
 
+  // Se falhou por conta do created_by (ex: FK constraint):
+  if (error && (error.message?.includes("created_by") || error.code === "23503")) {
+    console.warn("[supabase-data] createTask: erro em created_by, retentando sem created_by");
+    delete (payload as any).created_by;
+    const retry = await (supabase.from("tasks") as any)
+      .insert(payload)
+      .select()
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
+
   if (error) {
     console.error("[supabase-data] createTask", error);
     return null;
@@ -338,6 +402,7 @@ export async function createStage(input: {
   color?: string;
   sort_order: number;
   wip_limit?: number | null;
+  is_done?: boolean;
 }): Promise<Stage | null> {
   const supabase = client();
   const payload: Database["public"]["Tables"]["stages"]["Insert"] = {
@@ -346,6 +411,7 @@ export async function createStage(input: {
     color: input.color ?? "#3b82f6",
     sort_order: input.sort_order,
     wip_limit: input.wip_limit ?? null,
+    is_done: input.is_done ?? false,
   };
   const { data, error } = await (supabase.from("stages") as any).insert(payload).select().single();
   if (error) {
@@ -376,18 +442,76 @@ export async function deleteStage(id: string): Promise<void> {
 
 export async function getCurrentWorkspaceId(): Promise<string | null> {
   const supabase = client();
-  const { data, error } = await supabase.auth.getUser();
-  if (error || !data?.user) {
-    console.error("[supabase-data] getCurrentUser", error);
-    return null;
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const userId = authData?.user?.id;
+
+  if (userId) {
+    // 1. Verificar se o usuário pertence a algum workspace via workspace_members (membros e convites)
+    const { data: memberRows, error: memberErr } = await (supabase
+      .from("workspace_members") as any)
+      .select("workspace_id")
+      .eq("user_id", userId)
+      .limit(1);
+
+    const members = memberRows as Array<{ workspace_id: string }> | null;
+    if (!memberErr && members && members.length > 0 && members[0]?.workspace_id) {
+      return members[0].workspace_id;
+    }
+
+    // 2. Se não estiver em workspace_members, verificar se é owner direto na tabela workspaces
+    const { data: ownedWs, error: ownerErr } = await (supabase
+      .from("workspaces") as any)
+      .select("id")
+      .eq("owner_id", userId)
+      .limit(1);
+
+    const owned = ownedWs as Array<{ id: string }> | null;
+    if (!ownerErr && owned && owned.length > 0 && owned[0]?.id) {
+      return owned[0].id;
+    }
   }
-  const { data: workspaces } = await supabase
-    .from("workspaces")
+
+  // 3. Fallback: buscar o primeiro workspace acessível pelo usuário via RLS
+  const { data: anyWs, error: anyErr } = await (supabase
+    .from("workspaces") as any)
     .select("id")
-    .eq("owner_id", data.user.id)
-    .limit(1)
-    .single();
-  return (workspaces as { id: string } | null)?.id ?? null;
+    .limit(1);
+
+  const anyList = anyWs as Array<{ id: string }> | null;
+  if (!anyErr && anyList && anyList.length > 0 && anyList[0]?.id) {
+    return anyList[0].id;
+  }
+
+  // 4. Se o usuário estiver autenticado mas não tiver NENHUM workspace, criar um automaticamente!
+  if (userId) {
+    try {
+      const email = authData?.user?.email || "user";
+      const slug = `ws-${email.split("@")[0].replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}-${userId.slice(0, 6)}`;
+      const { data: createdWs, error: createWsErr } = await (supabase
+        .from("workspaces") as any)
+        .insert({
+          name: "Workspace Principal",
+          slug,
+          owner_id: userId,
+        })
+        .select("id")
+        .limit(1);
+
+      if (!createWsErr && createdWs && createdWs.length > 0 && createdWs[0].id) {
+        // Adiciona como membro owner
+        await (supabase.from("workspace_members") as any).insert({
+          workspace_id: createdWs[0].id,
+          user_id: userId,
+          role: "owner",
+        });
+        return createdWs[0].id;
+      }
+    } catch (createErr) {
+      console.error("[supabase-data] Auto-create workspace failed:", createErr);
+    }
+  }
+
+  return null;
 }
 
 // ────────────────────────────────────────────────────────────────────────────

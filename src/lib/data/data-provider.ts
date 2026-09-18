@@ -3,6 +3,7 @@
 import { isSupabaseConfigured } from "@/lib/supabase/mode";
 import {
   fetchAllProjects,
+  fetchProjectById,
   fetchAllStages,
   fetchAllTasks,
   fetchAllDependencies,
@@ -80,6 +81,11 @@ export const dataProvider = {
     return { projects };
   },
 
+  getProjectById: async (id: string) => {
+    if (getDataLayer() !== "supabase") return null;
+    return await fetchProjectById(id);
+  },
+
   loadProjectDetails: async (projectId: string) => {
     if (getDataLayer() !== "supabase") return null;
     const [stages, tasks] = await Promise.all([
@@ -100,6 +106,8 @@ export const dataProvider = {
     name: string;
     description?: string;
     color?: string;
+    start_date?: string;
+    target_date?: string;
     templateId?: string;
     track_time?: boolean;
     customStages?: Array<{ name: string; color: string; sort_order: number; wip_limit?: number | null; is_done?: boolean }>;
@@ -107,16 +115,24 @@ export const dataProvider = {
   }) => {
     if (getDataLayer() !== "supabase") return null;
     const { workspaceId, userId } = await loadWorkspaceContext();
-    if (!workspaceId) return null;
+    if (!workspaceId) {
+      console.error("[dataProvider.createProject] Nenhum workspaceId encontrado para o usuário!");
+      return null;
+    }
     const project = await supabaseCreateProject({
       name: input.name,
       description: input.description,
       color: input.color,
+      start_date: input.start_date,
+      target_date: input.target_date,
       workspace_id: workspaceId,
-      created_by: userId,
+      created_by: userId || null,
       track_time: input.track_time,
     });
-    if (!project) return null;
+    if (!project) {
+      console.error("[dataProvider.createProject] Falha ao criar projeto no Supabase!");
+      return null;
+    }
 
     // Caminho 1: customStages enviado (lista já customizada pelo user no editor)
     if (input.customStages && input.customStages.length > 0) {
@@ -128,6 +144,7 @@ export const dataProvider = {
           color: s.color,
           sort_order: s.sort_order,
           wip_limit: s.wip_limit ?? null,
+          is_done: s.is_done ?? false,
         });
         if (stage) {
           createdStages.push({

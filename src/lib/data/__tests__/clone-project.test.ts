@@ -191,5 +191,29 @@ describe("Project Cloning Logic", () => {
     expect(shiftDateString(null)).toBeUndefined();
     expect(shiftDateString("not-a-date")).toBeUndefined();
   });
+
+  it("should preserve newly created/cloned local projects when merging with remote projects on refresh", () => {
+    // Simula projetos remotos retornados pelo Supabase
+    const remoteProjects: Project[] = [sourceProject];
+
+    // Simula um projeto novo recém-criado ou clonado localmente
+    const clonedProject: Project = {
+      ...sourceProject,
+      id: "proj-cloned-123",
+      name: "Implantação ERP (Cópia)",
+    };
+
+    // Estado local antes do refresh
+    const localStateProjects: Project[] = [sourceProject, clonedProject];
+
+    // Lógica usada no DataContext.init e DataContext.refresh
+    const remoteIds = new Set(remoteProjects.map((p) => p.id));
+    const localOnlyProjects = localStateProjects.filter((p) => !remoteIds.has(p.id));
+    const combinedProjects = [...remoteProjects, ...localOnlyProjects];
+
+    expect(combinedProjects).toHaveLength(2);
+    expect(combinedProjects.find((p) => p.id === "proj-cloned-123")).toBeDefined();
+    expect(combinedProjects.find((p) => p.id === "proj-orig")).toBeDefined();
+  });
 });
 

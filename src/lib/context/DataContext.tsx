@@ -355,15 +355,48 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setWorkspaceId(ctx.workspaceId ?? "ws-local");
         const data = await dataProvider.loadProjectsOnly();
         if (cancelled) return;
+
+        const stored = loadFromStorage();
+
         if (data && data.projects) {
+          const supabaseProjectIds = new Set(data.projects.map((p) => p.id));
+          // Preserva projetos que foram criados localmente/em fallback ou que ainda não constem no Supabase
+          const localOnlyProjects = (stored?.projects || []).filter(
+            (p) => !supabaseProjectIds.has(p.id)
+          );
+          const localOnlyStages = (stored?.stages || []).filter(
+            (s) => localOnlyProjects.some((p) => p.id === s.project_id)
+          );
+          const localOnlyTasks = (stored?.tasks || []).filter(
+            (t) => localOnlyProjects.some((p) => p.id === t.project_id)
+          );
+          const localOnlyDeps = (stored?.dependencies || []).filter(
+            (d) => localOnlyTasks.some((t) => t.id === d.task_id)
+          );
+
+          const combinedProjects = [...data.projects, ...localOnlyProjects];
+
           setState({
-            projects: data.projects,
-            stages: [],
-            tasks: [],
-            dependencies: [],
+            projects: combinedProjects,
+            stages: localOnlyStages,
+            tasks: localOnlyTasks,
+            dependencies: localOnlyDeps,
             loading: false,
           });
-          setLoadedProjects({});
+
+          const loaded: Record<string, boolean> = {};
+          localOnlyProjects.forEach((p) => {
+            loaded[p.id] = true;
+          });
+          setLoadedProjects(loaded);
+        } else if (stored) {
+          // Fallback resiliente se o Supabase não responder
+          setState({ ...stored, loading: false });
+          const loaded: Record<string, boolean> = {};
+          stored.projects.forEach((p) => {
+            loaded[p.id] = true;
+          });
+          setLoadedProjects(loaded);
         } else {
           setState((s) => ({ ...s, loading: false }));
         }
@@ -394,19 +427,29 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, []);
 
-  // Persist (só em modo demo)
+  // Persist (salva em localStorage como backup sempre que o state mudar e não estiver carregando)
   useEffect(() => {
-    if (!state.loading && getDataLayer() === "local") saveToStorage(state);
+    if (!state.loading) {
+      saveToStorage(state);
+    }
   }, [state]);
 
   const refresh = useCallback(async () => {
     if (getDataLayer() === "supabase") {
       const data = await dataProvider.loadProjectsOnly();
       if (data) {
-        setState((prev) => ({
-          ...prev,
-          projects: data.projects,
-        }));
+        setState((prev) => {
+          const supabaseProjectIds = new Set(data.projects.map((p) => p.id));
+          const localOnlyProjects = prev.projects.filter(
+            (p) => !supabaseProjectIds.has(p.id)
+          );
+          const nextState: DataState = {
+            ...prev,
+            projects: [...data.projects, ...localOnlyProjects],
+          };
+          saveToStorage(nextState);
+          return nextState;
+        });
 
         const loadedIds = Object.keys(loadedProjects).filter((id) => loadedProjects[id]);
         if (loadedIds.length > 0) {
@@ -420,12 +463,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 (d) => !detailTaskIds.has(d.task_id)
               );
 
-              return {
+              const nextState: DataState = {
                 ...prev,
                 stages: [...filteredStages, ...details.stages],
                 tasks: [...filteredTasks, ...details.tasks],
                 dependencies: [...filteredDeps, ...details.dependencies],
               };
+              saveToStorage(nextState);
+              return nextState;
             });
           }
         }
@@ -449,20 +494,27 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         name: data.name ?? "Novo Projeto",
         description: data.description ?? undefined,
         color: data.color,
+        start_date: data.start_date ?? undefined,
+        target_date: data.target_date ?? undefined,
         track_time: data.track_time !== false,
         templateId: data.templateId,
         customStages: data.customStages,
       });
       if (result) {
         const { project, stages } = result;
-        setState((prev) => ({
-          ...prev,
-          projects: [project, ...prev.projects],
-          stages: [...prev.stages, ...stages],
-        }));
+        setState((prev) => {
+          const nextState: DataState = {
+            ...prev,
+            projects: [project, ...prev.projects.filter((p) => p.id !== project.id)],
+            stages: [...prev.stages.filter((s) => s.project_id !== project.id), ...stages],
+          };
+          saveToStorage(nextState);
+          return nextState;
+        });
         setLoadedProjects((prev) => ({ ...prev, [project.id]: true }));
         return Object.assign(project, { stages });
       }
+      console.warn("[DataContext] createProject no Supabase retornou nulo, aplicando fallback local resiliente.");
     }
 
     // Modo DEMO ou fallback
@@ -495,11 +547,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           }))
         : defaultStagesForProject(project.id);
 
-    setState((prev) => ({
-      ...prev,
-      projects: [project, ...prev.projects],
-      stages: [...prev.stages, ...stages],
-    }));
+    setState((prev) => {
+      const nextState: DataState = {
+        ...prev,
+        projects: [project, ...prev.projects],
+        stages: [...prev.stages, ...stages],
+      };
+      saveToStorage(nextState);
+      return nextState;
+    });
     setLoadedProjects((prev) => ({ ...prev, [project.id]: true }));
     return Object.assign(project, { stages });
   }, [userId, workspaceId]);
@@ -778,6 +834,41 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   );
 
   const loadProjectDetails = useCallback(async (projectId: string) => {
+    // 1. Se o projeto não estiver na lista de projetos em memória, busca ele no Supabase ou localStorage
+    const existing = (stateRef.current || state).projects.find((p) => p.id === projectId);
+    if (!existing) {
+      if (getDataLayer() === "supabase") {
+        try {
+          const single = await dataProvider.getProjectById(projectId);
+          if (single) {
+            setState((prev) => {
+              const nextState: DataState = {
+                ...prev,
+                projects: [single, ...prev.projects.filter((p) => p.id !== projectId)],
+              };
+              saveToStorage(nextState);
+              return nextState;
+            });
+          }
+        } catch (err) {
+          console.error("[DataContext] Error fetching single project:", err);
+        }
+      }
+      // Se ainda não achou e tem no localStorage, restaura
+      const stored = loadFromStorage();
+      const localP = stored?.projects.find((p) => p.id === projectId);
+      if (localP) {
+        setState((prev) => {
+          const nextState: DataState = {
+            ...prev,
+            projects: [localP, ...prev.projects.filter((p) => p.id !== projectId)],
+          };
+          saveToStorage(nextState);
+          return nextState;
+        });
+      }
+    }
+
     if (getDataLayer() !== "supabase") return;
     if (loadedProjects[projectId]) return;
 
@@ -792,19 +883,21 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             (d) => !detailTaskIds.includes(d.task_id)
           );
 
-          return {
+          const nextState: DataState = {
             ...prev,
             stages: [...filteredStages, ...details.stages],
             tasks: [...filteredTasks, ...details.tasks],
             dependencies: [...filteredDeps, ...details.dependencies],
           };
+          saveToStorage(nextState);
+          return nextState;
         });
         setLoadedProjects((prev) => ({ ...prev, [projectId]: true }));
       }
     } catch (error) {
       console.error("[DataContext] Error loading project details:", error);
     }
-  }, [loadedProjects]);
+  }, [loadedProjects, state]);
 
   const loadAllProjectsDetails = useCallback(async () => {
     if (getDataLayer() !== "supabase") return;
@@ -847,9 +940,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const isProjectLoaded = useCallback(
     (projectId: string) => {
+      const p = (stateRef.current || state).projects.find((proj) => proj.id === projectId);
+      if (!p) return false;
       return Boolean(loadedProjects[projectId] || getDataLayer() === "local");
     },
-    [loadedProjects]
+    [loadedProjects, state]
   );
 
   const cloneProject = useCallback(
@@ -1095,9 +1190,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           tasks: [...prev.tasks, ...missingTasks],
         };
 
-        if (getDataLayer() === "local") {
-          saveToStorage(nextState);
-        }
+        saveToStorage(nextState);
 
         return nextState;
       });

@@ -42,18 +42,24 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     isProjectLoaded,
   } = useData();
 
-  const [loadingProject, setLoadingProject] = useState(!isProjectLoaded(id));
+  const [loadingProject, setLoadingProject] = useState(!isProjectLoaded(id) || !getProject(id));
 
   useEffect(() => {
+    let active = true;
     async function fetchDetails() {
-      if (id && !isProjectLoaded(id)) {
+      if (id && (!isProjectLoaded(id) || !getProject(id))) {
         setLoadingProject(true);
         await loadProjectDetails(id);
+        if (active) setLoadingProject(false);
+      } else {
         setLoadingProject(false);
       }
     }
     fetchDetails();
-  }, [id, loadProjectDetails, isProjectLoaded]);
+    return () => {
+      active = false;
+    };
+  }, [id, loadProjectDetails, isProjectLoaded, getProject]);
 
   const project = getProject(id);
   const stages = getStagesByProject(id);
