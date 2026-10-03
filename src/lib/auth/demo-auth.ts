@@ -27,7 +27,9 @@ function getUsers(): DemoUser[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(DEMO_USERS_KEY);
-    return raw ? (JSON.parse(raw) as DemoUser[]) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as DemoUser[]) : [];
   } catch {
     return [];
   }
