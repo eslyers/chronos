@@ -265,13 +265,17 @@ export async function createDefaultStages(projectId: string): Promise<Stage[]> {
 
 export async function updateProject(id: string, patch: Partial<Project>): Promise<void> {
   const supabase = client();
-  const payload: Database["public"]["Tables"]["projects"]["Update"] = {};
+  const payload: Record<string, any> = {};
   if (patch.name !== undefined) payload.name = patch.name;
   if (patch.description !== undefined) payload.description = patch.description;
   if (patch.color !== undefined) payload.color = patch.color;
   if (patch.status !== undefined) payload.status = patch.status;
-  if (patch.start_date !== undefined) payload.start_date = patch.start_date;
-  if (patch.target_date !== undefined) payload.target_date = patch.target_date;
+  if (patch.start_date !== undefined) {
+    payload.start_date = patch.start_date ? patch.start_date.split("T")[0] : null;
+  }
+  if (patch.target_date !== undefined) {
+    payload.target_date = patch.target_date ? patch.target_date.split("T")[0] : null;
+  }
   if (patch.track_time !== undefined) payload.track_time = patch.track_time;
 
   const { error } = await (supabase.from("projects") as any).update(payload).eq("id", id);

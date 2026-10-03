@@ -564,24 +564,33 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (getDataLayer() === "supabase") {
       await dataProvider.updateProject(id, data);
     }
-    setState((prev) => ({
-      ...prev,
-      projects: prev.projects.map((p) =>
+    setState((prev) => {
+      const nextProjects = prev.projects.map((p) =>
         p.id === id ? { ...p, ...data, updated_at: new Date().toISOString() } : p
-      ),
-    }));
+      );
+      const nextState: DataState = {
+        ...prev,
+        projects: nextProjects,
+      };
+      saveToStorage(nextState);
+      return nextState;
+    });
   }, []);
 
   const deleteProject = useCallback(async (id: string) => {
     if (getDataLayer() === "supabase") {
       await dataProvider.deleteProject(id);
     }
-    setState((prev) => ({
-      ...prev,
-      projects: prev.projects.filter((p) => p.id !== id),
-      stages: prev.stages.filter((s) => s.project_id !== id),
-      tasks: prev.tasks.filter((t) => t.project_id !== id),
-    }));
+    setState((prev) => {
+      const nextState: DataState = {
+        ...prev,
+        projects: prev.projects.filter((p) => p.id !== id),
+        stages: prev.stages.filter((s) => s.project_id !== id),
+        tasks: prev.tasks.filter((t) => t.project_id !== id),
+      };
+      saveToStorage(nextState);
+      return nextState;
+    });
   }, []);
 
   // ── Stages ──────────────────────────────────────────────────
