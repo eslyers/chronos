@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { isSupabaseConfigured } from "@/lib/supabase/mode";
 import { createSPAClient } from "@/lib/supabase/client";
-import { Building2, Eye, EyeOff, Lock, User, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Building2, Eye, EyeOff, Lock, User, ArrowRight } from "lucide-react";
 
 // ── Tipos ──────────────────────────────────────────────────────
 interface InviteInfo {
