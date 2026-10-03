@@ -46,7 +46,7 @@ npx supabase secrets set TELEGRAM_BOT_TOKEN="123456789:ABCdefGHIjklMNOpqrsTUVwxy
 npx supabase secrets set BREVO_API_KEY="xsmtpsib-..."
 npx supabase secrets set BREVO_SENDER_EMAIL="ersilva@piccadilly.com.br"
 npx supabase secrets set BREVO_SENDER_NAME="CHRONOS"
-npx supabase secrets set APP_URL="https://chronos-temp.vercel.app"
+npx supabase secrets set APP_URL="https://www.chronos.expert" APP_BASE_URL="https://www.chronos.expert"
 ```
 
 ## ⏰ Cron Schedule (rodar due-soon-alert 1x por dia às 9h)

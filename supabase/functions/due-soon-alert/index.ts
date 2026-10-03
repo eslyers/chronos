@@ -16,7 +16,7 @@ const BREVO_SENDER_NAME = Deno.env.get("BREVO_SENDER_NAME") ?? "CHRONOS";
 // (Vercel production, Vercel preview, local, custom domain, etc)
 // Mantém compatibilidade com APP_URL antigo (fallback) + usa APP_BASE_URL
 // pra ficar consistente com task-assigned-notify e stage-change-notify
-const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? Deno.env.get("APP_URL") ?? "https://chronos-temp.vercel.app";
+const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? Deno.env.get("APP_URL") ?? "https://www.chronos.expert";
 
 // ── Interfaces ───────────────────────────────────────────────
 interface Task {

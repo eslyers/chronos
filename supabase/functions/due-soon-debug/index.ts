@@ -1,7 +1,7 @@
 // DEBUG: retorna o HTML do email SEM enviar
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? "https://chronos-temp.vercel.app";
+const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? "https://www.chronos.expert";
 
 Deno.serve(async (req: Request) => {
   const supabase = createClient(

@@ -20,7 +20,7 @@ const resendSchema = z.object({
   token: z.string().min(1, "Token inválido"),
 });
 
-const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://chronos-temp.vercel.app";
+const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.chronos.expert";
 const INVITE_EXPIRY_HOURS = 168; // 7 dias
 
 export async function POST(request: NextRequest) {

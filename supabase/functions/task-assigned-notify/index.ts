@@ -13,7 +13,7 @@ const BREVO_SENDER_EMAIL = Deno.env.get("BREVO_SENDER_EMAIL") ?? "ersilva@piccad
 const BREVO_SENDER_NAME = Deno.env.get("BREVO_SENDER_NAME") ?? "CHRONOS";
 // URL base do app — vem de env var pra funcionar em qualquer deploy
 // (Vercel production, Vercel preview, local, custom domain, etc)
-const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? "https://chronos-temp.vercel.app";
+const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? "https://www.chronos.expert";
 
 interface Payload {
   type: "INSERT" | "UPDATE" | "DELETE";

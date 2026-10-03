@@ -12,7 +12,7 @@ const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY") ?? RESEND_API_KEY ?? "";
 const BREVO_SENDER_EMAIL = Deno.env.get("BREVO_SENDER_EMAIL") ?? "ersilva@piccadilly.com.br";
 const BREVO_SENDER_NAME = Deno.env.get("BREVO_SENDER_NAME") ?? "CHRONOS";
 // URL base do app — vem de env var pra funcionar em qualquer deploy
-const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? "https://chronos-temp.vercel.app";
+const APP_BASE_URL = Deno.env.get("APP_BASE_URL") ?? "https://www.chronos.expert";
 
 interface Payload {
   type: "INSERT" | "UPDATE" | "DELETE";
