@@ -8,7 +8,7 @@
 function getBrevoConfig() {
   return {
     apiKey: process.env.BREVO_API_KEY ?? process.env.RESEND_API_KEY ?? "",
-    senderEmail: process.env.BREVO_SENDER_EMAIL ?? "ersilva@piccadilly.com.br",
+    senderEmail: process.env.BREVO_SENDER_EMAIL ?? "notificacoes@chronos.expert",
     senderName: process.env.BREVO_SENDER_NAME ?? "CHRONOS",
   };
 }
