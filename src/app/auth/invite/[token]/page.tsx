@@ -2,13 +2,9 @@
 
 // ─────────────────────────────────────────────────────────────
 // CHRONOS — /auth/invite/[token]
-// Landing page pra quem clicou no link do email de convite.
-// Mostra "Você foi convidado pro workspace X" + form de criar conta
-// pré-preenchido com o email do convite. Ao aceitar:
-//   1. Faz signUpWithPassword (cria user no Supabase auth.users)
-//   2. Chama RPC accept_invite_token(p_token, p_user_id) via admin client
-//      (a função RPC server-side adiciona o user em workspace_members)
-//   3. Redireciona pro /app
+// Landing page para usuários convidados.
+// Exibe os detalhes do workspace e convite, permitindo que o usuário
+// crie/defina sua senha de acesso e entre diretamente no sistema.
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useState, use, Suspense } from "react";
@@ -19,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { isSupabaseConfigured } from "@/lib/supabase/mode";
 import { createSPAClient } from "@/lib/supabase/client";
+import { Building2, Eye, EyeOff, Lock, User, ArrowRight, CheckCircle2 } from "lucide-react";
 
 // ── Tipos ──────────────────────────────────────────────────────
 interface InviteInfo {
@@ -30,7 +27,6 @@ interface InviteInfo {
   expires_at: string;
   invited_by_name: string | null;
   invited_by_email: string;
-  user_exists?: boolean;
 }
 
 const ROLE_LABEL: Record<InviteInfo["role"], string> = {
@@ -41,23 +37,24 @@ const ROLE_LABEL: Record<InviteInfo["role"], string> = {
 
 const ROLE_DESC: Record<InviteInfo["role"], string> = {
   admin: "Pode gerenciar tarefas, etapas e cronograma",
-  member: "Pode criar, atualizar tarefas e interagir no kanban",
+  member: "Pode interagir no kanban, atualizar tarefas e apontamentos",
   viewer: "Pode apenas visualizar tarefas e cronogramas",
 };
 
 function InvitePageInner({ token }: { token: string }) {
   const router = useRouter();
 
-  // ── Estado do convite (carregado server-side via serverAction) ──
+  // ── Estado do convite ──
   const [invite, setInvite] = useState<InviteInfo | null>(null);
   const [loadingInvite, setLoadingInvite] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [showSetup, setShowSetup] = useState(false);
 
-  // ── Form de signup ──
+  // ── Form de definição de senha ──
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -101,25 +98,25 @@ function InvitePageInner({ token }: { token: string }) {
     };
   }, [token]);
 
-  // ── Aceitar convite: signup server-side + signIn client-side ─────────────────────────────────
+  // ── Aceitar convite: definir senha + login automático ───────
   async function handleAccept(e: React.FormEvent) {
     e.preventDefault();
     if (!invite) return;
     setFormError(null);
 
     if (password.length < 8) {
-      setFormError("A senha deve ter pelo menos 8 caracteres");
+      setFormError("A senha deve ter pelo menos 8 caracteres.");
       return;
     }
     if (password !== confirmPassword) {
-      setFormError("As senhas não coincidem");
+      setFormError("As senhas não coincidem. Digite a mesma senha em ambos os campos.");
       return;
     }
 
     setSubmitting(true);
 
     try {
-      // ── 1. Criação de conta + aceite do convite (server-side, sem email confirm) ──
+      // 1. Cria conta ou atualiza credenciais + aceita convite via admin server-side
       const acceptRes = await fetch("/api/invites/accept-signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -127,42 +124,36 @@ function InvitePageInner({ token }: { token: string }) {
           token,
           email: invite.email,
           password,
-          name: name || undefined,
+          name: name.trim() || undefined,
         }),
       });
       const acceptJson = await acceptRes.json();
-
-      // Usuário já existe: redirecionar para login
-      if (acceptRes.status === 409 && acceptRes.headers.get("X-Existing-User") === "true") {
-        setFormError(
-          "Este email já possui uma conta. Clique abaixo para fazer login diretamente."
-        );
-        setSubmitting(false);
-        return;
-      }
 
       if (!acceptRes.ok) {
         throw new Error(acceptJson.error || "Falha ao aceitar convite");
       }
 
-      // ── 2. SignIn client-side com as credenciais recém-criadas ──
+      // 2. Limpar qualquer sessão antiga no browser antes de autenticar
       const supabase = createSPAClient();
+      await supabase.auth.signOut().catch(() => {});
+
+      // 3. SignIn client-side com as credenciais recém-definidas
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: invite.email,
         password,
       });
 
       if (signInError) {
-        throw new Error(
-          `Conta criada, mas login falhou: ${signInError.message}. Tente fazer login manualmente.`
-        );
+        // Redireciona para o login caso a sessão automática requeira autenticação manual
+        router.push(`/auth/login?email=${encodeURIComponent(invite.email)}`);
+        return;
       }
 
-      // ── 3. Redirecionar pro app ──
+      // 4. Redirecionar para o painel principal
       router.push("/app");
       router.refresh();
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Erro ao aceitar convite");
+      setFormError(err instanceof Error ? err.message : "Erro ao configurar senha e entrar");
     } finally {
       setSubmitting(false);
     }
@@ -171,9 +162,9 @@ function InvitePageInner({ token }: { token: string }) {
   // ── Render: loading ──────────────────────────────────────────
   if (loadingInvite) {
     return (
-      <div className="text-center space-y-4 py-8">
+      <div className="text-center space-y-4 py-12">
         <div className="text-4xl animate-bounce">⏳</div>
-        <p className="text-sm text-muted-foreground">Carregando convite…</p>
+        <p className="text-sm text-muted-foreground">Carregando detalhes do convite…</p>
       </div>
     );
   }
@@ -181,175 +172,97 @@ function InvitePageInner({ token }: { token: string }) {
   // ── Render: erro de convite ──────────────────────────────────
   if (loadError || !invite) {
     return (
-      <div className="space-y-6 text-center py-4">
+      <div className="space-y-6 text-center py-6">
         <div className="text-5xl">❌</div>
-        <h2 className="text-2xl font-semibold">Convite inválido</h2>
+        <h2 className="text-2xl font-bold tracking-tight">Convite não localizado</h2>
         <Alert variant="destructive">
           <AlertDescription>{loadError || "Convite não encontrado"}</AlertDescription>
         </Alert>
         <p className="text-sm text-muted-foreground">
-          O link pode ter expirado ou já ter sido usado.
+          O link pode estar incorreto, ter expirado ou sido revogado.
         </p>
-        <Link
-          href="/auth/login"
-          className="text-sm text-primary-600 hover:text-primary-500 font-medium"
-        >
-          Ir para login
-        </Link>
+        <Button asChild variant="outline">
+          <Link href="/auth/login">Ir para tela de login</Link>
+        </Button>
       </div>
     );
   }
 
-  // ── Render: convite expirado/revocado ─────────────────────────
+  // ── Render: convite expirado ou revogado ──────────────────────
   if (invite.status !== "pending") {
-    const statusLabel: Record<string, { emoji: string; msg: string }> = {
-      accepted: { emoji: "✅", msg: "Este convite já foi aceito. Faça login para entrar." },
-      revoked: { emoji: "🚫", msg: "Este convite foi revogado pelo administrador." },
-      expired: { emoji: "⏰", msg: "Este convite expirou. Peça um novo ao administrador." },
+    const statusLabel: Record<string, { emoji: string; title: string; msg: string }> = {
+      accepted: {
+        emoji: "✅",
+        title: "Convite já aceito",
+        msg: "Este convite já foi ativado anteriormente. Faça login para acessar o workspace.",
+      },
+      revoked: {
+        emoji: "🚫",
+        title: "Convite cancelado",
+        msg: "Este convite foi revogado pelo administrador do workspace.",
+      },
+      expired: {
+        emoji: "⏰",
+        title: "Convite expirado",
+        msg: "O prazo deste convite expirou. Solicite um novo link ao gestor do workspace.",
+      },
     };
     const info = statusLabel[invite.status] ?? statusLabel.expired!;
     return (
-      <div className="space-y-6 text-center py-4">
+      <div className="space-y-6 text-center py-6">
         <div className="text-5xl">{info.emoji}</div>
-        <h2 className="text-2xl font-semibold">Convite {invite.status}</h2>
+        <h2 className="text-2xl font-bold tracking-tight">{info.title}</h2>
         <p className="text-sm text-muted-foreground">{info.msg}</p>
-        <Link
-          href="/auth/login"
-          className="text-sm text-primary-600 hover:text-primary-500 font-medium"
-        >
-          Ir para login
-        </Link>
+        <Button asChild className="w-full bg-gradient-to-r from-orange-500 to-amber-600 text-white">
+          <Link href={`/auth/login?email=${encodeURIComponent(invite.email)}`}>
+            Acessar com Login
+          </Link>
+        </Button>
       </div>
     );
   }
 
-  // ── Render: Passo 1 (Welcome Card - sem inputs de senha para bots) ─────────────────
-  if (!showSetup && !invite.user_exists) {
-    return (
-      <div className="space-y-6">
-        <div className="text-center space-y-2">
-          <Link href="/" className="inline-flex items-center gap-2 text-2xl font-bold">
-            <span className="text-3xl">🕐</span>
-            <span>CHRONOS</span>
-          </Link>
-          <p className="text-sm text-muted-foreground">Acesso ao Workspace Liberado</p>
-        </div>
-
-        <div className="rounded-xl border border-border/80 bg-card/60 p-5 space-y-4 shadow-sm">
-          <div className="flex items-center gap-3 pb-3 border-b border-border/50">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500 font-bold text-xl">
-              🏢
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-foreground truncate">{invite.workspace_name}</p>
-              <p className="text-xs text-muted-foreground">
-                Liberado por {invite.invited_by_name || invite.invited_by_email.split("@")[0]}
-              </p>
-            </div>
-            <span
-              className={
-                "text-xs px-2.5 py-1 rounded-full font-medium " +
-                (invite.role === "admin"
-                  ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
-                  : invite.role === "member"
-                  ? "bg-orange-500/15 text-orange-700 dark:text-orange-300"
-                  : "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300")
-              }
-            >
-              {ROLE_LABEL[invite.role]}
-            </span>
-          </div>
-
-          <div className="text-sm text-muted-foreground space-y-1.5">
-            <p>Seu email <strong>{invite.email}</strong> foi autorizado para colaborar no cronograma contábil e tarefas deste workspace.</p>
-            <p className="text-xs text-muted-foreground/80">{ROLE_DESC[invite.role]}</p>
-          </div>
-
-          <Button
-            onClick={() => setShowSetup(true)}
-            className="w-full bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-medium py-2.5 shadow-sm"
-          >
-            Continuar e Definir Senha →
-          </Button>
-        </div>
-
-        <p className="text-center text-xs text-muted-foreground">
-          Já possui conta?{" "}
-          <Link
-            href={`/auth/login?email=${encodeURIComponent(invite.email)}`}
-            className="text-orange-600 dark:text-orange-400 hover:underline font-medium"
-          >
-            Faça login diretamente
-          </Link>
-        </p>
-      </div>
-    );
-  }
-
-  // ── Render: Usuário já possui conta prévia ───────────────────────
-  if (invite.user_exists) {
-    return (
-      <div className="space-y-6">
-        <div className="text-center space-y-2">
-          <Link href="/" className="inline-flex items-center gap-2 text-2xl font-bold">
-            <span className="text-3xl">🕐</span>
-            <span>CHRONOS</span>
-          </Link>
-          <p className="text-sm text-muted-foreground">Bem-vindo(a) de volta!</p>
-        </div>
-
-        <div className="rounded-xl border border-border/80 bg-card/60 p-5 space-y-4 shadow-sm">
-          <div className="flex items-center gap-3 pb-3 border-b border-border/50">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 font-bold text-xl">
-              ✨
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-foreground truncate">{invite.workspace_name}</p>
-              <p className="text-xs text-muted-foreground">
-                Convidado por {invite.invited_by_name || invite.invited_by_email.split("@")[0]}
-              </p>
-            </div>
-            <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-orange-500/15 text-orange-700 dark:text-orange-300">
-              {ROLE_LABEL[invite.role]}
-            </span>
-          </div>
-
-          <p className="text-sm text-muted-foreground">
-            Identificamos que <strong>{invite.email}</strong> já possui cadastro no CHRONOS. Basta fazer login para acessar o novo workspace.
-          </p>
-
-          <Button
-            asChild
-            className="w-full bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-medium py-2.5 shadow-sm"
-          >
-            <Link href={`/auth/login?email=${encodeURIComponent(invite.email)}`}>
-              Fazer Login e Acessar Workspace →
-            </Link>
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Render: Passo 2 (Formulário de definição de senha) ──────────
+  // ── Render: Formulário para Criar Senha e Logar ───────────────
   return (
     <div className="space-y-6">
       <div className="text-center space-y-2">
-        <Link href="/" className="inline-flex items-center gap-2 text-2xl font-bold">
+        <Link href="/" className="inline-flex items-center gap-2 text-2xl font-bold tracking-tight">
           <span className="text-3xl">🕐</span>
           <span>CHRONOS</span>
         </Link>
-        <p className="text-sm text-muted-foreground">Configure sua senha de acesso</p>
+        <h2 className="text-xl font-bold text-foreground">Você foi convidado para colaborar</h2>
+        <p className="text-sm text-muted-foreground">Crie sua senha de acesso para ativar sua conta</p>
       </div>
 
-      <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Workspace</span>
-          <span className="text-xs px-2 py-0.5 rounded font-medium bg-orange-500/15 text-orange-700 dark:text-orange-300">
+      {/* Card com dados do workspace e remetente */}
+      <div className="rounded-xl border border-border/80 bg-card/70 p-4.5 space-y-3.5 shadow-sm backdrop-blur-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-500/10 text-orange-500 font-bold text-xl">
+            <Building2 className="h-6 w-6" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-foreground truncate text-base">{invite.workspace_name}</p>
+            <p className="text-xs text-muted-foreground">
+              Convidado por {invite.invited_by_name || invite.invited_by_email.split("@")[0]}
+            </p>
+          </div>
+          <span
+            className={
+              "text-xs px-2.5 py-1 rounded-full font-medium shrink-0 " +
+              (invite.role === "admin"
+                ? "bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                : invite.role === "member"
+                ? "bg-orange-500/15 text-orange-700 dark:text-orange-300"
+                : "bg-zinc-500/15 text-zinc-700 dark:text-zinc-300")
+            }
+          >
             {ROLE_LABEL[invite.role]}
           </span>
         </div>
-        <p className="font-semibold text-foreground truncate">{invite.workspace_name}</p>
+
+        <div className="text-xs text-muted-foreground/90 border-t border-border/40 pt-3">
+          <p>{ROLE_DESC[invite.role]}</p>
+        </div>
       </div>
 
       {formError && (
@@ -358,10 +271,11 @@ function InvitePageInner({ token }: { token: string }) {
         </Alert>
       )}
 
+      {/* Formulário de criação de senha */}
       <form onSubmit={handleAccept} className="space-y-4">
         <div>
-          <label htmlFor="email" className="block text-sm font-medium mb-1.5">
-            Email
+          <label htmlFor="email" className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+            Email Convidado
           </label>
           <Input
             id="email"
@@ -369,87 +283,118 @@ function InvitePageInner({ token }: { token: string }) {
             type="email"
             value={invite.email}
             disabled
-            className="bg-muted"
+            className="bg-muted/70 text-muted-foreground cursor-not-allowed font-medium"
           />
         </div>
 
         <div>
-          <label htmlFor="name" className="block text-sm font-medium mb-1.5">
-            Seu nome <span className="text-muted-foreground">(opcional)</span>
+          <label htmlFor="name" className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+            Seu Nome <span className="text-muted-foreground/70 normal-case font-normal">(opcional)</span>
           </label>
-          <Input
-            id="name"
-            name="name"
-            type="text"
-            autoComplete="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Como você quer ser chamado"
-          />
+          <div className="relative">
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+            <Input
+              id="name"
+              name="name"
+              type="text"
+              autoComplete="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Como deseja ser chamado"
+              className="pl-9"
+            />
+          </div>
         </div>
 
         <div>
-          <label htmlFor="password" className="block text-sm font-medium mb-1.5">
-            Senha
+          <label htmlFor="password" className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+            Crie sua Senha
           </label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Mínimo 8 caracteres"
-            minLength={8}
-          />
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+            <Input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="new-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Mínimo de 8 caracteres"
+              minLength={8}
+              className="pl-9 pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              tabIndex={-1}
+              aria-label={showPassword ? "Ocultar senha" : "Ver senha"}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         <div>
           <label
             htmlFor="confirmPassword"
-            className="block text-sm font-medium mb-1.5"
+            className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5"
           >
-            Confirmar senha
+            Confirme sua Senha
           </label>
-          <Input
-            id="confirmPassword"
-            name="confirmPassword"
-            type="password"
-            autoComplete="new-password"
-            required
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-          />
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+            <Input
+              id="confirmPassword"
+              name="confirmPassword"
+              type={showConfirmPassword ? "text" : "password"}
+              autoComplete="new-password"
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Digite a senha novamente"
+              minLength={8}
+              className="pl-9 pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              tabIndex={-1}
+              aria-label={showConfirmPassword ? "Ocultar senha" : "Ver senha"}
+            >
+              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setShowSetup(false)}
-            disabled={submitting}
-            className="w-1/3"
-          >
-            Voltar
-          </Button>
-          <Button
-            type="submit"
-            disabled={submitting}
-            className="w-2/3 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white"
-          >
-            {submitting ? "Criando conta…" : "Concluir e Entrar"}
-          </Button>
-        </div>
+        <Button
+          type="submit"
+          disabled={submitting}
+          className="w-full bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-medium py-2.5 shadow-sm transition-all"
+        >
+          {submitting ? (
+            <span className="flex items-center gap-2">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              Ativando conta e entrando…
+            </span>
+          ) : (
+            <span className="flex items-center justify-center gap-2">
+              Criar Senha e Entrar no Workspace
+              <ArrowRight className="h-4 w-4" />
+            </span>
+          )}
+        </Button>
       </form>
 
-      <p className="text-center text-xs text-muted-foreground">
-        Já tem conta?{" "}
+      <p className="text-center text-xs text-muted-foreground pt-2">
+        Já possui conta ativa e lembra sua senha?{" "}
         <Link
           href={`/auth/login?email=${encodeURIComponent(invite.email)}`}
-          className="text-orange-600 dark:text-orange-400 hover:underline font-medium"
+          className="text-orange-600 dark:text-orange-400 hover:underline font-semibold"
         >
-          Faça login
+          Fazer login diretamente
         </Link>
       </p>
     </div>
@@ -464,7 +409,7 @@ export default function InvitePage({
 }) {
   const { token } = use(params);
   return (
-    <Suspense fallback={<div className="p-4 text-muted-foreground">Carregando…</div>}>
+    <Suspense fallback={<div className="p-4 text-center text-sm text-muted-foreground">Carregando…</div>}>
       <InvitePageInner token={token} />
     </Suspense>
   );

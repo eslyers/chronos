@@ -1,11 +1,11 @@
 // ─────────────────────────────────────────────────────────────
 // CHRONOS API: POST /api/invites/accept-signup
-// Cria conta + aceita convite em uma única chamada server-side.
+// Cria conta ou atualiza credenciais + aceita convite em uma única chamada server-side.
 // Usa service_role para:
-//   1. Criar o usuário via admin.createUser (email_confirm = false)
-//   2. Fazer signIn automático (retorna session tokens)
-//   3. Chamar RPC accept_invite_token(p_token, p_user_id)
-// Isso resolve o problema de "email confirm" bloqueando o fluxo.
+//   1. Validar o token de convite
+//   2. Criar ou atualizar o usuário com a nova senha definida (email_confirm = true)
+//   3. Atualizar perfil com o nome (se fornecido)
+//   4. Chamar RPC accept_invite_token(p_token, p_user_id)
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from "next/server";
@@ -20,7 +20,7 @@ type AnyClient = any;
 const schema = z.object({
   token: z.string().min(1, "Token inválido"),
   email: z.string().email("Email inválido"),
-  password: z.string().min(8, "Senha muito curta"),
+  password: z.string().min(8, "A senha deve ter pelo menos 8 caracteres"),
   name: z.string().optional(),
 });
 
@@ -65,51 +65,77 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 2. Verificar se usuário já existe ──
-    const { data: existingUsers } = await adminClient.auth.admin.listUsers();
-    const existingUser = (existingUsers?.users ?? []).find(
+    let userId: string | null = null;
+
+    // Busca usuário existente via Supabase Auth Admin
+    const { data: userList } = await adminClient.auth.admin.listUsers();
+    const existingAuthUser = (userList?.users ?? []).find(
       (u: { email?: string }) => u.email?.toLowerCase() === email.toLowerCase()
     );
 
-    let userId: string;
+    if (existingAuthUser) {
+      userId = existingAuthUser.id;
+      // Atualizar a senha e confirmar email do usuário existente com a senha escolhida no convite
+      const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, {
+        password,
+        email_confirm: true,
+        user_metadata: name
+          ? { ...(existingAuthUser.user_metadata || {}), full_name: name, name }
+          : existingAuthUser.user_metadata,
+      });
 
-    if (existingUser) {
-      // Usuário já tem conta: apenas usar o ID existente
-      userId = existingUser.id;
+      if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 400 });
+      }
     } else {
-      // ── 3a. Criar usuário via admin API (sem confirmação de email) ──
+      // Criar novo usuário com confirmação de email ativa
       const { data: createdUser, error: createError } = await adminClient.auth.admin.createUser({
         email,
         password,
-        email_confirm: true, // confirma email automaticamente via admin
+        email_confirm: true,
         user_metadata: name ? { full_name: name, name } : {},
       });
 
       if (createError) {
-        // Erro específico de usuário duplicado (race condition)
+        // Se já existia e não apareceu no listUsers inicial
         if (createError.message?.includes("already") || createError.status === 422) {
-          return NextResponse.json(
-            { error: "Este email já possui uma conta. Use 'Já tenho conta → Fazer login'." },
-            { status: 409, headers: { "X-Existing-User": "true" } }
+          const { data: retryList } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+          const retryUser = (retryList?.users ?? []).find(
+            (u: { email?: string }) => u.email?.toLowerCase() === email.toLowerCase()
           );
+          if (retryUser) {
+            userId = retryUser.id;
+            await adminClient.auth.admin.updateUserById(userId, {
+              password,
+              email_confirm: true,
+              user_metadata: name ? { full_name: name, name } : undefined,
+            });
+          } else {
+            return NextResponse.json({ error: createError.message }, { status: 400 });
+          }
+        } else {
+          return NextResponse.json({ error: createError.message }, { status: 400 });
         }
-        return NextResponse.json({ error: createError.message }, { status: 400 });
-      }
-
-      if (!createdUser?.user) {
-        return NextResponse.json({ error: "Falha ao criar conta" }, { status: 500 });
-      }
-      userId = createdUser.user.id;
-
-      // ── 3b. Atualizar perfil se tiver nome ──
-      if (name) {
-        await adminClient
-          .from("profiles")
-          .update({ full_name: name })
-          .eq("id", userId);
+      } else {
+        if (!createdUser?.user) {
+          return NextResponse.json({ error: "Falha ao criar conta" }, { status: 500 });
+        }
+        userId = createdUser.user.id;
       }
     }
 
-    // ── 4. Aceitar convite via RPC (marca como accepted + adiciona ao workspace) ──
+    if (!userId) {
+      return NextResponse.json({ error: "Identificador de usuário não localizado" }, { status: 500 });
+    }
+
+    // ── 3. Atualizar ou criar perfil ──
+    if (name) {
+      await adminClient
+        .from("profiles")
+        .upsert({ id: userId, email, full_name: name }, { onConflict: "id" });
+    }
+
+    // ── 4. Aceitar convite via RPC (marca status='accepted' + adiciona ao workspace_members) ──
     const { error: rpcError } = await adminClient.rpc("accept_invite_token", {
       p_token: token,
       p_user_id: userId,
@@ -122,11 +148,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── 5. Retornar OK — o client vai fazer signIn com email+senha ──
+    // ── 5. Retornar OK para o frontend efetuar o signInWithPassword ──
     return NextResponse.json({
       success: true,
       user_id: userId,
-      existed: !!existingUser,
+      email,
     });
   } catch (err) {
     console.error("[api/invites/accept-signup] error:", err);
