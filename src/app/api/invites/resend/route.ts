@@ -42,7 +42,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const adminClient: AnyClient = await createServerAdminClient();
+    let adminClient: AnyClient;
+    try {
+      adminClient = await createServerAdminClient();
+    } catch (adminErr) {
+      console.warn("[api/invites/resend] Usando userClient como fallback:", adminErr);
+      adminClient = userClient;
+    }
 
     // ── Buscar o convite ──
     const { data: invite, error: inviteErr } = await adminClient

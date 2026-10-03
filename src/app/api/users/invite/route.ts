@@ -46,7 +46,13 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Verificar que user é owner/admin do workspace ──
-    const adminClient: AnyClient = await createServerAdminClient();
+    let adminClient: AnyClient;
+    try {
+      adminClient = await createServerAdminClient();
+    } catch (adminErr) {
+      console.warn("[api/users/invite] Usando userClient como fallback:", adminErr);
+      adminClient = userClient;
+    }
     const { data: membership, error: memberErr } = await adminClient
       .from("workspace_members")
       .select("role")
