@@ -1,12 +1,14 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Users, Mail, Info, ShieldCheck, UserCheck, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { isSupabaseConfigured } from "@/lib/supabase/mode";
+import { useGlobal } from "@/lib/context/GlobalContext";
 import { MembersTable } from "./_components/MembersTable";
 import { InviteDialog } from "./_components/InviteDialog";
 import { ToastContainer, useToast } from "@/components/ui/toast-notification";
@@ -26,6 +28,8 @@ import {
 type AnyClient = any;
 
 export default function UsersPage() {
+  const router = useRouter();
+  const { isWorkspaceAdmin, loading: authLoading } = useGlobal();
   const supabaseMode = React.useMemo(() => isSupabaseConfigured(), []);
   const [loading, setLoading] = React.useState(true);
   const [members, setMembers] = React.useState<Member[]>([]);
@@ -39,6 +43,8 @@ export default function UsersPage() {
     setLoading(true);
     try {
       let wsId = explicitWsId || workspaceId;
+      let userRole: WorkspaceRole = currentUserRole;
+
       if (supabaseMode) {
         if (!wsId) {
           const { getCurrentWorkspaceId } = await import("@/lib/data/supabase-data");
@@ -59,14 +65,27 @@ export default function UsersPage() {
               .maybeSingle();
             const memberRecord = ws as { role?: string } | null;
             if (memberRecord?.role) {
-              setCurrentUserRole(memberRecord.role as WorkspaceRole);
+              userRole = memberRecord.role as WorkspaceRole;
+              setCurrentUserRole(userRole);
             }
           }
         }
       } else {
         wsId = getDemoWorkspaceId();
         setWorkspaceId(wsId);
-        setCurrentUserRole(getDemoCurrentUser().role);
+        userRole = getDemoCurrentUser().role;
+        setCurrentUserRole(userRole);
+      }
+
+      // Se o usuário não for administrador nem proprietário, redireciona para o Dashboard
+      if (userRole !== "owner" && userRole !== "admin") {
+        addToast({
+          variant: "warning",
+          title: "Acesso restrito",
+          description: "A página de gestão de usuários é exclusiva para administradores.",
+        });
+        router.replace("/app");
+        return;
       }
 
       if (!wsId) {
@@ -83,11 +102,17 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabaseMode, workspaceId]);
+  }, [supabaseMode, workspaceId, currentUserRole, router, addToast]);
 
   React.useEffect(() => {
     reload();
   }, [reload]);
+
+  React.useEffect(() => {
+    if (!authLoading && !isWorkspaceAdmin && currentUserRole !== "owner" && currentUserRole !== "admin") {
+      router.replace("/app");
+    }
+  }, [authLoading, isWorkspaceAdmin, currentUserRole, router]);
 
   async function handleInvite({ email, role, sendEmail }: { email: string; role: WorkspaceRole; sendEmail: boolean }) {
     const me = getDemoCurrentUser();
@@ -210,8 +235,26 @@ export default function UsersPage() {
   }
 
   const isOwner = currentUserRole === "owner";
+  const isAdmin = currentUserRole === "admin" || isOwner;
   const memberCount = members.length;
   const pendingCount = invites.length;
+
+  if (!isAdmin && !authLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4 animate-fadeIn">
+        <ToastContainer toasts={toasts} onDismiss={dismiss} />
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500">
+          <Users className="h-7 w-7" />
+        </div>
+        <div className="text-center max-w-md px-4">
+          <h2 className="text-xl font-bold text-foreground">Acesso Restrito</h2>
+          <p className="text-sm text-muted-foreground mt-1.5">
+            A página de gestão de usuários é exclusiva para administradores. Redirecionando para o Dashboard...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-fadeIn pb-12">
@@ -235,7 +278,7 @@ export default function UsersPage() {
           </div>
 
           <div className="flex items-center gap-3 shrink-0">
-            {isOwner && (
+            {isAdmin && (
               <Button onClick={() => setInviteDialogOpen(true)} className="h-11 px-5 bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md shadow-blue-500/20">
                 <Mail className="h-4 w-4 mr-2" />
                 Convidar Novo Membro

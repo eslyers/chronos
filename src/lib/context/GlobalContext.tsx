@@ -12,10 +12,15 @@ type AppUser = {
   registered_at: Date;
 };
 
+export type WorkspaceRole = "owner" | "admin" | "member" | "viewer";
+
 interface GlobalContextType {
   loading: boolean;
   user: AppUser | null;
+  workspaceRole: WorkspaceRole | null;
+  isWorkspaceAdmin: boolean;
   signOut: () => Promise<void>;
+  refreshRole: () => Promise<void>;
 }
 
 const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
@@ -23,6 +28,46 @@ const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
 export function GlobalProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<AppUser | null>(null);
+  const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole | null>(null);
+
+  const isWorkspaceAdmin = workspaceRole === "owner" || workspaceRole === "admin";
+
+  const fetchRole = React.useCallback(async (uid: string) => {
+    if (!isSupabaseConfigured()) {
+      try {
+        const { getDemoCurrentUser } = await import("@/app/app/users/_lib/members");
+        const demoUser = getDemoCurrentUser();
+        setWorkspaceRole(demoUser.role);
+      } catch {
+        setWorkspaceRole("owner");
+      }
+      return;
+    }
+
+    try {
+      const { getCurrentWorkspaceId } = await import("@/lib/data/supabase-data");
+      const wsId = await getCurrentWorkspaceId();
+      if (!wsId) return;
+
+      const supabase = createSPAClient();
+      const { data: ws } = await supabase
+        .from("workspace_members")
+        .select("role")
+        .eq("workspace_id", wsId)
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      const memberRecord = ws as { role?: string } | null;
+      if (memberRecord?.role) {
+        setWorkspaceRole(memberRecord.role as WorkspaceRole);
+      } else {
+        setWorkspaceRole("member");
+      }
+    } catch (err) {
+      console.error("[GlobalContext] Error loading user role:", err);
+      setWorkspaceRole("member");
+    }
+  }, []);
 
   useEffect(() => {
     // Modo DEMO: usa sessão do localStorage
@@ -34,6 +79,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           id: session.user.id,
           registered_at: new Date(session.user.created_at),
         });
+        fetchRole(session.user.id);
       }
       setLoading(false);
       return;
@@ -51,6 +97,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
             id: authUser.id,
             registered_at: new Date(),
           });
+          await fetchRole(authUser.id);
         }
       } catch (error) {
         console.error("Error loading user:", error);
@@ -71,8 +118,10 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           id: session.user.id,
           registered_at: new Date(session.user.created_at),
         });
+        fetchRole(session.user.id);
       } else {
         setUser(null);
+        setWorkspaceRole(null);
       }
       setLoading(false);
     });
@@ -80,22 +129,39 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [fetchRole]);
+
+  const refreshRole = React.useCallback(async () => {
+    if (user?.id) {
+      await fetchRole(user.id);
+    }
+  }, [user?.id, fetchRole]);
 
   async function signOut() {
     if (!isSupabaseConfigured()) {
       demoSignOut();
       setUser(null);
+      setWorkspaceRole(null);
       window.location.href = "/";
       return;
     }
     await supabaseSignOut();
     setUser(null);
+    setWorkspaceRole(null);
     window.location.href = "/";
   }
 
   return (
-    <GlobalContext.Provider value={{ loading, user, signOut }}>
+    <GlobalContext.Provider
+      value={{
+        loading,
+        user,
+        workspaceRole,
+        isWorkspaceAdmin,
+        signOut,
+        refreshRole,
+      }}
+    >
       {children}
     </GlobalContext.Provider>
   );

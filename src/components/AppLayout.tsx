@@ -33,7 +33,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { user, signOut } = useGlobal();
+  const { user, isWorkspaceAdmin, signOut } = useGlobal();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Carregar preferência salva no localStorage
@@ -84,7 +84,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "Carga de Trabalho", href: "/app/workload", icon: Gauge },
     { name: "Calendário", href: "/app/calendar", icon: CalendarDays },
     { name: "Templates", href: "/app/templates", icon: Library },
-    { name: "Usuários", href: "/app/users", icon: Users },
+    ...(isWorkspaceAdmin ? [{ name: "Usuários", href: "/app/users", icon: Users }] : []),
     { name: "Notificações", href: "/app/notifications", icon: Bell },
     { name: "Atividades", href: "/app/activity", icon: History },
     { name: "Configurações", href: "/app/settings", icon: Settings },
