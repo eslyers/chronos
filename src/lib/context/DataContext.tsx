@@ -308,10 +308,18 @@ function seedMockData(): DataState {
   };
 }
 
-function loadFromStorage(): DataState | null {
+function getStorageKey(uid?: string): string {
+  if (uid && uid !== "local-user-esly" && uid !== "") {
+    return `chronos_data_state_${uid}`;
+  }
+  return STORAGE_KEY;
+}
+
+function loadFromStorage(uid?: string): DataState | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const key = getStorageKey(uid);
+    const raw = window.localStorage.getItem(key);
     if (!raw) return null;
     return JSON.parse(raw) as DataState;
   } catch {
@@ -319,9 +327,14 @@ function loadFromStorage(): DataState | null {
   }
 }
 
-function saveToStorage(state: DataState) {
+function saveToStorage(state: DataState, uid?: string) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try {
+    const key = getStorageKey(uid);
+    window.localStorage.setItem(key, JSON.stringify(state));
+  } catch {
+    // Ignore storage quota or serialization issues
+  }
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -353,52 +366,41 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (cancelled) return;
         setUserId(ctx.userId);
         setWorkspaceId(ctx.workspaceId ?? "ws-local");
+
+        // Limpa chave legada global para evitar vazamento de projetos entre usuários no mesmo navegador
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem("chronos_data_state_v1");
+        }
+
         const data = await dataProvider.loadProjectsOnly();
         if (cancelled) return;
 
-        const stored = loadFromStorage();
-
         if (data && data.projects) {
-          const supabaseProjectIds = new Set(data.projects.map((p) => p.id));
-          // Preserva projetos que foram criados localmente/em fallback ou que ainda não constem no Supabase
-          const localOnlyProjects = (stored?.projects || []).filter(
-            (p) => !supabaseProjectIds.has(p.id)
-          );
-          const localOnlyStages = (stored?.stages || []).filter(
-            (s) => localOnlyProjects.some((p) => p.id === s.project_id)
-          );
-          const localOnlyTasks = (stored?.tasks || []).filter(
-            (t) => localOnlyProjects.some((p) => p.id === t.project_id)
-          );
-          const localOnlyDeps = (stored?.dependencies || []).filter(
-            (d) => localOnlyTasks.some((t) => t.id === d.task_id)
-          );
-
-          const combinedProjects = [...data.projects, ...localOnlyProjects];
-
+          // Em modo Supabase, a autoridade de acesso aos projetos é estritamente o Supabase (RLS).
+          // Não mesclamos projetos locais não autorizados de outras sessões.
           setState({
-            projects: combinedProjects,
-            stages: localOnlyStages,
-            tasks: localOnlyTasks,
-            dependencies: localOnlyDeps,
+            projects: data.projects,
+            stages: [],
+            tasks: [],
+            dependencies: [],
             loading: false,
           });
-
-          const loaded: Record<string, boolean> = {};
-          localOnlyProjects.forEach((p) => {
-            loaded[p.id] = true;
-          });
-          setLoadedProjects(loaded);
-        } else if (stored) {
-          // Fallback resiliente se o Supabase não responder
-          setState({ ...stored, loading: false });
-          const loaded: Record<string, boolean> = {};
-          stored.projects.forEach((p) => {
-            loaded[p.id] = true;
-          });
-          setLoadedProjects(loaded);
+          setLoadedProjects({});
+          saveToStorage({
+            projects: data.projects,
+            stages: [],
+            tasks: [],
+            dependencies: [],
+            loading: false,
+          }, ctx.userId);
         } else {
-          setState((s) => ({ ...s, loading: false }));
+          // Fallback resiliente apenas para o cache isolado deste usuário específico
+          const userStored = loadFromStorage(ctx.userId);
+          if (userStored) {
+            setState({ ...userStored, loading: false });
+          } else {
+            setState((s) => ({ ...s, projects: [], loading: false }));
+          }
         }
         return;
       }
@@ -430,24 +432,20 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   // Persist (salva em localStorage como backup sempre que o state mudar e não estiver carregando)
   useEffect(() => {
     if (!state.loading) {
-      saveToStorage(state);
+      saveToStorage(state, userId);
     }
-  }, [state]);
+  }, [state, userId]);
 
   const refresh = useCallback(async () => {
     if (getDataLayer() === "supabase") {
       const data = await dataProvider.loadProjectsOnly();
       if (data) {
         setState((prev) => {
-          const supabaseProjectIds = new Set(data.projects.map((p) => p.id));
-          const localOnlyProjects = prev.projects.filter(
-            (p) => !supabaseProjectIds.has(p.id)
-          );
           const nextState: DataState = {
             ...prev,
-            projects: [...data.projects, ...localOnlyProjects],
+            projects: data.projects,
           };
-          saveToStorage(nextState);
+          saveToStorage(nextState, userId);
           return nextState;
         });
 
@@ -469,7 +467,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 tasks: [...filteredTasks, ...details.tasks],
                 dependencies: [...filteredDeps, ...details.dependencies],
               };
-              saveToStorage(nextState);
+              saveToStorage(nextState, userId);
               return nextState;
             });
           }
@@ -479,7 +477,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
     const stored = loadFromStorage();
     if (stored) setState({ ...stored, loading: false });
-  }, [loadedProjects]);
+  }, [loadedProjects, userId]);
 
   // ── Projects ────────────────────────────────────────────────
   const createProject = useCallback(async (
@@ -863,18 +861,20 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           console.error("[DataContext] Error fetching single project:", err);
         }
       }
-      // Se ainda não achou e tem no localStorage, restaura
-      const stored = loadFromStorage();
-      const localP = stored?.projects.find((p) => p.id === projectId);
-      if (localP) {
-        setState((prev) => {
-          const nextState: DataState = {
-            ...prev,
-            projects: [localP, ...prev.projects.filter((p) => p.id !== projectId)],
-          };
-          saveToStorage(nextState);
-          return nextState;
-        });
+      // Se ainda não achou e tem no localStorage, restaura apenas em modo demo
+      if (getDataLayer() !== "supabase") {
+        const stored = loadFromStorage();
+        const localP = stored?.projects.find((p) => p.id === projectId);
+        if (localP) {
+          setState((prev) => {
+            const nextState: DataState = {
+              ...prev,
+              projects: [localP, ...prev.projects.filter((p) => p.id !== projectId)],
+            };
+            saveToStorage(nextState);
+            return nextState;
+          });
+        }
       }
     }
 

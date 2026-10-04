@@ -84,7 +84,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "Carga de Trabalho", href: "/app/workload", icon: Gauge },
     { name: "Calendário", href: "/app/calendar", icon: CalendarDays },
     { name: "Templates", href: "/app/templates", icon: Library },
-    { name: "Equipe", href: "/app/users", icon: Users },
+    { name: "Usuários", href: "/app/users", icon: Users },
     { name: "Notificações", href: "/app/notifications", icon: Bell },
     { name: "Atividades", href: "/app/activity", icon: History },
     { name: "Configurações", href: "/app/settings", icon: Settings },

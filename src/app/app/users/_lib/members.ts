@@ -157,10 +157,14 @@ export const supabaseMembers: {
   list: (workspaceId: string) => Promise<Member[]>;
   pendingInvites: (workspaceId: string) => Promise<InviteToken[]>;
   revokeInvite: (token: string) => Promise<{ ok: boolean; error?: string }>;
+  updateRole: (workspaceId: string, userId: string, newRole: WorkspaceRole) => Promise<{ ok: boolean; error?: string }>;
+  removeMember: (workspaceId: string, userId: string) => Promise<{ ok: boolean; error?: string }>;
 } = {
   list: async (workspaceId) => {
+    if (!workspaceId) return [];
     const supabase: AnyClient = createSPAClient();
-    // Workspace members + profiles via join
+    
+    // First try the foreign key join
     const { data, error } = await supabase
       .from("workspace_members")
       .select(`
@@ -171,25 +175,63 @@ export const supabaseMembers: {
       `)
       .eq("workspace_id", workspaceId);
 
-    if (error) {
-      console.error("[members] load error:", error);
+    if (!error && Array.isArray(data) && data.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return data.map((row: any): Member => ({
+        id: row.user_id,
+        workspace_id: workspaceId,
+        user_id: row.user_id,
+        email: row.profiles?.email ?? "(sem email)",
+        full_name: row.profiles?.full_name ?? null,
+        role: row.role as WorkspaceRole,
+        status: "active",
+        invited_at: row.joined_at,
+        avatar_color: row.profiles?.avatar_color ?? undefined,
+        last_active_at: row.profiles?.last_active_at,
+      }));
+    }
+
+    // Robust fallback: query workspace_members then profiles by id
+    const { data: wmRows, error: wmError } = await supabase
+      .from("workspace_members")
+      .select("user_id, role, joined_at")
+      .eq("workspace_id", workspaceId);
+
+    if (wmError || !wmRows || wmRows.length === 0) {
+      if (wmError) console.error("[members] fallback load error:", wmError);
       return [];
     }
 
-    return (data || []).map((row: { user_id: string; role: string; joined_at: string; profiles: { email: string; full_name: string | null; avatar_color: string; last_active_at: string } | null }): Member => ({
-      id: row.user_id,
-      workspace_id: workspaceId,
-      user_id: row.user_id,
-      email: row.profiles?.email ?? "(sem email)",
-      full_name: row.profiles?.full_name ?? null,
-      role: row.role as WorkspaceRole,
-      status: "active",
-      invited_at: row.joined_at,
-      avatar_color: row.profiles?.avatar_color ?? undefined,
-      last_active_at: row.profiles?.last_active_at,
-    }));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const userIds = wmRows.map((r: any) => r.user_id).filter(Boolean);
+    const { data: profRows } = await supabase
+      .from("profiles")
+      .select("id, email, full_name, avatar_color, last_active_at")
+      .in("id", userIds);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const profMap = new Map<string, any>((profRows || []).map((p: any) => [p.id, p]));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return wmRows.map((row: any): Member => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prof: any = profMap.get(row.user_id);
+      return {
+        id: row.user_id,
+        workspace_id: workspaceId,
+        user_id: row.user_id,
+        email: prof?.email ?? "(sem email)",
+        full_name: prof?.full_name ?? null,
+        role: row.role as WorkspaceRole,
+        status: "active",
+        invited_at: row.joined_at,
+        avatar_color: prof?.avatar_color ?? undefined,
+        last_active_at: prof?.last_active_at,
+      };
+    });
   },
   pendingInvites: async (workspaceId) => {
+    if (!workspaceId) return [];
     const supabase: AnyClient = createSPAClient();
     const { data, error } = await supabase
       .from("invite_tokens")
@@ -212,6 +254,24 @@ export const supabaseMembers: {
       .eq("token", token);
     return { ok: !error, error: error?.message };
   },
+  updateRole: async (workspaceId, userId, newRole) => {
+    const supabase: AnyClient = createSPAClient();
+    const { error } = await supabase
+      .from("workspace_members")
+      .update({ role: newRole })
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", userId);
+    return { ok: !error, error: error?.message };
+  },
+  removeMember: async (workspaceId, userId) => {
+    const supabase: AnyClient = createSPAClient();
+    const { error } = await supabase
+      .from("workspace_members")
+      .delete()
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", userId);
+    return { ok: !error, error: error?.message };
+  },
 };
 
 // ── Unified facade ───────────────────────────────────────────
@@ -232,3 +292,20 @@ export async function loadPendingInvites(workspaceId: string): Promise<InviteTok
   }
   return demoInvites.list(workspaceId).filter((i) => i.status === "pending");
 }
+
+export async function updateMemberRole(workspaceId: string, userId: string, newRole: WorkspaceRole): Promise<{ ok: boolean; error?: string }> {
+  if (isSupabaseConfigured()) {
+    return supabaseMembers.updateRole(workspaceId, userId, newRole);
+  }
+  demoMembers.update(userId, { role: newRole });
+  return { ok: true };
+}
+
+export async function removeWorkspaceMember(workspaceId: string, userId: string): Promise<{ ok: boolean; error?: string }> {
+  if (isSupabaseConfigured()) {
+    return supabaseMembers.removeMember(workspaceId, userId);
+  }
+  demoMembers.remove(userId);
+  return { ok: true };
+}
+

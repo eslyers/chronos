@@ -35,18 +35,51 @@ export default function UsersPage() {
   const [inviteDialogOpen, setInviteDialogOpen] = React.useState(false);
   const { toasts, addToast, dismiss } = useToast();
 
-  const reload = React.useCallback(async () => {
+  const reload = React.useCallback(async (explicitWsId?: string) => {
     setLoading(true);
     try {
-      let wsId = workspaceId;
-      if (!supabaseMode) {
+      let wsId = explicitWsId || workspaceId;
+      if (supabaseMode) {
+        if (!wsId) {
+          const { getCurrentWorkspaceId } = await import("@/lib/data/supabase-data");
+          const found = await getCurrentWorkspaceId();
+          if (found) {
+            wsId = found;
+            setWorkspaceId(found);
+          }
+          const { createSPAClient } = await import("@/lib/supabase/client");
+          const supabase: AnyClient = createSPAClient();
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user && wsId) {
+            const { data: ws } = await supabase
+              .from("workspace_members")
+              .select("role")
+              .eq("workspace_id", wsId)
+              .eq("user_id", user.id)
+              .maybeSingle();
+            const memberRecord = ws as { role?: string } | null;
+            if (memberRecord?.role) {
+              setCurrentUserRole(memberRecord.role as WorkspaceRole);
+            }
+          }
+        }
+      } else {
         wsId = getDemoWorkspaceId();
         setWorkspaceId(wsId);
         setCurrentUserRole(getDemoCurrentUser().role);
       }
+
+      if (!wsId) {
+        setMembers([]);
+        setInvites([]);
+        return;
+      }
+
       const [m, i] = await Promise.all([loadMembers(wsId), loadPendingInvites(wsId)]);
       setMembers(m);
       setInvites(i);
+    } catch (err) {
+      console.error("[UsersPage] Error loading workspace members:", err);
     } finally {
       setLoading(false);
     }
@@ -55,26 +88,6 @@ export default function UsersPage() {
   React.useEffect(() => {
     reload();
   }, [reload]);
-
-  React.useEffect(() => {
-    if (!supabaseMode) return;
-    (async () => {
-      const { createSPAClient } = await import("@/lib/supabase/client");
-      const supabase: AnyClient = createSPAClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: ws } = await supabase
-        .from("workspace_members")
-        .select("workspace_id, role")
-        .eq("user_id", user.id)
-        .limit(1)
-        .maybeSingle();
-      if (ws) {
-        setWorkspaceId(ws.workspace_id);
-        setCurrentUserRole(ws.role);
-      }
-    })();
-  }, [supabaseMode]);
 
   async function handleInvite({ email, role, sendEmail }: { email: string; role: WorkspaceRole; sendEmail: boolean }) {
     const me = getDemoCurrentUser();
@@ -116,13 +129,37 @@ export default function UsersPage() {
     }
   }
 
+  async function handleUpdateRole(id: string, newRole: WorkspaceRole) {
+    try {
+      if (!supabaseMode) {
+        demoMembers.update(id, { role: newRole });
+        await reload();
+      } else {
+        const { updateMemberRole } = await import("./_lib/members");
+        const res = await updateMemberRole(workspaceId, id, newRole);
+        if (!res.ok) throw new Error(res.error || "Falha ao atualizar papel");
+        await reload();
+        addToast({ variant: "success", title: "Papel atualizado", description: "O nível de acesso foi alterado com sucesso." });
+      }
+    } catch (err) {
+      addToast({ variant: "error", title: "Erro ao atualizar papel", description: err instanceof Error ? err.message : "Tente novamente." });
+    }
+  }
+
   async function handleRemove(id: string) {
-    if (!supabaseMode) {
-      demoMembers.remove(id);
-      await reload();
-    } else {
-      // TODO: implement remove member API
-      addToast({ variant: "info", title: "Em breve", description: "Remoção de membros via API será implementada em breve." });
+    try {
+      if (!supabaseMode) {
+        demoMembers.remove(id);
+        await reload();
+      } else {
+        const { removeWorkspaceMember } = await import("./_lib/members");
+        const res = await removeWorkspaceMember(workspaceId, id);
+        if (!res.ok) throw new Error(res.error || "Falha ao remover membro");
+        await reload();
+        addToast({ variant: "success", title: "Membro removido", description: "O acesso do usuário ao workspace foi revogado." });
+      }
+    } catch (err) {
+      addToast({ variant: "error", title: "Erro ao remover", description: err instanceof Error ? err.message : "Tente novamente." });
     }
   }
 
@@ -185,12 +222,12 @@ export default function UsersPage() {
           <div>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-xs font-semibold">
-                GESTÃO DE EQUIPE & ACESSO
+                GESTÃO DE USUÁRIOS & ACESSO
               </Badge>
             </div>
             <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2 flex items-center gap-3">
               <Users className="h-7 w-7 text-blue-500" />
-              Gestão de Equipe & Membros
+              Gestão de Usuários & Equipe
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
               Gerencie os usuários do workspace, atribua papéis operacionais e envie convites por e-mail.
@@ -278,6 +315,7 @@ export default function UsersPage() {
             onRemove={handleRemove}
             onRevokeInvite={handleRevokeInvite}
             onResendInvite={handleResendInvite}
+            onUpdateRole={handleUpdateRole}
           />
         </Card>
       )}

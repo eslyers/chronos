@@ -42,9 +42,10 @@ interface MembersTableProps {
   onRemove: (id: string) => void;
   onRevokeInvite: (token: string) => void;
   onResendInvite: (token: string) => void;
+  onUpdateRole?: (id: string, newRole: WorkspaceRole) => void;
 }
 
-export function MembersTable({ members, invites, isOwner, onRemove, onRevokeInvite, onResendInvite }: MembersTableProps) {
+export function MembersTable({ members, invites, isOwner, onRemove, onRevokeInvite, onResendInvite, onUpdateRole }: MembersTableProps) {
   const [removeTarget, setRemoveTarget] = React.useState<Member | null>(null);
   const [revokeTarget, setRevokeTarget] = React.useState<InviteToken | null>(null);
   const [copiedToken, setCopiedToken] = React.useState<string | null>(null);
@@ -103,10 +104,23 @@ export function MembersTable({ members, invites, isOwner, onRemove, onRevokeInvi
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[m.role]}`}>
-                    <RoleIcon className="h-3 w-3" />
-                    {ROLE_LABELS[m.role]}
-                  </span>
+                  {isOwner && !isMe ? (
+                    <select
+                      value={m.role}
+                      onChange={(e) => onUpdateRole?.(m.id, e.target.value as WorkspaceRole)}
+                      className="text-xs font-medium rounded-lg border border-border bg-background px-2.5 py-1 text-foreground focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm hover:border-border/80 transition-colors"
+                      title="Alterar papel do usuário no workspace"
+                    >
+                      <option value="admin">Administrador</option>
+                      <option value="member">Membro</option>
+                      <option value="viewer">Visualizador</option>
+                    </select>
+                  ) : (
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[m.role]}`}>
+                      <RoleIcon className="h-3 w-3" />
+                      {ROLE_LABELS[m.role]}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20">
@@ -125,7 +139,7 @@ export function MembersTable({ members, invites, isOwner, onRemove, onRevokeInvi
                         setRemoveTarget(m);
                       }}
                       className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
-                      title="Remover membro"
+                      title="Remover membro do workspace"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
