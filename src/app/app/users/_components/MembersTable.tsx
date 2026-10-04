@@ -5,6 +5,7 @@ import { Trash2, Shield, ShieldAlert, User as UserIcon, Eye, Mail, Clock, Copy, 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Member, InviteToken, WorkspaceRole } from "../_lib/members";
 
 const ROLE_LABELS: Record<WorkspaceRole, string> = {
@@ -157,16 +158,34 @@ export function MembersTable({
                         Proprietário (Master)
                       </span>
                     ) : canManageRoles && !isMe ? (
-                      <select
+                      <Select
                         value={m.role}
-                        onChange={(e) => onUpdateRole?.(m.id, e.target.value as WorkspaceRole)}
-                        className="text-xs font-medium rounded-lg border border-border bg-background px-2.5 py-1 text-foreground focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-sm hover:border-border/80 transition-colors"
-                        title="Alterar papel do usuário no workspace"
+                        onValueChange={(val) => onUpdateRole?.(m.id, val as WorkspaceRole)}
                       >
-                        <option value="admin">Administrador</option>
-                        <option value="member">Membro</option>
-                        <option value="viewer">Visualizador</option>
-                      </select>
+                        <SelectTrigger className="w-[145px] h-8 text-xs font-medium bg-card/60 border-border/80 hover:bg-muted/50 transition-all rounded-lg shadow-sm">
+                          <SelectValue placeholder="Selecione papel" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="admin">
+                            <div className="flex items-center gap-2">
+                              <ShieldAlert className="h-3.5 w-3.5 text-purple-400" />
+                              <span>Administrador</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="member">
+                            <div className="flex items-center gap-2">
+                              <UserIcon className="h-3.5 w-3.5 text-sky-400" />
+                              <span>Membro</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="viewer">
+                            <div className="flex items-center gap-2">
+                              <Eye className="h-3.5 w-3.5 text-zinc-400" />
+                              <span>Visualizador</span>
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
                     ) : (
                       <span
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_COLORS[m.role]}`}

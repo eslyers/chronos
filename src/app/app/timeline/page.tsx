@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
@@ -522,15 +522,27 @@ function TimelineContent() {
               </label>
               <Select
                 value={selectedProjectId}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
-                className="h-10 text-sm font-medium bg-background border-border/80"
+                onValueChange={setSelectedProjectId}
               >
-                <option value="all">📊 Todos os Projetos ({projects.length})</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
+                <SelectTrigger className="h-10 text-sm font-medium bg-background border-border/80">
+                  <SelectValue placeholder="Filtrar por Projeto" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    <div className="flex items-center gap-2">
+                      <span>📊</span>
+                      <span>Todos os Projetos ({projects.length})</span>
+                    </div>
+                  </SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <div className="flex items-center gap-2">
+                        <FolderKanban className="h-3.5 w-3.5 text-blue-400" />
+                        <span className="truncate">{p.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
           </div>

@@ -35,6 +35,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useData, type Task } from "@/lib/context/DataContext";
 import { TaskAssignee } from "@/components/TaskAssignee";
 import { TaskDialog } from "@/components/TaskDialog";
@@ -642,70 +643,101 @@ export default function FastCloseCockpitPage() {
           {/* Single-Line Executive Toolbar */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
             {/* Seletor de Projeto */}
-            <div className="flex items-center gap-1.5 bg-muted/50 px-2.5 py-1.5 rounded-xl border border-border/80">
+            <div className="flex items-center gap-1.5 bg-muted/50 pl-2.5 pr-1 py-1 rounded-xl border border-border/80">
               <FolderKanban className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-              <select
+              <Select
                 value={selectedProjectId}
-                onChange={(e) => {
-                  if (e.target.value === "new") {
+                onValueChange={(val) => {
+                  if (val === "new") {
                     handleCreateFastCloseProject();
                   } else {
-                    setSelectedProjectId(e.target.value);
+                    setSelectedProjectId(val);
                   }
                 }}
-                className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100 max-w-[160px] truncate"
               >
-                <option value="all">📁 (Todos os Fechamentos)</option>
-                {closingProjects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    📁 {p.name}
-                  </option>
-                ))}
-                <option value="new">➕ + Novo Projeto</option>
-              </select>
+                <SelectTrigger className="h-7 text-xs font-bold bg-transparent border-0 shadow-none px-1.5 py-0 focus:ring-0 max-w-[170px] truncate">
+                  <SelectValue placeholder="Selecione o projeto" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    <div className="flex items-center gap-2">
+                      <FolderKanban className="h-3.5 w-3.5 text-blue-400" />
+                      <span>(Todos os Fechamentos)</span>
+                    </div>
+                  </SelectItem>
+                  {closingProjects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <div className="flex items-center gap-2">
+                        <FolderKanban className="h-3.5 w-3.5 text-blue-400" />
+                        <span className="truncate">{p.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="new">
+                    <div className="flex items-center gap-2 text-blue-500 font-semibold">
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>+ Novo Projeto</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Mês e Ano */}
-            <div className="flex items-center gap-1 bg-muted/50 px-2.5 py-1.5 rounded-xl border border-border/80">
-              <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
+            <div className="flex items-center gap-1 bg-muted/50 px-2 py-1 rounded-xl border border-border/80">
+              <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-1" />
+              <Select
+                value={String(selectedMonth)}
+                onValueChange={(val) => setSelectedMonth(Number(val))}
               >
-                {MONTH_NAMES.map((m, idx) => (
-                  <option key={idx} value={idx + 1}>{m}</option>
-                ))}
-              </select>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
+                <SelectTrigger className="h-7 text-xs font-bold bg-transparent border-0 shadow-none px-1.5 py-0 focus:ring-0 w-[110px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTH_NAMES.map((m, idx) => (
+                    <SelectItem key={idx} value={String(idx + 1)}>
+                      {m}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={String(selectedYear)}
+                onValueChange={(val) => setSelectedYear(Number(val))}
               >
-                <option value={2025}>2025</option>
-                <option value={2026}>2026</option>
-                <option value={2027}>2027</option>
-              </select>
+                <SelectTrigger className="h-7 text-xs font-bold bg-transparent border-0 shadow-none px-1.5 py-0 focus:ring-0 w-[80px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2025">2025</SelectItem>
+                  <SelectItem value="2026">2026</SelectItem>
+                  <SelectItem value="2027">2027</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Alcance de Ds */}
-            <div className="flex items-center gap-1.5 bg-muted/50 px-2.5 py-1.5 rounded-xl border border-border/80">
+            <div className="flex items-center gap-1.5 bg-muted/50 pl-2.5 pr-1 py-1 rounded-xl border border-border/80">
               <Filter className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <select
+              <Select
                 value={offsetRange}
-                onChange={(e) => {
-                  const newRange = e.target.value;
-                  setOffsetRange(newRange);
+                onValueChange={(val) => {
+                  setOffsetRange(val);
                   setCustomOffsets(undefined);
-                  saveProjectConfig(useD0, undefined, newRange);
+                  saveProjectConfig(useD0, undefined, val);
                 }}
-                className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100"
               >
-                <option value="D-5_D+5">D-5 a D+5</option>
-                <option value="D-3_D+3">D-3 a D+3</option>
-                <option value="D-2_D+4">D-2 a D+4</option>
-                <option value="D-10_D+10">D-10 a D+10</option>
-              </select>
+                <SelectTrigger className="h-7 text-xs font-bold bg-transparent border-0 shadow-none px-1.5 py-0 focus:ring-0 w-[115px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="D-5_D+5">D-5 a D+5</SelectItem>
+                  <SelectItem value="D-3_D+3">D-3 a D+3</SelectItem>
+                  <SelectItem value="D-2_D+4">D-2 a D+4</SelectItem>
+                  <SelectItem value="D-10_D+10">D-10 a D+10</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Alternador de Visão (Matriz x Lista) */}

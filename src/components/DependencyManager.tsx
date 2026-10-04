@@ -10,6 +10,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Link2, Plus, Trash2, Loader2, Info } from "lucide-react";
 import { useData, type Task, type TaskDependency } from "@/lib/context/DataContext";
@@ -166,53 +167,63 @@ export function DependencyManager({
               <label className="text-xs font-medium block mb-1">
                 Tarefa que depende
               </label>
-              <select
+              <Select
                 value={taskId}
-                onChange={(e) => setTaskId(e.target.value)}
-                className="w-full border rounded px-2 py-1.5 text-sm bg-background"
+                onValueChange={setTaskId}
                 disabled={busy}
               >
-                <option value="">Selecione…</option>
-                {projectTasks.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.title}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full h-9 rounded-lg border-border/80 bg-background text-xs">
+                  <SelectValue placeholder="Selecione a tarefa..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {projectTasks.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      <span className="truncate">{t.title}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="text-xs font-medium block mb-1">
                 Depende de
               </label>
-              <select
+              <Select
                 value={dependsOnTaskId}
-                onChange={(e) => setDependsOnTaskId(e.target.value)}
-                className="w-full border rounded px-2 py-1.5 text-sm bg-background"
+                onValueChange={setDependsOnTaskId}
                 disabled={busy}
               >
-                <option value="">Selecione…</option>
-                {projectTasks.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.title}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full h-9 rounded-lg border-border/80 bg-background text-xs">
+                  <SelectValue placeholder="Selecione a tarefa..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {projectTasks.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      <span className="truncate">{t.title}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div>
             <label className="text-xs font-medium block mb-1">Tipo</label>
-            <select
+            <Select
               value={depType}
-              onChange={(e) => setDepType(e.target.value as DepType)}
-              className="w-full border rounded px-2 py-1.5 text-sm bg-background"
+              onValueChange={(val) => setDepType(val as DepType)}
               disabled={busy}
             >
-              {Object.entries(DEP_TYPE_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="w-full h-9 rounded-lg border-border/80 bg-background text-xs">
+                <SelectValue placeholder="Selecione o tipo..." />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(DEP_TYPE_LABELS).map(([k, v]) => (
+                  <SelectItem key={k} value={k}>
+                    <span>{v.label}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-xs text-muted-foreground mt-1 flex items-start gap-1">
               <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
               {DEP_TYPE_LABELS[depType].description}

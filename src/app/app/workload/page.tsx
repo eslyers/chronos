@@ -27,6 +27,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useData, type Task } from "@/lib/context/DataContext";
 import { TaskDialog } from "@/components/TaskDialog";
 import {
@@ -166,18 +167,30 @@ function WorkloadContent() {
                 <FolderKanban className="h-3.5 w-3.5 text-blue-500" />
                 Projeto:
               </span>
-              <select
+              <Select
                 value={selectedProjectId}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
-                className="h-9 px-3 rounded-xl border border-input bg-background text-foreground text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                onValueChange={setSelectedProjectId}
               >
-                <option value="all">🌐 Todos os Projetos ({projects.length})</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    📁 {p.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-9 px-3 rounded-xl border border-input bg-background text-foreground text-xs font-semibold w-[220px]">
+                  <SelectValue placeholder="Selecione o projeto" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    <div className="flex items-center gap-2">
+                      <span>🌐</span>
+                      <span>Todos os Projetos ({projects.length})</span>
+                    </div>
+                  </SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <div className="flex items-center gap-2">
+                        <FolderKanban className="h-3.5 w-3.5 text-blue-400" />
+                        <span className="truncate">{p.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Período */}

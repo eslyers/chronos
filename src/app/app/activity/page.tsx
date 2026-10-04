@@ -8,7 +8,7 @@ import { createSPAClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Activity = {
   id: string;
@@ -171,15 +171,22 @@ export default function ActivityPage() {
               <Filter className="h-4 w-4 text-blue-500 ml-1" />
               <Select
                 value={projectFilter}
-                onChange={(e) => setProjectFilter(e.target.value)}
-                className="w-full sm:w-[220px] h-9 text-xs font-semibold border-none bg-transparent focus:ring-0"
+                onValueChange={setProjectFilter}
               >
-                <option value="all">Todos os projetos</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
+                <SelectTrigger className="w-full sm:w-[220px] h-9 text-xs font-semibold border-none bg-transparent focus:ring-0 shadow-none">
+                  <SelectValue placeholder="Todos os projetos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os projetos</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <div className="flex items-center gap-2">
+                        <Filter className="h-3.5 w-3.5 text-blue-400" />
+                        <span className="truncate">{p.name}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
           </div>

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import type { ImportPreview, ImportRow, ImportRowStatus } from "@/lib/excel-parser";
 import type { Task } from "@/lib/context/DataContext";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface ImportDialogProps {
   open: boolean;
@@ -535,18 +536,24 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                         Mostrando <strong className="text-foreground">{pageStart}–{pageEnd}</strong> de <strong className="text-foreground">{totalRows}</strong> linhas
                       </span>
                       <span className="opacity-50">•</span>
-                      <label className="flex items-center gap-1">
-                        Por página:
-                        <select
-                          value={pageSize}
-                          onChange={(e) => setPageSize(Number(e.target.value) as (typeof PAGE_SIZE_OPTIONS)[number])}
-                          className="bg-transparent border rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      <div className="flex items-center gap-1.5">
+                        <span>Por página:</span>
+                        <Select
+                          value={String(pageSize)}
+                          onValueChange={(val) => setPageSize(Number(val) as (typeof PAGE_SIZE_OPTIONS)[number])}
                         >
-                          {PAGE_SIZE_OPTIONS.map((s) => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
-                      </label>
+                          <SelectTrigger className="h-7 w-[68px] px-2 py-0 text-xs bg-transparent border-border/80 shadow-none">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PAGE_SIZE_OPTIONS.map((s) => (
+                              <SelectItem key={s} value={String(s)}>
+                                {s}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div className="flex items-center gap-1">
                       <button

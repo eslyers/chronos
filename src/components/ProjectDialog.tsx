@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useData, type Project } from "@/lib/context/DataContext";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   StageEditor,
   defaultStagesAsDrafts,
@@ -371,16 +372,34 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
                 <CircleDot className="h-3.5 w-3.5 text-blue-500" />
                 Status do Projeto
               </label>
-              <select
-                id="project-status"
+              <Select
                 value={status}
-                onChange={(e) => setStatus(e.target.value as typeof status)}
-                className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all"
+                onValueChange={(val) => setStatus(val as typeof status)}
               >
-                <option value="active">🟢 Em Andamento (Ativo)</option>
-                <option value="completed">✅ Concluído</option>
-                <option value="archived">📦 Arquivado</option>
-              </select>
+                <SelectTrigger id="project-status" className="h-10 rounded-xl bg-background border-border/80">
+                  <SelectValue placeholder="Selecione o status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shrink-0" />
+                      <span>Em Andamento (Ativo)</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="completed">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-blue-500 shrink-0" />
+                      <span>Concluído</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="archived">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-zinc-500 shrink-0" />
+                      <span>Arquivado</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           )}
 
@@ -540,20 +559,27 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
 
               {stagesMode === "template" && (
                 <div className="space-y-2">
-                  <select
-                    id="template_id"
-                    value={selectedTemplateId}
-                    onChange={(e) => setSelectedTemplateId(e.target.value)}
-                    className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all"
+                  <Select
+                    value={selectedTemplateId || "none"}
+                    onValueChange={(val) => setSelectedTemplateId(val === "none" ? "" : val)}
                   >
-                    <option value="">— Selecione um template corporativo —</option>
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.icon ? `${t.icon} ` : ""}
-                        {t.name} ({(t.stages as unknown[])?.length || 0} etapas)
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger id="template_id" className="h-10 rounded-xl bg-background border-border/80">
+                      <SelectValue placeholder="Selecione um template corporativo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">
+                        <span className="text-muted-foreground">— Selecione um template corporativo —</span>
+                      </SelectItem>
+                      {templates.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          <div className="flex items-center gap-2">
+                            <span>{t.icon || "📁"}</span>
+                            <span>{t.name} ({(t.stages as unknown[])?.length || 0} etapas)</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
                   {selectedTemplateId && stageDrafts.length > 0 && (
                     <div className="bg-muted/30 rounded-xl border border-border p-3 text-xs space-y-2">

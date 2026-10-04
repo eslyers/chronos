@@ -8,6 +8,7 @@ import { useGlobal } from "@/lib/context/GlobalContext";
 import { createSPAClient } from "@/lib/supabase/client";
 import { User, Key, CheckCircle, Bell, Send, Loader2, Clock, Mail, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Profile {
   id: string;
@@ -545,22 +546,26 @@ export default function SettingsPage() {
                     <div className="flex items-center gap-2 pt-2 border-t">
                       <Clock className="h-4 w-4 text-muted-foreground" />
                       <label className="text-sm">Alertar tarefas vencendo em</label>
-                      <select
-                        value={sub?.due_soon_hours ?? 24}
-                        onChange={(e) =>
-                          toggleSubscriberPref(proj.id, "due_soon_hours", parseInt(e.target.value))
+                      <Select
+                        value={String(sub?.due_soon_hours ?? 24)}
+                        onValueChange={(val) =>
+                          toggleSubscriberPref(proj.id, "due_soon_hours", parseInt(val))
                         }
-                        className="border rounded px-2 py-1 text-sm bg-background"
                         disabled={loading}
                       >
-                        <option value={1}>1 hora</option>
-                        <option value={3}>3 horas</option>
-                        <option value={6}>6 horas</option>
-                        <option value={12}>12 horas</option>
-                        <option value={24}>24 horas (1 dia)</option>
-                        <option value={48}>48 horas (2 dias)</option>
-                        <option value={72}>72 horas (3 dias)</option>
-                      </select>
+                        <SelectTrigger className="w-[180px] h-8 text-xs font-medium border-border/80 bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1 hora</SelectItem>
+                          <SelectItem value="3">3 horas</SelectItem>
+                          <SelectItem value="6">6 horas</SelectItem>
+                          <SelectItem value="12">12 horas</SelectItem>
+                          <SelectItem value="24">24 horas (1 dia)</SelectItem>
+                          <SelectItem value="48">48 horas (2 dias)</SelectItem>
+                          <SelectItem value="72">72 horas (3 dias)</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 );

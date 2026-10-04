@@ -8,8 +8,11 @@ import {
   UserPlus,
   Shield,
   Trash2,
+  User,
+  Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { type Project } from "@/lib/context/DataContext";
 import {
   fetchProjectMembers,
@@ -219,29 +222,61 @@ export function ProjectMembersDialog({
               </p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
-                <select
-                  value={selectedUserId}
-                  onChange={(e) => setSelectedUserId(e.target.value)}
-                  className="sm:col-span-2 text-xs rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                  required
-                >
-                  <option value="">Selecione um membro do workspace...</option>
-                  {availableWorkspaceMembers.map((m) => (
-                    <option key={m.user_id} value={m.user_id}>
-                      {m.full_name ? `${m.full_name} (${m.email})` : m.email}
-                    </option>
-                  ))}
-                </select>
+                <div className="sm:col-span-2">
+                  <Select
+                    value={selectedUserId}
+                    onValueChange={setSelectedUserId}
+                  >
+                    <SelectTrigger className="h-9 text-xs font-medium bg-background border-border/80 shadow-sm">
+                      <SelectValue placeholder="Selecione um membro do workspace..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableWorkspaceMembers.map((m) => {
+                        const uid = m.user_id || m.id;
+                        if (!uid) return null;
+                        return (
+                          <SelectItem key={uid} value={uid}>
+                            <div className="flex items-center gap-2">
+                              <User className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                              <span className="truncate">{m.full_name ? `${m.full_name} (${m.email})` : m.email}</span>
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                <select
-                  value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value as "admin" | "member" | "viewer")}
-                  className="text-xs rounded-lg border border-border bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="member">Membro</option>
-                  <option value="admin">Admin</option>
-                  <option value="viewer">Visualizador</option>
-                </select>
+                <div>
+                  <Select
+                    value={selectedRole}
+                    onValueChange={(val) => setSelectedRole(val as "admin" | "member" | "viewer")}
+                  >
+                    <SelectTrigger className="h-9 text-xs font-medium bg-background border-border/80 shadow-sm">
+                      <SelectValue placeholder="Papel..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="member">
+                        <div className="flex items-center gap-2">
+                          <User className="h-3.5 w-3.5 text-sky-400" />
+                          <span>Membro</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="admin">
+                        <div className="flex items-center gap-2">
+                          <Shield className="h-3.5 w-3.5 text-purple-400" />
+                          <span>Admin</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="viewer">
+                        <div className="flex items-center gap-2">
+                          <Eye className="h-3.5 w-3.5 text-zinc-400" />
+                          <span>Visualizador</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
                 <div className="sm:col-span-3 pt-1">
                   <Button

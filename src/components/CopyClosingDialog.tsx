@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Copy, X, Loader2, CheckSquare, Square, ArrowRight, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Task } from "@/lib/context/DataContext";
 
 interface CopyClosingDialogProps {
@@ -146,24 +147,38 @@ export function CopyClosingDialog({
                 Mês Origem (Copiar De):
               </label>
               <div className="flex items-center gap-2">
-                <select
-                  value={sourceMonth}
-                  onChange={(e) => setSourceMonth(Number(e.target.value))}
-                  className="flex-1 h-9 rounded-lg border border-input bg-card text-foreground dark:bg-zinc-900 dark:text-zinc-100 px-3 text-xs font-semibold focus:ring-2 focus:ring-blue-500 [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100 cursor-pointer"
-                >
-                  {MONTH_NAMES.map((m, idx) => (
-                    <option key={idx} value={idx + 1} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">{m}</option>
-                  ))}
-                </select>
-                <select
-                  value={sourceYear}
-                  onChange={(e) => setSourceYear(Number(e.target.value))}
-                  className="w-20 h-9 rounded-lg border border-input bg-card text-foreground dark:bg-zinc-900 dark:text-zinc-100 px-2 text-xs font-semibold focus:ring-2 focus:ring-blue-500 [&>option]:bg-slate-900 [&>option]:text-slate-100 dark:[&>option]:bg-zinc-900 dark:[&>option]:text-zinc-100 cursor-pointer"
-                >
-                  <option value={2025} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">2025</option>
-                  <option value={2026} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">2026</option>
-                  <option value={2027} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">2027</option>
-                </select>
+                <div className="flex-1">
+                  <Select
+                    value={String(sourceMonth)}
+                    onValueChange={(val) => setSourceMonth(Number(val))}
+                  >
+                    <SelectTrigger className="h-9 rounded-lg border-border/80 bg-card text-xs font-semibold">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTH_NAMES.map((m, idx) => (
+                        <SelectItem key={idx} value={String(idx + 1)}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-24">
+                  <Select
+                    value={String(sourceYear)}
+                    onValueChange={(val) => setSourceYear(Number(val))}
+                  >
+                    <SelectTrigger className="h-9 rounded-lg border-border/80 bg-card text-xs font-semibold">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="2025">2025</SelectItem>
+                      <SelectItem value="2026">2026</SelectItem>
+                      <SelectItem value="2027">2027</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 

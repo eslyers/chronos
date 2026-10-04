@@ -30,6 +30,7 @@ import {
 } from "@/lib/context/DataContext";
 import { createSPAClient } from "@/lib/supabase/client";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TaskCommentsSection } from "@/components/task-dialog/TaskCommentsSection";
 import { TaskAttachmentsSection } from "@/components/task-dialog/TaskAttachmentsSection";
 import { parseDurationToHours, formatHoursToHHMM, formatHoursBadge } from "@/lib/duration";
@@ -587,18 +588,21 @@ export function TaskDialog({
                   <KanbanSquare className="h-3.5 w-3.5 text-blue-500" />
                   Etapa do Kanban
                 </label>
-                <select
-                  id="task-stage"
-                  value={stageId}
-                  onChange={(e) => setStageId(e.target.value)}
-                  className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-card text-foreground dark:bg-zinc-900 dark:text-zinc-100 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all cursor-pointer"
-                >
-                  {stages.map((s) => (
-                    <option key={s.id} value={s.id} className="bg-slate-900 text-slate-100 dark:bg-zinc-900 dark:text-zinc-100">
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                <Select value={stageId} onValueChange={setStageId}>
+                  <SelectTrigger id="task-stage" className="h-10 rounded-xl bg-card border-border/80">
+                    <SelectValue placeholder="Selecione a etapa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stages.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        <div className="flex items-center gap-2">
+                          <KanbanSquare className="h-3.5 w-3.5 text-blue-500" />
+                          <span>{s.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Responsável */}
@@ -634,25 +638,33 @@ export function TaskDialog({
                 </div>
 
                 {assigneeMode === "member" ? (
-                  <select
-                    id="task-assignee"
-                    value={assigneeId}
-                    onChange={(e) => {
-                      const selectedId = e.target.value;
+                  <Select
+                    value={assigneeId || "unassigned"}
+                    onValueChange={(val) => {
+                      const selectedId = val === "unassigned" ? "" : val;
                       setAssigneeId(selectedId);
                       const member = assignees.find((a) => a.id === selectedId);
                       setAssigneeName(member ? (member.full_name || member.email) : null);
                       setAssigneeStatus(null);
                     }}
-                    className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all"
                   >
-                    <option value="">— Sem responsável atribuído —</option>
-                    {assignees.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        👤 {a.full_name ? `${a.full_name} (${a.email})` : a.email}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger id="task-assignee" className="h-10 rounded-xl bg-background border-border/80">
+                      <SelectValue placeholder="Selecione o responsável" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">
+                        <span className="text-muted-foreground">— Sem responsável atribuído —</span>
+                      </SelectItem>
+                      {assignees.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          <div className="flex items-center gap-2">
+                            <UserCircle2 className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                            <span className="truncate">{a.full_name ? `${a.full_name} (${a.email})` : a.email}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 ) : (
                   <div className="space-y-1.5">
                     <input
@@ -679,19 +691,27 @@ export function TaskDialog({
                   <CornerDownRight className="h-3.5 w-3.5 text-blue-500" />
                   Estrutura WBS: Vincular como Sub-tarefa de
                 </label>
-                <select
-                  id="task-parent"
-                  value={parentTaskId}
-                  onChange={(e) => setParentTaskId(e.target.value)}
-                  className="flex h-10 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 font-medium transition-all"
+                <Select
+                  value={parentTaskId || "none"}
+                  onValueChange={(val) => setParentTaskId(val === "none" ? "" : val)}
                 >
-                  <option value="">— Nenhuma (Tarefa Principal / Raiz) —</option>
-                  {parentTaskOptions.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      📋 {t.title}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="task-parent" className="h-10 rounded-xl bg-background border-border/80">
+                    <SelectValue placeholder="Selecione a tarefa raiz" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      <span className="text-muted-foreground">— Nenhuma (Tarefa Principal / Raiz) —</span>
+                    </SelectItem>
+                    {parentTaskOptions.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                          <span className="truncate">{t.title}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
