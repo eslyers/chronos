@@ -2,7 +2,7 @@
 
 import { useState, use, useEffect, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, Plus, Calendar, MoreVertical, CornerDownRight, FolderTree, FileText, BarChart3, CheckCircle2, Copy, Gauge } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, MoreVertical, CornerDownRight, FolderTree, FileText, BarChart3, CheckCircle2, Copy, Gauge, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { useData, type Task } from "@/lib/context/DataContext";
 import { ProjectDialog } from "@/components/ProjectDialog";
 import { CloneProjectDialog } from "@/components/CloneProjectDialog";
 import { ProjectWorkloadDialog } from "@/components/ProjectWorkloadDialog";
+import { ProjectMembersDialog } from "@/components/ProjectMembersDialog";
 import { TaskDialog } from "@/components/TaskDialog";
 import { TaskAssignee } from "@/components/TaskAssignee";
 import { ImportProjectButton } from "@/components/ImportProjectButton";
@@ -74,6 +75,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [cloneOpen, setCloneOpen] = useState(false);
   const [workloadOpen, setWorkloadOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
   const processedTaskIdRef = useRef<string | null>(null);
 
   // Deep-link: se URL tem ?task=<id>, abre o dialog da task e scrolla ate ela sem travar
@@ -253,6 +255,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               Clonar Projeto
             </Button>
             <ImportProjectButton mode="single" project={project} />
+            <Button
+              onClick={() => setMembersOpen(true)}
+              variant="outline"
+              className="h-10 px-3.5 text-xs font-bold border-border bg-background hover:bg-muted gap-2 text-primary"
+            >
+              <Users className="h-4 w-4" />
+              Membros & Acesso
+            </Button>
             <Button variant="outline" onClick={() => setEditOpen(true)}>
               Editar projeto
             </Button>
@@ -545,6 +555,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           onOpenChange={setWorkloadOpen}
           project={project}
           tasks={allTasks}
+        />
+      )}
+
+      {project && (
+        <ProjectMembersDialog
+          open={membersOpen}
+          onOpenChange={setMembersOpen}
+          project={project}
         />
       )}
     </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Plus, Calendar, Target, Trash2, Edit, FolderOpen, FolderKanban, ArrowRight, Copy } from "lucide-react";
+import { Plus, Calendar, Target, Trash2, Edit, FolderOpen, FolderKanban, ArrowRight, Copy, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { useData, type Project } from "@/lib/context/DataContext";
 import { ProjectDialog } from "@/components/ProjectDialog";
 import { CloneProjectDialog } from "@/components/CloneProjectDialog";
+import { ProjectMembersDialog } from "@/components/ProjectMembersDialog";
 import { ImportProjectButton } from "@/components/ImportProjectButton";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
 
@@ -19,6 +20,7 @@ export default function ProjectsPage() {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
   const [cloningProject, setCloningProject] = useState<Project | null>(null);
+  const [membersProject, setMembersProject] = useState<Project | null>(null);
   const [filter, setFilter] = useState<"all" | "active" | "completed" | "archived">("all");
 
   useEffect(() => {
@@ -226,6 +228,13 @@ export default function ProjectsPage() {
 
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                         <button
+                          onClick={() => setMembersProject(project)}
+                          className="p-1.5 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                          title="Membros e Acesso ao Projeto"
+                        >
+                          <Users className="h-4 w-4" />
+                        </button>
+                        <button
                           onClick={() => openClone(project)}
                           className="p-1.5 rounded-lg hover:bg-blue-500/10 text-muted-foreground hover:text-blue-500 transition-colors"
                           title="Clonar Projeto"
@@ -326,6 +335,11 @@ export default function ProjectsPage() {
         open={cloneDialogOpen}
         onOpenChange={setCloneDialogOpen}
         project={cloningProject}
+      />
+      <ProjectMembersDialog
+        open={!!membersProject}
+        onOpenChange={(open) => !open && setMembersProject(null)}
+        project={membersProject}
       />
       {deleteConfirm.dialog}
     </div>

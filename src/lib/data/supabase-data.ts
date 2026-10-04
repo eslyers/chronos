@@ -610,3 +610,85 @@ export function wouldCreateCycle(
   }
   return false;
 }
+
+// ── Project Members Access Control ──────────────────────────
+
+export interface ProjectMember {
+  id: string;
+  project_id: string;
+  user_id: string;
+  role: "owner" | "admin" | "member" | "viewer";
+  created_at: string;
+  email?: string;
+  full_name?: string | null;
+  avatar_color?: string;
+}
+
+export async function fetchProjectMembers(projectId: string): Promise<ProjectMember[]> {
+  const supabase: any = client();
+  const { data, error } = await supabase
+    .from("project_members")
+    .select(`
+      id,
+      project_id,
+      user_id,
+      role,
+      created_at,
+      profiles:profiles (email, full_name, avatar_color)
+    `)
+    .eq("project_id", projectId);
+
+  if (error) {
+    console.error("[supabase-data] fetchProjectMembers error:", error);
+    return [];
+  }
+
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    project_id: row.project_id,
+    user_id: row.user_id,
+    role: row.role,
+    created_at: row.created_at,
+    email: row.profiles?.email ?? "",
+    full_name: row.profiles?.full_name ?? null,
+    avatar_color: row.profiles?.avatar_color ?? "#3b82f6",
+  }));
+}
+
+export async function addProjectMember(
+  projectId: string,
+  userId: string,
+  role: "owner" | "admin" | "member" | "viewer" = "member"
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase: any = client();
+  const { error } = await supabase
+    .from("project_members")
+    .upsert(
+      { project_id: projectId, user_id: userId, role },
+      { onConflict: "project_id,user_id" }
+    );
+
+  if (error) {
+    console.error("[supabase-data] addProjectMember error:", error);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+export async function removeProjectMember(
+  projectId: string,
+  userId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase: any = client();
+  const { error } = await supabase
+    .from("project_members")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("[supabase-data] removeProjectMember error:", error);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
