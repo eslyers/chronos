@@ -26,6 +26,8 @@ export interface Member {
   accepted_at?: string;
   last_active_at?: string;
   avatar_color?: string;
+  avatar_url?: string | null;
+  is_master_admin?: boolean;
 }
 
 export interface InviteToken {
@@ -153,6 +155,8 @@ export const demoInvites: {
 
 // ── Production (Supabase) ────────────────────────────────────
 
+const MASTER_ADMIN_EMAIL = "eslyers@gmail.com";
+
 export const supabaseMembers: {
   list: (workspaceId: string) => Promise<Member[]>;
   pendingInvites: (workspaceId: string) => Promise<InviteToken[]>;
@@ -162,52 +166,43 @@ export const supabaseMembers: {
 } = {
   list: async (workspaceId) => {
     if (!workspaceId) return [];
-    const supabase: AnyClient = createSPAClient();
-    
-    // First try the foreign key join
-    const { data, error } = await supabase
-      .from("workspace_members")
-      .select(`
-        user_id,
-        role,
-        joined_at,
-        profiles:profiles (id, email, full_name, avatar_color, last_active_at)
-      `)
-      .eq("workspace_id", workspaceId);
 
-    if (!error && Array.isArray(data) && data.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return data.map((row: any): Member => ({
-        id: row.user_id,
-        workspace_id: workspaceId,
-        user_id: row.user_id,
-        email: row.profiles?.email ?? "(sem email)",
-        full_name: row.profiles?.full_name ?? null,
-        role: row.role as WorkspaceRole,
-        status: "active",
-        invited_at: row.joined_at,
-        avatar_color: row.profiles?.avatar_color ?? undefined,
-        last_active_at: row.profiles?.last_active_at,
-      }));
+    // 1. Tentar primeiro o endpoint seguro da API (com serverAdminClient)
+    try {
+      const res = await fetch(`/api/users/members?workspace_id=${encodeURIComponent(workspaceId)}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.members)) {
+          return json.members;
+        }
+      }
+    } catch (apiErr) {
+      console.warn("[members] Falha ao consultar /api/users/members, usando fallback SPA:", apiErr);
     }
 
-    // Robust fallback: query workspace_members then profiles by id
+    // 2. Fallback direto via Supabase Client utilizando colunas existentes na tabela profiles
+    const supabase: AnyClient = createSPAClient();
     const { data: wmRows, error: wmError } = await supabase
       .from("workspace_members")
       .select("user_id, role, joined_at")
-      .eq("workspace_id", workspaceId);
+      .eq("workspace_id", workspaceId)
+      .order("joined_at", { ascending: true });
 
     if (wmError || !wmRows || wmRows.length === 0) {
-      if (wmError) console.error("[members] fallback load error:", wmError);
+      if (wmError) console.error("[members] Erro ao listar workspace_members:", wmError);
       return [];
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const userIds = wmRows.map((r: any) => r.user_id).filter(Boolean);
-    const { data: profRows } = await supabase
+    const { data: profRows, error: profErr } = await supabase
       .from("profiles")
-      .select("id, email, full_name, avatar_color, last_active_at")
+      .select("id, email, full_name, avatar_url, updated_at")
       .in("id", userIds);
+
+    if (profErr) {
+      console.warn("[members] Erro ao carregar perfis associados:", profErr);
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const profMap = new Map<string, any>((profRows || []).map((p: any) => [p.id, p]));
@@ -216,17 +211,21 @@ export const supabaseMembers: {
     return wmRows.map((row: any): Member => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const prof: any = profMap.get(row.user_id);
+      const email = prof?.email || "(sem email)";
+      const isMaster = email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
+
       return {
         id: row.user_id,
         workspace_id: workspaceId,
         user_id: row.user_id,
-        email: prof?.email ?? "(sem email)",
+        email,
         full_name: prof?.full_name ?? null,
-        role: row.role as WorkspaceRole,
+        role: isMaster ? "owner" : (row.role as WorkspaceRole),
+        is_master_admin: isMaster,
         status: "active",
         invited_at: row.joined_at,
-        avatar_color: prof?.avatar_color ?? undefined,
-        last_active_at: prof?.last_active_at,
+        avatar_url: prof?.avatar_url ?? null,
+        last_active_at: prof?.updated_at,
       };
     });
   },
@@ -256,6 +255,13 @@ export const supabaseMembers: {
   },
   updateRole: async (workspaceId, userId, newRole) => {
     const supabase: AnyClient = createSPAClient();
+
+    // Proteção: não permitir alterar papel do Master Admin
+    const { data: prof } = await supabase.from("profiles").select("email").eq("id", userId).maybeSingle();
+    if (prof?.email?.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase()) {
+      return { ok: false, error: "O Master Admin não pode ter seu papel alterado." };
+    }
+
     const { error } = await supabase
       .from("workspace_members")
       .update({ role: newRole })
@@ -265,6 +271,13 @@ export const supabaseMembers: {
   },
   removeMember: async (workspaceId, userId) => {
     const supabase: AnyClient = createSPAClient();
+
+    // Proteção: não permitir remover o Master Admin
+    const { data: prof } = await supabase.from("profiles").select("email").eq("id", userId).maybeSingle();
+    if (prof?.email?.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase()) {
+      return { ok: false, error: "O Master Admin não pode ser removido do workspace." };
+    }
+
     const { error } = await supabase
       .from("workspace_members")
       .delete()

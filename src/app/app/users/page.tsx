@@ -29,7 +29,7 @@ type AnyClient = any;
 
 export default function UsersPage() {
   const router = useRouter();
-  const { isWorkspaceAdmin, loading: authLoading } = useGlobal();
+  const { isWorkspaceAdmin, isMasterAdmin, user: authUser, loading: authLoading } = useGlobal();
   const supabaseMode = React.useMemo(() => isSupabaseConfigured(), []);
   const [loading, setLoading] = React.useState(true);
   const [members, setMembers] = React.useState<Member[]>([]);
@@ -43,7 +43,7 @@ export default function UsersPage() {
     setLoading(true);
     try {
       let wsId = explicitWsId || workspaceId;
-      let userRole: WorkspaceRole = currentUserRole;
+      let userRole: WorkspaceRole = isMasterAdmin ? "owner" : currentUserRole;
 
       if (supabaseMode) {
         if (!wsId) {
@@ -57,16 +57,22 @@ export default function UsersPage() {
           const supabase: AnyClient = createSPAClient();
           const { data: { user } } = await supabase.auth.getUser();
           if (user && wsId) {
-            const { data: ws } = await supabase
-              .from("workspace_members")
-              .select("role")
-              .eq("workspace_id", wsId)
-              .eq("user_id", user.id)
-              .maybeSingle();
-            const memberRecord = ws as { role?: string } | null;
-            if (memberRecord?.role) {
-              userRole = memberRecord.role as WorkspaceRole;
-              setCurrentUserRole(userRole);
+            const isUserMaster = user.email?.toLowerCase() === "eslyers@gmail.com";
+            if (isUserMaster) {
+              userRole = "owner";
+              setCurrentUserRole("owner");
+            } else {
+              const { data: ws } = await supabase
+                .from("workspace_members")
+                .select("role")
+                .eq("workspace_id", wsId)
+                .eq("user_id", user.id)
+                .maybeSingle();
+              const memberRecord = ws as { role?: string } | null;
+              if (memberRecord?.role) {
+                userRole = memberRecord.role as WorkspaceRole;
+                setCurrentUserRole(userRole);
+              }
             }
           }
         }
@@ -77,8 +83,8 @@ export default function UsersPage() {
         setCurrentUserRole(userRole);
       }
 
-      // Se o usuário não for administrador nem proprietário, redireciona para o Dashboard
-      if (userRole !== "owner" && userRole !== "admin") {
+      // Se o usuário não for administrador nem proprietário nem master admin, redireciona para o Dashboard
+      if (!isMasterAdmin && userRole !== "owner" && userRole !== "admin") {
         addToast({
           variant: "warning",
           title: "Acesso restrito",
@@ -102,17 +108,17 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabaseMode, workspaceId, currentUserRole, router, addToast]);
+  }, [supabaseMode, workspaceId, currentUserRole, isMasterAdmin, router, addToast]);
 
   React.useEffect(() => {
     reload();
   }, [reload]);
 
   React.useEffect(() => {
-    if (!authLoading && !isWorkspaceAdmin && currentUserRole !== "owner" && currentUserRole !== "admin") {
+    if (!authLoading && !isMasterAdmin && !isWorkspaceAdmin && currentUserRole !== "owner" && currentUserRole !== "admin") {
       router.replace("/app");
     }
-  }, [authLoading, isWorkspaceAdmin, currentUserRole, router]);
+  }, [authLoading, isMasterAdmin, isWorkspaceAdmin, currentUserRole, router]);
 
   async function handleInvite({ email, role, sendEmail }: { email: string; role: WorkspaceRole; sendEmail: boolean }) {
     const me = getDemoCurrentUser();
@@ -319,7 +325,15 @@ export default function UsersPage() {
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Seu Papel no Workspace</p>
               <p className="text-2xl font-extrabold mt-1.5 capitalize text-emerald-500">
-                {currentUserRole === "owner" ? "Proprietário (Owner)" : currentUserRole === "admin" ? "Administrador" : currentUserRole === "member" ? "Membro Operacional" : "Visualizador"}
+                {isMasterAdmin
+                  ? "Master Admin (Controle Total)"
+                  : currentUserRole === "owner"
+                  ? "Proprietário (Owner)"
+                  : currentUserRole === "admin"
+                  ? "Administrador"
+                  : currentUserRole === "member"
+                  ? "Membro Operacional"
+                  : "Visualizador"}
               </p>
             </div>
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 font-bold">
@@ -354,7 +368,10 @@ export default function UsersPage() {
           <MembersTable
             members={members}
             invites={invites}
-            isOwner={isOwner}
+            isOwner={isOwner || isMasterAdmin}
+            isMasterAdmin={isMasterAdmin}
+            currentUserId={authUser?.id}
+            currentUserEmail={authUser?.email}
             onRemove={handleRemove}
             onRevokeInvite={handleRevokeInvite}
             onResendInvite={handleResendInvite}

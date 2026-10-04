@@ -14,11 +14,14 @@ type AppUser = {
 
 export type WorkspaceRole = "owner" | "admin" | "member" | "viewer";
 
+export const MASTER_ADMIN_EMAIL = "eslyers@gmail.com";
+
 interface GlobalContextType {
   loading: boolean;
   user: AppUser | null;
   workspaceRole: WorkspaceRole | null;
   isWorkspaceAdmin: boolean;
+  isMasterAdmin: boolean;
   signOut: () => Promise<void>;
   refreshRole: () => Promise<void>;
 }
@@ -30,7 +33,8 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole | null>(null);
 
-  const isWorkspaceAdmin = workspaceRole === "owner" || workspaceRole === "admin";
+  const isMasterAdmin = user?.email?.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
+  const isWorkspaceAdmin = isMasterAdmin || workspaceRole === "owner" || workspaceRole === "admin";
 
   const fetchRole = React.useCallback(async (uid: string) => {
     if (!isSupabaseConfigured()) {
@@ -158,6 +162,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         user,
         workspaceRole,
         isWorkspaceAdmin,
+        isMasterAdmin,
         signOut,
         refreshRole,
       }}
