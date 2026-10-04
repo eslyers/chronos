@@ -149,7 +149,10 @@ function InvitePageInner({ token }: { token: string }) {
         return;
       }
 
-      // 4. Redirecionar para o painel principal
+      // 4. Salvar workspace ativo e redirecionar para o painel principal
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("chronos:active_workspace_id", invite.workspace_id);
+      }
       router.push("/app");
       router.refresh();
     } catch (err) {

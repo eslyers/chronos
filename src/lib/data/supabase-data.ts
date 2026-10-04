@@ -446,29 +446,55 @@ export async function deleteStage(id: string): Promise<void> {
 
 export async function getCurrentWorkspaceId(): Promise<string | null> {
   const supabase = client();
-  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const { data: authData } = await supabase.auth.getUser();
   const userId = authData?.user?.id;
 
   if (userId) {
-    // 1. Verificar se o usuário pertence a algum workspace via workspace_members (membros e convites)
-    const { data: memberRows, error: memberErr } = await (supabase
-      .from("workspace_members") as any)
-      .select("workspace_id")
-      .eq("user_id", userId)
-      .limit(1);
+    // 0. Preferência salva no localStorage para este usuário (se válida)
+    if (typeof window !== "undefined") {
+      const savedWs =
+        window.localStorage.getItem(`chronos:active_workspace_id:${userId}`) ||
+        window.localStorage.getItem("chronos:active_workspace_id");
+      if (savedWs) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: check } = await (supabase.from("workspace_members") as any)
+          .select("workspace_id")
+          .eq("workspace_id", savedWs)
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (check?.workspace_id) {
+          return check.workspace_id;
+        }
+      }
+    }
 
-    const members = memberRows as Array<{ workspace_id: string }> | null;
+    // 1. Verificar se o usuário pertence a algum workspace via workspace_members (ordenado pelos mais recentes)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: memberRows, error: memberErr } = await (supabase.from("workspace_members") as any)
+      .select("workspace_id, role, joined_at")
+      .eq("user_id", userId)
+      .order("joined_at", { ascending: false });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const members = memberRows as Array<{ workspace_id: string; role: string; joined_at: string }> | null;
     if (!memberErr && members && members.length > 0 && members[0]?.workspace_id) {
-      return members[0].workspace_id;
+      const selected = members[0].workspace_id;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(`chronos:active_workspace_id:${userId}`, selected);
+        window.localStorage.setItem("chronos:active_workspace_id", selected);
+      }
+      return selected;
     }
 
     // 2. Se não estiver em workspace_members, verificar se é owner direto na tabela workspaces
-    const { data: ownedWs, error: ownerErr } = await (supabase
-      .from("workspaces") as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: ownedWs, error: ownerErr } = await (supabase.from("workspaces") as any)
       .select("id")
       .eq("owner_id", userId)
+      .order("created_at", { ascending: false })
       .limit(1);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const owned = ownedWs as Array<{ id: string }> | null;
     if (!ownerErr && owned && owned.length > 0 && owned[0]?.id) {
       return owned[0].id;
@@ -476,11 +502,12 @@ export async function getCurrentWorkspaceId(): Promise<string | null> {
   }
 
   // 3. Fallback: buscar o primeiro workspace acessível pelo usuário via RLS
-  const { data: anyWs, error: anyErr } = await (supabase
-    .from("workspaces") as any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: anyWs, error: anyErr } = await (supabase.from("workspaces") as any)
     .select("id")
     .limit(1);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const anyList = anyWs as Array<{ id: string }> | null;
   if (!anyErr && anyList && anyList.length > 0 && anyList[0]?.id) {
     return anyList[0].id;
