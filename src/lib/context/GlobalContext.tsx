@@ -6,10 +6,11 @@ import { isSupabaseConfigured } from "@/lib/supabase/mode";
 import { getSession as supabaseGetSession, signOut as supabaseSignOut } from "@/lib/auth/supabase-auth";
 import { demoGetSession, demoSignOut } from "@/lib/auth/demo-auth";
 
-type AppUser = {
+export type AppUser = {
   email: string;
   id: string;
   registered_at: Date;
+  name?: string | null;
 };
 
 export type WorkspaceRole = "owner" | "admin" | "member" | "viewer";
@@ -24,6 +25,7 @@ interface GlobalContextType {
   isMasterAdmin: boolean;
   signOut: () => Promise<void>;
   refreshRole: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const GlobalContext = createContext<GlobalContextType | undefined>(undefined);
@@ -82,6 +84,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
           email: session.user.email,
           id: session.user.id,
           registered_at: new Date(session.user.created_at),
+          name: "Esly",
         });
         fetchRole(session.user.id);
       }
@@ -96,10 +99,27 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       try {
         const { user: authUser } = await supabaseGetSession();
         if (authUser) {
+          let displayName: string | null = authUser.name ?? null;
+
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: prof } = await (supabase.from("profiles") as any)
+              .select("full_name")
+              .eq("id", authUser.id)
+              .maybeSingle();
+
+            if (prof?.full_name) {
+              displayName = prof.full_name;
+            }
+          } catch {
+            // Continua com displayName de auth
+          }
+
           setUser({
             email: authUser.email,
             id: authUser.id,
             registered_at: new Date(),
+            name: displayName,
           });
           await fetchRole(authUser.id);
         }
@@ -115,12 +135,32 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
     // Listener para mudança de auth state
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
+        let displayName =
+          (session.user.user_metadata?.full_name as string) ||
+          (session.user.user_metadata?.name as string) ||
+          null;
+
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: prof } = await (supabase.from("profiles") as any)
+            .select("full_name")
+            .eq("id", session.user.id)
+            .maybeSingle();
+
+          if (prof?.full_name) {
+            displayName = prof.full_name;
+          }
+        } catch {
+          // Ignora erro
+        }
+
         setUser({
           email: session.user.email!,
           id: session.user.id,
           registered_at: new Date(session.user.created_at),
+          name: displayName,
         });
         fetchRole(session.user.id);
       } else {
@@ -140,6 +180,25 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       await fetchRole(user.id);
     }
   }, [user?.id, fetchRole]);
+
+  const refreshUser = React.useCallback(async () => {
+    if (!user?.id) return;
+    if (!isSupabaseConfigured()) return;
+    try {
+      const supabase = createSPAClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: prof } = await (supabase.from("profiles") as any)
+        .select("full_name")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (prof?.full_name !== undefined) {
+        setUser((prev) => (prev ? { ...prev, name: prof.full_name } : null));
+      }
+    } catch (err) {
+      console.error("[GlobalContext] Error refreshing user profile:", err);
+    }
+  }, [user?.id]);
 
   async function signOut() {
     if (!isSupabaseConfigured()) {
@@ -165,6 +224,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
         isMasterAdmin,
         signOut,
         refreshRole,
+        refreshUser,
       }}
     >
       {children}

@@ -40,11 +40,15 @@ export async function getSession(): Promise<{
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return { user: null };
   const user = data.user;
+  const resolvedName =
+    (user.user_metadata?.full_name as string | undefined) ??
+    (user.user_metadata?.name as string | undefined) ??
+    undefined;
   return {
     user: {
       id: user.id,
       email: user.email ?? "",
-      name: (user.user_metadata?.name as string | undefined) ?? undefined,
+      name: resolvedName,
     },
   };
 }

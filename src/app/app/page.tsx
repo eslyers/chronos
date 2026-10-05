@@ -54,12 +54,51 @@ const PRIORITY_LABELS: Record<
   critical: { label: "Crítica", variant: "destructive", bg: "bg-red-500/10 text-red-500 border-red-500/30 font-bold animate-pulse" },
 };
 
+function getWelcomeDisplayName(
+  fullName: string | null | undefined,
+  email: string | null | undefined
+): string {
+  const cleanName = fullName?.trim();
+  const emailPrefix = email?.split("@")[0]?.toLowerCase();
+
+  // 1. Se tem nome cadastrado que não é apenas o prefixo bruto do email
+  if (cleanName && cleanName.toLowerCase() !== emailPrefix) {
+    // Se for um nome amigável (até 3 palavras ou 25 caracteres, ex: "Esly R. Silva" ou "João Paulo"), exibe completo
+    const parts = cleanName.split(/\s+/);
+    if (parts.length <= 3 && cleanName.length <= 25) {
+      return cleanName;
+    }
+    return parts[0];
+  }
+
+  // 2. Se for a conta Master Admin (eslyers@gmail.com) e o nome for vazio ou "eslyers"
+  if (email?.toLowerCase() === "eslyers@gmail.com" || cleanName?.toLowerCase() === "eslyers") {
+    return "Esly";
+  }
+
+  // 3. Se tiver algum nome não vazio
+  if (cleanName) {
+    const parts = cleanName.split(/\s+/);
+    if (parts.length <= 3 && cleanName.length <= 25) {
+      return cleanName;
+    }
+    return parts[0];
+  }
+
+  // 4. Fallback caso só tenha email: capitalizar o prefixo ou usar "Usuário"
+  if (emailPrefix) {
+    return emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1);
+  }
+
+  return "Usuário";
+}
+
 export default function DashboardPage() {
   const { user, loading: userLoading } = useGlobal();
   const { projects, tasks, getTasksByProject, loading: dataLoading, loadAllProjectsDetails } = useData();
   const [upcomingTasks, setUpcomingTasks] = useState<UpcomingTask[]>([]);
   const [recentNotifications, setRecentNotifications] = useState<RecentNotification[]>([]);
-  const [assigneeName, setAssigneeName] = useState<string>("Esly");
+  const [welcomeName, setWelcomeName] = useState<string>("Esly");
 
   useEffect(() => {
     loadAllProjectsDetails();
@@ -67,12 +106,36 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!user) return;
-    setAssigneeName(user.email?.split("@")[0] ?? "Esly");
 
-    // Carregar notificações recentes do Supabase
+    // Inicializa imediatamente com base no contexto global
+    setWelcomeName(getWelcomeDisplayName(user.name, user.email));
+
+    // Carregar perfil atualizado e notificações recentes do Supabase
     (async () => {
       try {
         const supabase = createSPAClient();
+
+        // 1. Buscar perfil do usuário para garantir o nome mais atualizado
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: profile } = await (supabase.from("profiles") as any)
+          .select("full_name")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (profile?.full_name) {
+          setWelcomeName(getWelcomeDisplayName(profile.full_name, user.email));
+        } else {
+          // Se perfil não tiver full_name, checar user_metadata do auth
+          const { data: authData } = await supabase.auth.getUser();
+          const metaName =
+            (authData?.user?.user_metadata?.full_name as string) ||
+            (authData?.user?.user_metadata?.name as string);
+          if (metaName) {
+            setWelcomeName(getWelcomeDisplayName(metaName, user.email));
+          }
+        }
+
+        // 2. Notificações recentes
         const { data: notifs } = await supabase
           .from("notifications")
           .select("id, type, status, channels, payload, created_at")
@@ -194,7 +257,7 @@ export default function DashboardPage() {
               </span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2">
-              Visão Geral, {assigneeName} 👋
+              Visão Geral, {welcomeName} 👋
             </h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
               Acompanhe a saúde operacional do seu cronograma, monitore prazos e gerencie entregas em tempo real.

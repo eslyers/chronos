@@ -66,7 +66,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     router.push("/app/settings");
   };
 
-  const getInitials = (email: string) => {
+  const getInitials = (email: string, name?: string | null) => {
+    const cleanName = name?.trim();
+    if (cleanName) {
+      const parts = cleanName.split(/\s+/);
+      return parts.length > 1
+        ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+        : parts[0].slice(0, 2).toUpperCase();
+    }
     const parts = email.split("@")[0].split(/[._-]/);
     return parts.length > 1
       ? (parts[0][0] + parts[1][0]).toUpperCase()
@@ -262,11 +269,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 onClick={() => setUserDropdownOpen(!isUserDropdownOpen)}
                 className="flex items-center gap-2 text-sm rounded-full hover:bg-muted px-2 py-1 transition-colors"
               >
-                <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center text-xs font-medium">
-                  {user ? getInitials(user.email) : "??"}
+                <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center text-xs font-semibold text-foreground">
+                  {user ? getInitials(user.email, user.name) : "??"}
                 </div>
-                <span className="hidden sm:inline text-foreground/80">
-                  {user?.email || "Conectando..."}
+                <span className="hidden sm:inline text-foreground/80 font-medium">
+                  {user?.name || user?.email || "Conectando..."}
                 </span>
               </button>
 
@@ -274,7 +281,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <div className="absolute right-0 mt-2 w-64 bg-popover rounded-md shadow-lg border border-border z-40">
                   <div className="p-3 border-b border-border">
                     <p className="text-xs text-muted-foreground">Conectado como</p>
-                    <p className="text-sm font-medium truncate">{user?.email}</p>
+                    <p className="text-sm font-semibold text-foreground truncate">
+                      {user?.name || user?.email}
+                    </p>
+                    {user?.name && (
+                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                    )}
                   </div>
                   <div className="p-1">
                     <button
