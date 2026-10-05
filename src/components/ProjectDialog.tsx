@@ -230,7 +230,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
       style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
     >
       <div

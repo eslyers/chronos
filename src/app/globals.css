@@ -82,6 +82,11 @@ input[type="number"] {
   appearance: textfield !important;
 }
 
+/* Dropdowns e popovers do Radix UI flutuando com z-index máximo acima de modais/dialogs */
+[data-radix-popper-content-wrapper] {
+  z-index: 100000 !important;
+}
+
 @layer base {
   * {
     @apply border-border;
