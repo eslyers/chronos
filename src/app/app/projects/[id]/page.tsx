@@ -426,7 +426,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                               {priorityLabel(task.priority)}
                             </Badge>
                             {isTaskDone && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0.2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-bold">
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-bold">
                                 Concluída
                               </Badge>
                             )}
