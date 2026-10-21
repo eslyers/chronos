@@ -91,7 +91,7 @@ export default function SettingsPage() {
             throw new Error(
               `Não foi possível criar seu perfil (RLS bloqueou INSERT). ` +
                 `Aplique a migration 20260716000000_fix_profile_insert_policies.sql ` +
-                `no Supabase Dashboard (ver SUPABASE-FIX-SETTINGS.md). Detalhes: ${createErr.message}`
+                `no Supabase Dashboard (ver docs/notes/SUPABASE-FIX-SETTINGS.md). Detalhes: ${createErr.message}`
             );
           }
           if (created) p = created as Profile;
