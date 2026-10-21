@@ -3,18 +3,9 @@
 import React, { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  Cell,
-  ReferenceLine,
-} from "recharts";
-import {
+  BarChart3,
   Gauge,
   Users,
   AlertTriangle,
@@ -32,10 +23,20 @@ import { useData, type Task } from "@/lib/context/DataContext";
 import { TaskDialog } from "@/components/TaskDialog";
 import {
   calculateWorkload,
+  getTaskEstimatedHours,
   type WorkloadPeriod,
   type MemberWorkload,
   DEFAULT_WEEKLY_CAPACITY_HOURS,
 } from "@/lib/workload";
+import { isTaskDone } from "@/lib/task-status";
+import { useWorkspaceMemberNames } from "@/hooks/useWorkspaceMemberNames";
+import type { WorkloadChartDatum } from "@/components/dashboard/WorkloadBarChart";
+
+// recharts é pesado: o gráfico só é baixado no cliente, quando há dados
+const WorkloadBarChart = dynamic(() => import("@/components/dashboard/WorkloadBarChart"), {
+  ssr: false,
+  loading: () => <div className="h-full w-full rounded-xl bg-muted/30 motion-safe:animate-pulse" />,
+});
 
 function WorkloadContent() {
   const searchParams = useSearchParams();
@@ -71,13 +72,17 @@ function WorkloadContent() {
     return tasks.filter((t) => t.project_id === selectedProjectId);
   }, [tasks, selectedProjectId]);
 
+  // Membros têm só assignee_id nas tarefas: os nomes vêm dos perfis do workspace
+  const memberNames = useWorkspaceMemberNames();
+
   // Calcula estatísticas de Workload
   const workload = useMemo(() => {
     return calculateWorkload(scopedTasks, {
       period,
       weeklyCapacityHours: weeklyCapacity,
+      memberNames,
     });
-  }, [scopedTasks, period, weeklyCapacity]);
+  }, [scopedTasks, period, weeklyCapacity, memberNames]);
 
   // Filtra colaboradores pela barra de busca
   const filteredMembers = useMemo(() => {
@@ -89,7 +94,7 @@ function WorkloadContent() {
   }, [workload.members, searchQuery]);
 
   // Dados formatados para o gráfico de barras
-  const chartData = useMemo(() => {
+  const chartData = useMemo<WorkloadChartDatum[]>(() => {
     return workload.members.map((m) => ({
       name: m.memberName.length > 14 ? `${m.memberName.slice(0, 12)}...` : m.memberName,
       fullName: m.memberName,
@@ -99,18 +104,6 @@ function WorkloadContent() {
       status: m.status,
     }));
   }, [workload.members]);
-
-  const getStatusColor = (status: "overload" | "optimal" | "under") => {
-    switch (status) {
-      case "overload":
-        return "#ef4444"; // red-500
-      case "optimal":
-        return "#10b981"; // emerald-500
-      case "under":
-      default:
-        return "#3b82f6"; // blue-500
-    }
-  };
 
   if (loading) {
     return (
@@ -280,7 +273,7 @@ function WorkloadContent() {
             <span className="text-xs font-bold uppercase tracking-wider">Sobrecarregados</span>
             <div className={`p-2 rounded-xl ${
               workload.overloadedMembersCount > 0
-                ? "bg-red-500/15 text-red-500 animate-pulse"
+                ? "bg-red-500/15 text-red-500 motion-safe:animate-pulse"
                 : "bg-muted text-muted-foreground"
             }`}>
               <AlertTriangle className="h-4 w-4" />
@@ -325,7 +318,7 @@ function WorkloadContent() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
             <div>
               <h3 className="font-bold text-base tracking-tight text-foreground flex items-center gap-2">
-                <BarChart className="h-4 w-4 text-blue-500" />
+                <BarChart3 className="h-4 w-4 text-blue-500" />
                 Comparativo de Carga Horária vs. Capacidade Padrão ({weeklyCapacity}h)
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -350,65 +343,7 @@ function WorkloadContent() {
           </div>
 
           <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 11, fill: "currentColor" }}
-                  interval={0}
-                  angle={-15}
-                  textAnchor="end"
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: "currentColor" }}
-                  unit="h"
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      const data = payload[0].payload;
-                      return (
-                        <div className="bg-card border border-border p-3 rounded-xl shadow-xl text-xs space-y-1">
-                          <p className="font-bold text-foreground">{data.fullName}</p>
-                          <p className="text-muted-foreground">
-                            Horas Pendentes: <strong className="text-foreground">{data.horas}h</strong>
-                          </p>
-                          <p className="text-muted-foreground">
-                            Utilização: <strong style={{ color: getStatusColor(data.status) }}>{data.utilizacao}%</strong>
-                          </p>
-                          <p className="text-muted-foreground">
-                            Capacidade: <strong>{data.capacidade}h</strong>
-                          </p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <ReferenceLine
-                  y={weeklyCapacity}
-                  stroke="#f59e0b"
-                  strokeDasharray="4 4"
-                  strokeWidth={2}
-                  label={{
-                    value: `Capacidade (${weeklyCapacity}h)`,
-                    position: "top",
-                    fill: "#f59e0b",
-                    fontSize: 11,
-                    fontWeight: 600,
-                  }}
-                />
-                <Bar dataKey="horas" radius={[6, 6, 0, 0]}>
-                  {chartData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={getStatusColor(entry.status)}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <WorkloadBarChart data={chartData} weeklyCapacity={weeklyCapacity} />
           </div>
         </Card>
       )}
@@ -532,7 +467,7 @@ function WorkloadContent() {
                       <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
                         {member.tasks.map((t) => {
                           const projectOfTask = projects.find((p) => p.id === t.project_id);
-                          const isTaskDone = t.status === "done" || t.progress === 100;
+                          const done = isTaskDone(t);
 
                           return (
                             <button
@@ -545,7 +480,7 @@ function WorkloadContent() {
                               className="w-full text-left p-2 rounded-lg bg-muted/40 hover:bg-muted border border-border/40 hover:border-blue-500/40 transition-all flex items-center justify-between gap-2 group/task"
                             >
                               <div className="min-w-0 flex-1">
-                                <div className={`text-xs font-semibold truncate ${isTaskDone ? "line-through text-muted-foreground" : "text-foreground group-hover/task:text-blue-500"}`}>
+                                <div className={`text-xs font-semibold truncate ${done ? "line-through text-muted-foreground" : "text-foreground group-hover/task:text-blue-500"}`}>
                                   {t.title}
                                 </div>
                                 {projectOfTask && (
@@ -557,7 +492,7 @@ function WorkloadContent() {
 
                               <div className="shrink-0 flex items-center gap-1.5 text-right font-mono text-[11px]">
                                 <span className="px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-500 font-bold">
-                                  {t.estimated_hours || 8}h
+                                  {getTaskEstimatedHours(t)}h
                                 </span>
                               </div>
                             </button>

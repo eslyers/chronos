@@ -1,5 +1,6 @@
 import type { Task } from "@/lib/context/DataContext";
-import { todayDateOnly } from "@/lib/date-only";
+import { todayDateOnly, toDateOnly, daysBetweenDateOnly } from "@/lib/date-only";
+import { isTaskDone, isTaskOverdue } from "@/lib/task-status";
 
 export type WorkloadStatus = "overload" | "optimal" | "under";
 
@@ -42,14 +43,28 @@ export const DEFAULT_WEEKLY_CAPACITY_HOURS = 40;
 export const DEFAULT_DAILY_CAPACITY_HOURS = 8;
 export const DEFAULT_TASK_ESTIMATED_HOURS = 8; // fallback when estimated_hours is not specified
 
+/** Nomes dos membros do workspace por user id (profiles.full_name ou e-mail). */
+export type MemberNames = Record<string, string>;
+
+/** Rótulo de último recurso para um membro cujo perfil não foi carregado. */
+export const UNKNOWN_MEMBER_LABEL = "Membro da Equipe";
+
 /**
- * Normaliza o nome ou chave de identificação do colaborador
+ * Normaliza o nome ou chave de identificação do colaborador.
+ * Membros do workspace têm assignee_id com assignee_name NULL (constraint do
+ * banco), então o nome vem de `memberNames`; convites pendentes têm só o nome.
  */
-export function getTaskAssigneeKey(task: Task): { key: string; name: string; id: string | null } {
+export function getTaskAssigneeKey(
+  task: Task,
+  memberNames?: MemberNames
+): { key: string; name: string; id: string | null } {
   if (task.assignee_id) {
     return {
       key: task.assignee_id,
-      name: task.assignee_name || "Membro da Equipe",
+      name:
+        memberNames?.[task.assignee_id]?.trim() ||
+        task.assignee_name?.trim() ||
+        UNKNOWN_MEMBER_LABEL,
       id: task.assignee_id,
     };
   }
@@ -75,16 +90,12 @@ export function getTaskEstimatedHours(task: Task): number {
     return task.estimated_hours;
   }
   // Se não foi estipulado manualmente, podemos calcular com base na duração ou usar 8h padrão
-  if (task.start_date && task.due_date) {
-    const cleanStart = task.start_date.split("T")[0].trim();
-    const cleanDue = task.due_date.split("T")[0].trim();
-    const start = new Date(cleanStart + "T00:00:00").getTime();
-    const end = new Date(cleanDue + "T00:00:00").getTime();
-    if (!isNaN(start) && !isNaN(end)) {
-      const diffDays = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
-      // Limite máximo sensato de fallback para não distorcer o gráfico
-      return Math.min(diffDays * DEFAULT_DAILY_CAPACITY_HOURS, 80);
-    }
+  const start = toDateOnly(task.start_date);
+  const due = toDateOnly(task.due_date);
+  if (start && due) {
+    const diffDays = Math.max(1, daysBetweenDateOnly(start, due) + 1);
+    // Limite máximo sensato de fallback para não distorcer o gráfico
+    return Math.min(diffDays * DEFAULT_DAILY_CAPACITY_HOURS, 80);
   }
   return DEFAULT_TASK_ESTIMATED_HOURS;
 }
@@ -145,6 +156,7 @@ export function calculateWorkload(
     period?: WorkloadPeriod;
     weeklyCapacityHours?: number;
     includeCompleted?: boolean;
+    memberNames?: MemberNames;
   }
 ): WorkloadSummary {
   const period = options?.period ?? "all";
@@ -159,10 +171,10 @@ export function calculateWorkload(
   let unassignedHours = 0;
 
   for (const task of filteredTasks) {
-    const { key, name, id } = getTaskAssigneeKey(task);
+    const { key, name, id } = getTaskAssigneeKey(task, options?.memberNames);
     const estHours = getTaskEstimatedHours(task);
-    const isCompleted = task.status === "done" || task.progress === 100;
-    const isOverdue = !isCompleted && task.due_date ? task.due_date < todayStr : false;
+    const isCompleted = isTaskDone(task);
+    const isOverdue = isTaskOverdue(task, todayStr);
 
     if (key === "unassigned") {
       unassignedTasksCount++;

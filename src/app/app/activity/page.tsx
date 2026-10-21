@@ -5,6 +5,7 @@ import Link from "next/link";
 import { History, ArrowRight, User, Filter, ShieldCheck, Clock } from "lucide-react";
 import { useGlobal } from "@/lib/context/GlobalContext";
 import { createSPAClient } from "@/lib/supabase/client";
+import { timeAgo } from "@/lib/time-ago";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,98 +54,106 @@ export default function ActivityPage() {
   const [projectFilter, setProjectFilter] = React.useState<string>("all");
   const [projects, setProjects] = React.useState<{ id: string; name: string }[]>([]);
 
+  // Id da requisição mais recente: respostas de filtros anteriores são descartadas
+  const requestIdRef = React.useRef(0);
+
   const fetchActivity = React.useCallback(async () => {
     if (!user) return;
+    const requestId = ++requestIdRef.current;
+    const isStale = () => requestId !== requestIdRef.current;
     setLoading(true);
-    const supabase = createSPAClient();
 
-    const { data: projData } = await supabase
-      .from("projects")
-      .select("id, name")
-      .order("name");
-    setProjects(projData || []);
+    try {
+      const supabase = createSPAClient();
 
-    let query = supabase
-      .from("stage_transitions")
-      .select(
+      const { data: projData } = await supabase
+        .from("projects")
+        .select("id, name")
+        .order("name");
+      if (isStale()) return;
+      setProjects(projData || []);
+
+      let query = supabase
+        .from("stage_transitions")
+        .select(
+          `
+          id,
+          task_id,
+          moved_by,
+          moved_at,
+          note,
+          tasks!inner(id, title, project_id, projects!inner(id, name)),
+          from_stage:stages!stage_transitions_from_stage_id_fkey(name),
+          to_stage:stages!stage_transitions_to_stage_id_fkey(name)
         `
-        id,
-        task_id,
-        moved_by,
-        moved_at,
-        note,
-        tasks!inner(id, title, project_id, projects!inner(id, name)),
-        from_stage:stages!stage_transitions_from_stage_id_fkey(name),
-        to_stage:stages!stage_transitions_to_stage_id_fkey(name)
-      `
-      )
-      .order("moved_at", { ascending: false })
-      .limit(200);
+        )
+        .order("moved_at", { ascending: false })
+        .limit(200);
 
-    if (projectFilter !== "all") {
-      query = query.eq("tasks.project_id", projectFilter);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error("Activity fetch error:", error);
-      setActivities([]);
-    } else {
-      const rawData = (data || []) as RawTransition[];
-
-      const movedByIds = Array.from(
-        new Set(rawData.map((d) => d.moved_by).filter((id): id is string => Boolean(id)))
-      );
-      let profileMap: Record<string, { email: string; full_name: string | null }> = {};
-      if (movedByIds.length) {
-        const { data: profData } = await supabase
-          .from("profiles")
-          .select("id, email, full_name")
-          .in("id", movedByIds);
-        const profs = (profData || []) as ProfileRow[];
-        profileMap = Object.fromEntries(
-          profs.map((p) => [
-            p.id,
-            { email: p.email, full_name: p.full_name },
-          ])
-        );
+      if (projectFilter !== "all") {
+        query = query.eq("tasks.project_id", projectFilter);
       }
 
-      const enriched: Activity[] = rawData.map((d) => ({
-        id: d.id,
-        task_id: d.task_id,
-        task_title: d.tasks?.title ?? "(tarefa removida)",
-        project_id: d.tasks?.project_id ?? "",
-        project_name: d.tasks?.projects?.name ?? "?",
-        from_stage_name: d.from_stage?.name ?? null,
-        to_stage_name: d.to_stage?.name ?? "?",
-        moved_by_email: d.moved_by ? profileMap[d.moved_by]?.email ?? null : null,
-        moved_by_name: d.moved_by ? profileMap[d.moved_by]?.full_name ?? null : null,
-        moved_at: d.moved_at,
-        note: d.note,
-      }));
-      setActivities(enriched);
+      const { data, error } = await query;
+      if (isStale()) return;
+
+      if (error) {
+        console.error("Activity fetch error:", error);
+        setActivities([]);
+      } else {
+        const rawData = (data || []) as RawTransition[];
+
+        const movedByIds = Array.from(
+          new Set(rawData.map((d) => d.moved_by).filter((id): id is string => Boolean(id)))
+        );
+        let profileMap: Record<string, { email: string; full_name: string | null }> = {};
+        if (movedByIds.length) {
+          const { data: profData } = await supabase
+            .from("profiles")
+            .select("id, email, full_name")
+            .in("id", movedByIds);
+          if (isStale()) return;
+          const profs = (profData || []) as ProfileRow[];
+          profileMap = Object.fromEntries(
+            profs.map((p) => [
+              p.id,
+              { email: p.email, full_name: p.full_name },
+            ])
+          );
+        }
+
+        const enriched: Activity[] = rawData.map((d) => ({
+          id: d.id,
+          task_id: d.task_id,
+          task_title: d.tasks?.title ?? "(tarefa removida)",
+          project_id: d.tasks?.project_id ?? "",
+          project_name: d.tasks?.projects?.name ?? "?",
+          from_stage_name: d.from_stage?.name ?? null,
+          to_stage_name: d.to_stage?.name ?? "?",
+          moved_by_email: d.moved_by ? profileMap[d.moved_by]?.email ?? null : null,
+          moved_by_name: d.moved_by ? profileMap[d.moved_by]?.full_name ?? null : null,
+          moved_at: d.moved_at,
+          note: d.note,
+        }));
+        setActivities(enriched);
+      }
+    } catch (err) {
+      // Falha de rede/cliente não pode deixar o carregamento preso
+      console.error("Activity fetch error:", err);
+      if (!isStale()) setActivities([]);
+    } finally {
+      if (!isStale()) setLoading(false);
     }
-    setLoading(false);
   }, [user, projectFilter]);
 
   React.useEffect(() => {
+    const requestIds = requestIdRef;
     fetchActivity();
+    return () => {
+      // Invalida a requisição em curso ao trocar o filtro ou desmontar
+      requestIds.current++;
+    };
   }, [fetchActivity]);
-
-  function timeAgo(iso: string): string {
-    const ms = Date.now() - new Date(iso).getTime();
-    const sec = Math.floor(ms / 1000);
-    if (sec < 60) return `agora`;
-    const min = Math.floor(sec / 60);
-    if (min < 60) return `há ${min} min`;
-    const h = Math.floor(min / 60);
-    if (h < 24) return `há ${h}h`;
-    const d = Math.floor(h / 24);
-    if (d < 30) return `há ${d}d`;
-    return new Date(iso).toLocaleDateString("pt-BR");
-  }
 
   return (
     <div className="space-y-8 animate-fadeIn pb-12">

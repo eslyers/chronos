@@ -1,8 +1,9 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -29,35 +30,53 @@ import { ThemeToggle } from "@/components/theme-toggle";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isUserDropdownOpen, setUserDropdownOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { user, isWorkspaceAdmin, signOut } = useGlobal();
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Carregar preferência salva no localStorage
   useEffect(() => {
     setMounted(true);
-    const saved = localStorage.getItem("sidebar-collapsed");
-    if (saved !== null) setIsCollapsed(saved === "true");
+    try {
+      const saved = localStorage.getItem("sidebar-collapsed");
+      if (saved !== null) setIsCollapsed(saved === "true");
+    } catch {
+      // localStorage indisponível (modo privado/bloqueado)
+    }
   }, []);
 
-  // Fechar dropdown ao clicar fora
+  // Breakpoint lg: no desktop a sidebar é fixa; abaixo disso é off-canvas
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setUserDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
   }, []);
+
+  // Esc fecha a sidebar mobile
+  useEffect(() => {
+    if (!isMobileSidebarOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileSidebarOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isMobileSidebarOpen]);
+
+  // Off-canvas fechado fica fora da ordem de tabulação e da árvore de acessibilidade
+  const isSidebarHidden = mounted && !isDesktop && !isMobileSidebarOpen;
 
   const toggleCollapse = () => {
     setIsCollapsed((prev) => {
       const next = !prev;
-      localStorage.setItem("sidebar-collapsed", String(next));
+      try {
+        localStorage.setItem("sidebar-collapsed", String(next));
+      } catch {
+        // localStorage indisponível
+      }
       return next;
     });
   };
@@ -113,13 +132,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar */}
       <aside
+        inert={isSidebarHidden}
+        aria-hidden={isSidebarHidden || undefined}
         className={`
           fixed inset-y-0 left-0 bg-card border-r border-border shadow-sm z-40
           transform transition-all duration-300 ease-in-out
           ${isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0
           ${mounted ? sidebarWidth : "w-64"}
-          overflow-hidden
+          overflow-hidden flex flex-col
         `}
       >
         {/* Logo / Header */}
@@ -149,8 +170,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Navigation */}
-        <nav className="mt-3 px-2 space-y-0.5 flex-1">
+        {/* Navigation — rola em telas baixas em vez de passar por baixo do rodapé */}
+        <nav aria-label="Navegação principal" className="py-3 px-2 space-y-0.5 flex-1 min-h-0 overflow-y-auto">
           {navigation.map((item) => {
             // Exact match for /app (dashboard) — avoids matching all /app/* sub-routes.
             // For all other items, also match sub-routes (e.g. /app/projects/[id]).
@@ -165,6 +186,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 href={item.href}
                 onClick={() => setMobileSidebarOpen(false)}
                 title={isCollapsed ? item.name : undefined}
+                aria-current={isActive ? "page" : undefined}
                 className={`
                   group relative flex items-center rounded-md transition-all duration-150
                   ${isCollapsed ? "justify-center px-0 py-2.5" : "px-3 py-2"}
@@ -206,7 +228,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         {/* Footer */}
-        <div className="absolute bottom-0 left-0 right-0 border-t border-border bg-card">
+        <div className="shrink-0 border-t border-border bg-card">
           {/* Collapse toggle button — only on desktop */}
           <button
             onClick={toggleCollapse}
@@ -264,22 +286,30 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
 
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setUserDropdownOpen(!isUserDropdownOpen)}
-                className="flex items-center gap-2 text-sm rounded-full hover:bg-muted px-2 py-1 transition-colors"
-              >
-                <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center text-xs font-semibold text-foreground">
-                  {user ? getInitials(user.email, user.name) : "??"}
-                </div>
-                <span className="hidden sm:inline text-foreground/80 font-medium">
-                  {user?.name || user?.email || "Conectando..."}
-                </span>
-              </button>
+            {/* Menu do usuário (Radix: Esc, setas, foco e aria-expanded) */}
+            <DropdownMenu.Root modal={false}>
+              <DropdownMenu.Trigger asChild>
+                <button
+                  type="button"
+                  aria-label="Menu do usuário"
+                  className="flex items-center gap-2 text-sm rounded-full hover:bg-muted px-2 py-1 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted"
+                >
+                  <div className="w-8 h-8 rounded-full bg-foreground/10 flex items-center justify-center text-xs font-semibold text-foreground">
+                    {user ? getInitials(user.email, user.name) : "??"}
+                  </div>
+                  <span className="hidden sm:inline text-foreground/80 font-medium">
+                    {user?.name || user?.email || "Conectando..."}
+                  </span>
+                </button>
+              </DropdownMenu.Trigger>
 
-              {isUserDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-popover rounded-md shadow-lg border border-border z-40">
-                  <div className="p-3 border-b border-border">
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  align="end"
+                  sideOffset={8}
+                  className="w-64 bg-popover text-popover-foreground rounded-md shadow-lg border border-border z-40 focus:outline-none"
+                >
+                  <DropdownMenu.Label className="p-3 border-b border-border font-normal">
                     <p className="text-xs text-muted-foreground">Conectado como</p>
                     <p className="text-sm font-semibold text-foreground truncate">
                       {user?.name || user?.email}
@@ -287,32 +317,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     {user?.name && (
                       <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                     )}
-                  </div>
-                  <div className="p-1">
-                    <button
-                      onClick={() => {
-                        setUserDropdownOpen(false);
-                        handleSettings();
-                      }}
-                      className="w-full flex items-center px-3 py-2 text-sm rounded-sm hover:bg-muted"
+                  </DropdownMenu.Label>
+                  <DropdownMenu.Group className="p-1">
+                    <DropdownMenu.Item
+                      onSelect={handleSettings}
+                      className="w-full flex items-center px-3 py-2 text-sm rounded-sm cursor-pointer outline-none hover:bg-muted data-[highlighted]:bg-muted"
                     >
                       <KeyRound className="mr-3 h-4 w-4 text-muted-foreground" />
                       Configurações
-                    </button>
-                    <button
-                      onClick={() => {
-                        setUserDropdownOpen(false);
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item
+                      onSelect={() => {
                         signOut();
                       }}
-                      className="w-full flex items-center px-3 py-2 text-sm text-destructive rounded-sm hover:bg-destructive/10"
+                      className="w-full flex items-center px-3 py-2 text-sm text-destructive rounded-sm cursor-pointer outline-none hover:bg-destructive/10 data-[highlighted]:bg-destructive/10"
                     >
                       <LogOut className="mr-3 h-4 w-4" />
                       Sair
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Group>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
           </div>
         </header>
 

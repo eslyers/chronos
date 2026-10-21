@@ -1,21 +1,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  Legend,
-} from "recharts";
+import dynamic from "next/dynamic";
 import {
   Dialog,
   DialogContent,
@@ -23,42 +9,47 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BarChart3,
   CheckCircle2,
   Clock,
   AlertTriangle,
-  Users,
-  TrendingUp,
-  Layers,
   Hourglass,
 } from "lucide-react";
 import { useData, type Stage } from "@/lib/context/DataContext";
 import { formatHoursBadge } from "@/lib/duration";
+import { formatDateOnly, parseDateOnly, todayDateOnly, daysBetweenDateOnly } from "@/lib/date-only";
+import { isTaskDone, isTaskOverdue } from "@/lib/task-status";
+import { PRIORITY_HEX, PRIORITY_LABEL, PRIORITY_ORDER, type Priority } from "@/lib/priority";
+import { getTaskAssigneeKey } from "@/lib/workload";
+import { useWorkspaceMemberNames } from "@/hooks/useWorkspaceMemberNames";
+import type {
+  AssigneePoint,
+  BurndownPoint,
+  PriorityPoint,
+  StagePoint,
+} from "@/components/dashboard/ProjectAnalyticsCharts";
+
+// recharts só é baixado no cliente quando o diálogo abre (o conteúdo do
+// Radix Dialog não é montado enquanto fechado)
+const ProjectAnalyticsCharts = dynamic(
+  () => import("@/components/dashboard/ProjectAnalyticsCharts"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-80 w-full rounded-xl bg-muted/30 motion-safe:animate-pulse" aria-hidden="true" />
+    ),
+  }
+);
 
 interface ProjectAnalyticsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
 }
-
-const PRIORITY_COLORS: Record<string, string> = {
-  critical: "#ef4444",
-  high: "#6366f1",
-  medium: "#3b82f6",
-  low: "#94a3b8",
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  critical: "Crítica",
-  high: "Alta",
-  medium: "Média",
-  low: "Baixa",
-};
 
 export function ProjectAnalyticsDialog({
   open,
@@ -70,6 +61,7 @@ export function ProjectAnalyticsDialog({
   const project = useMemo(() => getProject(projectId), [getProject, projectId]);
   const stages = useMemo(() => getStagesByProject(projectId), [getStagesByProject, projectId]);
   const tasks = useMemo(() => getTasksByProject(projectId), [getTasksByProject, projectId]);
+  const memberNames = useWorkspaceMemberNames(open);
 
   // ─── CÁLCULOS E MÉTRICAS KPI ───
   const metrics = useMemo<{
@@ -83,14 +75,11 @@ export function ProjectAnalyticsDialog({
     bottleneckStage: { stage: Stage; count: number; isWipExceeded: boolean } | null;
   }>(() => {
     const total = tasks.length;
-    const completed = tasks.filter((t) => t.status === "done" || t.progress === 100).length;
+    const completed = tasks.filter((t) => isTaskDone(t)).length;
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-    const now = new Date();
-    const overdue = tasks.filter((t) => {
-      if (t.status === "done" || t.progress === 100 || !t.due_date) return false;
-      return new Date(t.due_date) < now;
-    }).length;
+    const today = todayDateOnly();
+    const overdue = tasks.filter((t) => isTaskOverdue(t, today)).length;
 
     const onTime = total - overdue;
 
@@ -128,28 +117,35 @@ export function ProjectAnalyticsDialog({
   }, [tasks, stages]);
 
   // ─── DADOS DO GRÁFICO 1: BURNDOWN & EVOLUÇÃO TEMPORAL ───
-  const burndownData = useMemo(() => {
-    if (!project || tasks.length === 0) return [];
+  const burndownData = useMemo<BurndownPoint[]>(() => {
+    if (!open || !project || tasks.length === 0) return [];
 
-    const startDate = project.start_date ? new Date(project.start_date) : new Date();
-    const targetDate = project.target_date ? new Date(project.target_date) : new Date(startDate.getTime() + 30 * 86400000);
+    // start/target são DATE: meia-noite local, nunca new Date("YYYY-MM-DD") (UTC)
+    const startDate = parseDateOnly(project.start_date) ?? parseDateOnly(todayDateOnly())!;
+    const startStr = formatDateOnly(startDate);
+    const targetStr = project.target_date
+      ? formatDateOnly(parseDateOnly(project.target_date) ?? startDate)
+      : formatDateOnly(new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + 30));
 
-    const totalDays = Math.max(1, Math.ceil((targetDate.getTime() - startDate.getTime()) / (1000 * 3600 * 24)));
+    const totalDays = Math.max(1, daysBetweenDateOnly(startStr, targetStr));
     const totalTasks = tasks.length;
 
     const stepDays = Math.max(1, Math.floor(totalDays / 6));
-    const points = [];
+    const points: BurndownPoint[] = [];
 
     for (let day = 0; day <= totalDays; day += stepDays) {
-      const currentDate = new Date(startDate.getTime() + day * (1000 * 3600 * 24));
+      const currentDate = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() + day);
+      const currentStr = formatDateOnly(currentDate);
       const dateStr = currentDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
 
       const idealRemaining = Math.max(0, Math.round(totalTasks - (day / totalDays) * totalTasks));
 
+      // Concluída até o fim do dia (local) em que foi atualizada
       const tasksDoneByDate = tasks.filter((t) => {
-        if (t.status !== "done" && t.progress !== 100) return false;
-        const updatedDate = new Date(t.updated_at || t.created_at);
-        return updatedDate <= currentDate;
+        if (!isTaskDone(t)) return false;
+        const updated = new Date(t.updated_at || t.created_at);
+        if (Number.isNaN(updated.getTime())) return false;
+        return formatDateOnly(updated) <= currentStr;
       }).length;
 
       const actualRemaining = Math.max(0, totalTasks - tasksDoneByDate);
@@ -163,57 +159,55 @@ export function ProjectAnalyticsDialog({
     }
 
     return points;
-  }, [project, tasks]);
+  }, [open, project, tasks]);
 
   // ─── DADOS DO GRÁFICO 2: CARGA DE TRABALHO POR RESPONSÁVEL ───
-  const assigneeData = useMemo(() => {
-    const map: Record<
-      string,
-      { name: string; Concluídas: number; "Em Andamento": number; Pendentes: number; Atrasadas: number }
-    > = {};
+  // Agrupa por assignee_id (membros têm assignee_name NULL) com nomes dos perfis
+  const assigneeData = useMemo<AssigneePoint[]>(() => {
+    if (!open) return [];
+    const map: Record<string, AssigneePoint> = {};
+    const today = todayDateOnly();
 
     tasks.forEach((t) => {
-      const name = t.assignee_name || "Não atribuído";
-      if (!map[name]) {
-        map[name] = { name, Concluídas: 0, "Em Andamento": 0, Pendentes: 0, Atrasadas: 0 };
+      const { key, name } = getTaskAssigneeKey(t, memberNames);
+      if (!map[key]) {
+        map[key] = { name, Concluídas: 0, "Em Andamento": 0, Pendentes: 0, Atrasadas: 0 };
       }
 
-      const isOverdue = t.due_date && new Date(t.due_date) < new Date() && t.status !== "done" && t.progress !== 100;
-
-      if (t.status === "done" || t.progress === 100) {
-        map[name]["Concluídas"]++;
-      } else if (isOverdue) {
-        map[name]["Atrasadas"]++;
+      if (isTaskDone(t)) {
+        map[key]["Concluídas"]++;
+      } else if (isTaskOverdue(t, today)) {
+        map[key]["Atrasadas"]++;
       } else if (t.status === "in_progress" || t.progress > 0) {
-        map[name]["Em Andamento"]++;
+        map[key]["Em Andamento"]++;
       } else {
-        map[name]["Pendentes"]++;
+        map[key]["Pendentes"]++;
       }
     });
 
     return Object.values(map);
-  }, [tasks]);
+  }, [open, tasks, memberNames]);
 
   // ─── DADOS DO GRÁFICO 3: DISTRIBUIÇÃO POR PRIORIDADE ───
-  const priorityData = useMemo(() => {
-    const counts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
+  const priorityData = useMemo<PriorityPoint[]>(() => {
+    if (!open) return [];
+    const counts: Record<Priority, number> = { critical: 0, high: 0, medium: 0, low: 0 };
 
     tasks.forEach((t) => {
-      const p = t.priority || "medium";
-      counts[p] = (counts[p] || 0) + 1;
+      const p = (t.priority in counts ? t.priority : "medium") as Priority;
+      counts[p]++;
     });
 
-    return Object.entries(counts)
-      .filter(([, count]) => count > 0)
-      .map(([key, count]) => ({
-        name: PRIORITY_LABELS[key] || key,
-        val: count,
-        color: PRIORITY_COLORS[key] || "#3b82f6",
-      }));
-  }, [tasks]);
+    return PRIORITY_ORDER.filter((key) => counts[key] > 0).map((key) => ({
+      name: PRIORITY_LABEL[key],
+      val: counts[key],
+      color: PRIORITY_HEX[key],
+    }));
+  }, [open, tasks]);
 
   // ─── DADOS DO GRÁFICO 4: DISTRIBUIÇÃO POR ESTÁGIO ───
-  const stageData = useMemo(() => {
+  const stageData = useMemo<StagePoint[]>(() => {
+    if (!open) return [];
     return stages.map((s) => {
       const stageTasks = tasks.filter((t) => t.stage_id === s.id);
       return {
@@ -223,7 +217,7 @@ export function ProjectAnalyticsDialog({
         color: s.color || "#3b82f6",
       };
     });
-  }, [stages, tasks]);
+  }, [open, stages, tasks]);
 
   if (!project) return null;
 
@@ -351,209 +345,13 @@ export function ProjectAnalyticsDialog({
           </Card>
         </div>
 
-        {/* ─── TABS DE GRÁFICOS INTERATIVOS ─── */}
-        <Tabs defaultValue="burndown" className="space-y-4 pt-2">
-          <TabsList className="bg-muted p-1 w-full flex overflow-x-auto justify-start flex-nowrap scrollbar-none">
-            <TabsTrigger value="burndown" className="text-xs font-semibold gap-1.5">
-              <TrendingUp className="h-3.5 w-3.5" />
-              <span>Burndown & Evolução</span>
-            </TabsTrigger>
-            <TabsTrigger value="workload" className="text-xs font-semibold gap-1.5">
-              <Users className="h-3.5 w-3.5" />
-              <span>Carga de Trabalho</span>
-            </TabsTrigger>
-            <TabsTrigger value="distribution" className="text-xs font-semibold gap-1.5">
-              <Layers className="h-3.5 w-3.5" />
-              <span>Prioridades & Estágios</span>
-            </TabsTrigger>
-          </TabsList>
-
-          {/* TAB 1: BURNDOWN CHART */}
-          <TabsContent value="burndown" className="space-y-4">
-            <Card className="bg-card border-border">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-bold flex items-center justify-between text-foreground">
-                  <span>Gráfico de Burndown (Tarefas Pendentes x Linha Ideal)</span>
-                  <span className="text-xs text-muted-foreground font-normal">
-                    Meta vs Realizado ao longo do tempo
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-2">
-                {burndownData.length === 0 ? (
-                  <div className="h-64 flex items-center justify-center text-xs text-muted-foreground">
-                    Sem dados suficientes para gerar o gráfico de Burndown.
-                  </div>
-                ) : (
-                  <div className="h-72 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={burndownData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="colorIdeal" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
-                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                          </linearGradient>
-                          <linearGradient id="colorReal" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                        <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "var(--background)",
-                            borderColor: "var(--border)",
-                            borderRadius: "8px",
-                            fontSize: "12px",
-                          }}
-                        />
-                        <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} />
-                        <Area
-                          type="monotone"
-                          dataKey="Ideal"
-                          stroke="#6366f1"
-                          strokeWidth={2}
-                          strokeDasharray="4 4"
-                          fillOpacity={1}
-                          fill="url(#colorIdeal)"
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="Real"
-                          stroke="#10b981"
-                          strokeWidth={2.5}
-                          fillOpacity={1}
-                          fill="url(#colorReal)"
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* TAB 2: CARGA DE TRABALHO POR RESPONSÁVEL */}
-          <TabsContent value="workload" className="space-y-4">
-            <Card className="bg-card border-border">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-bold flex items-center justify-between text-foreground">
-                  <span>Distribuição de Tarefas por Responsável</span>
-                  <span className="text-xs text-muted-foreground font-normal">
-                    Comparativo de Concluídas, Em Andamento, Pendentes e Atrasadas
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-2">
-                {assigneeData.length === 0 ? (
-                  <div className="h-64 flex items-center justify-center text-xs text-muted-foreground">
-                    Nenhum responsável atribuído às tarefas deste projeto.
-                  </div>
-                ) : (
-                  <div className="h-72 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={assigneeData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "var(--background)",
-                            borderColor: "var(--border)",
-                            borderRadius: "8px",
-                            fontSize: "12px",
-                          }}
-                        />
-                        <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} />
-                        <Bar dataKey="Concluídas" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
-                        <Bar dataKey="Em Andamento" stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} />
-                        <Bar dataKey="Pendentes" stackId="a" fill="#94a3b8" radius={[0, 0, 0, 0]} />
-                        <Bar dataKey="Atrasadas" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* TAB 3: PRIORIDADES E ESTÁGIOS */}
-          <TabsContent value="distribution" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="bg-card border-border">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-bold text-foreground">
-                    Distribuição por Prioridade
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-2">
-                  <div className="h-64 w-full flex items-center justify-center">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={priorityData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={55}
-                          outerRadius={85}
-                          paddingAngle={4}
-                          dataKey="val"
-                        >
-                          {priorityData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "var(--background)",
-                            borderColor: "var(--border)",
-                            borderRadius: "8px",
-                            fontSize: "12px",
-                          }}
-                        />
-                        <Legend wrapperStyle={{ fontSize: "12px" }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-card border-border">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-bold text-foreground">
-                    Tarefas por Estágio do Kanban
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-2">
-                  <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart layout="vertical" data={stageData} margin={{ top: 10, right: 30, left: 20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                        <XAxis type="number" tick={{ fontSize: 11 }} />
-                        <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={90} />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "var(--background)",
-                            borderColor: "var(--border)",
-                            borderRadius: "8px",
-                            fontSize: "12px",
-                          }}
-                        />
-                        <Bar dataKey="Tarefas" radius={[0, 4, 4, 0]}>
-                          {stageData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-        </Tabs>
+        {/* ─── TABS DE GRÁFICOS INTERATIVOS (carregadas sob demanda) ─── */}
+        <ProjectAnalyticsCharts
+          burndownData={burndownData}
+          assigneeData={assigneeData}
+          priorityData={priorityData}
+          stageData={stageData}
+        />
       </DialogContent>
     </Dialog>
   );
