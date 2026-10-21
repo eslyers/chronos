@@ -29,6 +29,18 @@
     --chart-3: 173 58% 39%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+
+    /* Escala primary-50…900 (tailwind.config): azul do --primary (blue-500) */
+    --color-primary-50: #eff6ff;
+    --color-primary-100: #dbeafe;
+    --color-primary-200: #bfdbfe;
+    --color-primary-300: #93c5fd;
+    --color-primary-400: #60a5fa;
+    --color-primary-500: #3b82f6;
+    --color-primary-600: #2563eb;
+    --color-primary-700: #1d4ed8;
+    --color-primary-800: #1e40af;
+    --color-primary-900: #1e3a8a;
   }
 
   .dark {
@@ -98,7 +110,7 @@ input[type="number"] {
 }
 
 /* ============================================================== */
-/* GANTT CHART — PREMIUM THEME (light default, dark em .gantt-dark.css) */
+/* GANTT CHART — PREMIUM THEME (light default, dark em .dark abaixo) */
 /* ============================================================== */
 /* Sistema de CSS variables que deixa o Gantt harmonioso com o resto
    do app. As classes do gantt-task-react sao hasheadas pelo Emotion,
@@ -139,7 +151,7 @@ input[type="number"] {
   /* Bars (priority) */
   --gantt-bar-low: hsl(199 89% 48%);        /* sky-500 */
   --gantt-bar-medium: hsl(217 91% 60%);     /* blue-500 */
-  --gantt-bar-high: hsl(38 92% 50%);        /* blue-500 */
+  --gantt-bar-high: hsl(25 95% 53%);        /* orange-500 (#f97316, DESIGN.md) */
   --gantt-bar-critical: hsl(0 84% 60%);     /* red-500 */
   --gantt-bar-project: hsl(215 16% 47%);    /* slate-500 */
   --gantt-bar-project-selected: hsl(215 19% 35%);
@@ -175,7 +187,7 @@ input[type="number"] {
 
   --gantt-bar-low: hsl(199 89% 55%);
   --gantt-bar-medium: hsl(217 91% 65%);
-  --gantt-bar-high: hsl(38 92% 55%);
+  --gantt-bar-high: hsl(25 95% 53%);
   --gantt-bar-critical: hsl(0 84% 65%);
   --gantt-bar-project: hsl(215 16% 55%);
   --gantt-bar-project-selected: hsl(215 19% 65%);

@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
-import "./gantt-dark.css";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/components/theme-provider";
+
+// Fonte do DESIGN.md; exposta como --font-inter para o `font-sans` do Tailwind
+const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-inter" });
 
 const productName = process.env.NEXT_PUBLIC_PRODUCTNAME || "CHRONOS";
 const description =
@@ -44,8 +47,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
-      <body className="min-h-screen bg-background text-foreground antialiased">
+    <html lang="pt-BR" className={inter.variable} suppressHydrationWarning>
+      <body className="min-h-screen bg-background text-foreground font-sans antialiased">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

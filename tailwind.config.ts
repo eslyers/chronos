@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import defaultTheme from "tailwindcss/defaultTheme";
 
 const config: Config = {
     darkMode: ["class"],
@@ -75,6 +76,27 @@ const config: Config = {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
+  		},
+  		// Inter (next/font no layout raiz), com a pilha padrão como fallback
+  		fontFamily: {
+  			sans: ['var(--font-inter)', ...defaultTheme.fontFamily.sans]
+  		},
+  		// Utilitários usados no app que não existem no Tailwind 3.4
+  		// (shadow-xs / backdrop-blur-xs seguem os valores do Tailwind 4)
+  		boxShadow: {
+  			xs: '0 1px 2px 0 rgb(0 0 0 / 0.05)'
+  		},
+  		backdropBlur: {
+  			xs: '4px'
+  		},
+  		keyframes: {
+  			fadeIn: {
+  				from: { opacity: '0' },
+  				to: { opacity: '1' }
+  			}
+  		},
+  		animation: {
+  			fadeIn: 'fadeIn 0.3s ease-out'
   		}
   	}
   },

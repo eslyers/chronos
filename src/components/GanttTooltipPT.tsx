@@ -2,6 +2,8 @@
 
 import type { CSSProperties } from "react";
 import type { Task as GanttTask } from "gantt-task-react";
+import { formatDateOnly, daysBetweenDateOnly } from "@/lib/date-only";
+import { formatGanttDate, ganttEndToInclusiveDate } from "@/lib/gantt-tasks";
 
 interface TooltipContentProps {
   task: GanttTask;
@@ -13,17 +15,11 @@ interface TooltipContentProps {
 //   _3T42e → tooltipDefaultContainer
 //   _29NTg → tooltipDefaultContainerParagraph
 
-// Formato BR abreviado para tooltip: DD/MM/YY (mais compacto que default D-M-YYYY)
-function formatDateBR(date: Date): string {
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const yy = String(date.getFullYear()).slice(-2);
-  return `${dd}/${mm}/${yy}`;
-}
-
 /**
  * TooltipContent PT-BR para o Gantt.
  * Substitui o default que vinha com "Duration: X day(s)" e "Progress: X %".
+ * Datas em DD/MM/YY; o `end` do Gantt é exclusivo, então o prazo exibido
+ * é o dia anterior a ele.
  *
  * Uso: <Gantt TooltipContent={GanttTooltipPT} ... />
  */
@@ -42,18 +38,18 @@ export function GanttTooltipPT({
     fontWeight: 600,
   };
 
-  const days = Math.round(
-    (task.end.getTime() - task.start.getTime()) / (1000 * 60 * 60 * 24)
-  );
+  const lastDay = ganttEndToInclusiveDate(task.end);
+  // Dias corridos contando início e prazo (texto YYYY-MM-DD: imune a fuso/horário de verão)
+  const days = daysBetweenDateOnly(formatDateOnly(task.start), formatDateOnly(lastDay)) + 1;
 
   return (
     <div className="_3T42e" style={containerStyle}>
       <b style={titleStyle}>{task.name}</b>
       <p className="_29NTg" style={{ margin: 0 }}>
-        {formatDateBR(task.start)} → {formatDateBR(task.end)}
+        {formatGanttDate(task.start)} → {formatGanttDate(lastDay)}
       </p>
-      {task.end.getTime() - task.start.getTime() !== 0 && (
-        <p className="_29NTg">Duração: {days} dia(s)</p>
+      {days > 0 && (
+        <p className="_29NTg">Duração: {days} {days === 1 ? "dia" : "dias"}</p>
       )}
       {task.progress === 100 ? (
         <p className="_29NTg" style={{ color: "#10b981", fontWeight: 600 }}>
