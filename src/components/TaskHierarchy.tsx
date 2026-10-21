@@ -123,6 +123,8 @@ export function TaskHierarchy({ projectId }: { projectId: string }) {
       await deleteTask(task.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao excluir");
+      // Repassa para o ConfirmDialog continuar aberto (o toast já veio do DataContext)
+      throw err;
     }
   };
 
@@ -202,10 +204,7 @@ export function TaskHierarchy({ projectId }: { projectId: string }) {
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleAddSubtask(node.task.id);
-                if (e.key === "Escape") {
-                  setAddingTo(null);
-                  setNewTitle("");
-                }
+                // Esc é tratado no onEscapeKeyDown do DialogContent (antes deste handler)
               }}
             />
             <Button
@@ -247,7 +246,17 @@ export function TaskHierarchy({ projectId }: { projectId: string }) {
           )}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+        onEscapeKeyDown={(e) => {
+          // Esc com o campo de sub-tarefa aberto cancela só a digitação, não o modal
+          if (addingTo) {
+            e.preventDefault();
+            setAddingTo(null);
+            setNewTitle("");
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Hierarquia de tarefas (WBS)</DialogTitle>
           <DialogDescription>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Loader2,
@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { useData, type Project } from "@/lib/context/DataContext";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { toDateOnly, todayDateOnly } from "@/lib/date-only";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   StageEditor,
@@ -109,31 +111,48 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
     };
   }, [open, isEdit]);
 
-  // Reset form quando abre
+  // Rastreadores para inicializar o form apenas na abertura real (impede reset ao digitar
+  // quando o pai recria o objeto `project`, ex.: após um refresh do DataContext)
+  const prevOpenRef = useRef(false);
+  const prevProjectIdRef = useRef<string | null>(null);
+
+  // Reset form quando abre (ou ao trocar de projeto)
   useEffect(() => {
-    if (open) {
-      if (project) {
-        setName(project.name);
-        setDescription(project.description ?? "");
-        setColor(project.color);
-        setStatus(project.status);
-        setStartDate(project.start_date ? project.start_date.split("T")[0] : "");
-        setTargetDate(project.target_date ? project.target_date.split("T")[0] : "");
-        setTrackTime(project.track_time !== false);
-      } else {
-        setName("");
-        setDescription("");
-        setColor("#3b82f6");
-        setStatus("active");
-        setStartDate(new Date().toISOString().split("T")[0]);
-        setTargetDate("");
-        setTrackTime(true);
-        setStagesMode("default");
-        setSelectedTemplateId("");
-        setStageDrafts(defaultStagesAsDrafts());
-      }
-      setError("");
+    if (!open) {
+      prevOpenRef.current = false;
+      prevProjectIdRef.current = null;
+      return;
     }
+
+    const currentProjectId = project?.id ?? "new";
+    const isNewlyOpened = !prevOpenRef.current;
+    const isDifferentProject = currentProjectId !== prevProjectIdRef.current;
+    if (!isNewlyOpened && !isDifferentProject) return;
+
+    prevOpenRef.current = true;
+    prevProjectIdRef.current = currentProjectId;
+
+    if (project) {
+      setName(project.name);
+      setDescription(project.description ?? "");
+      setColor(project.color);
+      setStatus(project.status);
+      setStartDate(toDateOnly(project.start_date) ?? "");
+      setTargetDate(toDateOnly(project.target_date) ?? "");
+      setTrackTime(project.track_time !== false);
+    } else {
+      setName("");
+      setDescription("");
+      setColor("#3b82f6");
+      setStatus("active");
+      setStartDate(todayDateOnly());
+      setTargetDate("");
+      setTrackTime(true);
+      setStagesMode("default");
+      setSelectedTemplateId("");
+      setStageDrafts(defaultStagesAsDrafts());
+    }
+    setError("");
   }, [open, project]);
 
   // Atualiza drafts conforme modo
@@ -162,26 +181,6 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stagesMode, selectedTemplateId, templates]);
 
-  // Fechar com ESC
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onOpenChange(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onOpenChange]);
-
-  // Bloquear scroll
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-      return () => {
-        document.body.style.overflow = "";
-      };
-    }
-  }, [open]);
-
   async function handleSubmit() {
     if (!name.trim()) {
       setError("Nome do projeto é obrigatório");
@@ -195,8 +194,9 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
         description: description.trim() || null,
         color,
         status,
-        start_date: startDate ? new Date(startDate).toISOString() : null,
-        target_date: targetDate ? new Date(targetDate).toISOString() : null,
+        // Colunas DATE: só "YYYY-MM-DD" (toISOString deslocaria o dia)
+        start_date: toDateOnly(startDate),
+        target_date: toDateOnly(targetDate),
         track_time: trackTime,
       };
 
@@ -217,9 +217,11 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
         };
         await createProject(input);
       }
+      // Fecha só depois de salvar com sucesso
       onOpenChange(false);
       router.refresh();
     } catch (err) {
+      // O DataContext já exibiu o toast; mantém o formulário aberto com o motivo
       setError(err instanceof Error ? err.message : "Erro ao salvar");
     } finally {
       setLoading(false);
@@ -229,16 +231,25 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
-      style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && loading) return;
+        onOpenChange(next);
+      }}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="project-dialog-title"
-        className="relative w-full max-w-xl bg-card border border-border rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col animate-fadeIn"
-        onClick={(e) => e.stopPropagation()}
+      <DialogContent
+        hideCloseButton
+        aria-describedby={undefined}
+        overlayClassName="bg-black/65"
+        // Formulário: clique fora não descarta o que foi digitado
+        onPointerDownOutside={(e) => e.preventDefault()}
+        // Foco inicial no nome do projeto (não no X do cabeçalho)
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          document.getElementById("project-name")?.focus();
+        }}
+        className="flex flex-col gap-0 p-0 w-[calc(100%-2rem)] max-w-xl bg-card border-border rounded-2xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[90vh]"
       >
         {/* Header estilo executivo */}
         <div className="bg-gradient-to-r from-blue-600/10 via-blue-500/5 to-transparent border-b border-border p-6 shrink-0 relative">
@@ -261,9 +272,9 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
                   {isEdit ? "Edição de Portfólio" : "Novo Projeto Corporativo"}
                 </span>
               </div>
-              <h2 id="project-dialog-title" className="text-xl font-bold leading-tight mt-0.5">
+              <DialogTitle className="text-xl font-bold leading-tight tracking-normal mt-0.5">
                 {isEdit ? "Editar Projeto" : "Criar Novo Projeto"}
-              </h2>
+              </DialogTitle>
             </div>
           </div>
         </div>
@@ -288,7 +299,6 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
               placeholder="Ex: Transformação Digital Q4"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              autoFocus
               className="flex h-11 w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-all font-medium"
             />
           </div>
@@ -311,10 +321,10 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
 
           {/* Cor do Projeto */}
           <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
               <Palette className="h-3.5 w-3.5 text-blue-500" />
               Identificador Visual (Cor)
-            </label>
+            </span>
             <div className="flex flex-wrap gap-2.5">
               {COLORS.map((c) => {
                 const isSelected = color === c.value;
@@ -323,6 +333,8 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
                     key={c.value}
                     type="button"
                     title={c.name}
+                    aria-label={c.name}
+                    aria-pressed={isSelected}
                     onClick={() => setColor(c.value)}
                     className={`
                       relative w-8 h-8 rounded-xl transition-all duration-200 flex items-center justify-center
@@ -447,10 +459,10 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
           {/* Escolha de Etapas (só ao criar novo) */}
           {!isEdit && (
             <div className="space-y-3 pt-3 border-t border-border">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5 text-blue-500" />
                 Estrutura de Etapas do Kanban
-              </label>
+              </span>
 
               {/* Grid de Modos com cards visuais */}
               <div className="grid grid-cols-2 gap-2.5">
@@ -458,6 +470,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
                 <button
                   type="button"
                   onClick={() => setStagesMode("default")}
+                  aria-pressed={stagesMode === "default"}
                   className={`
                     p-3 rounded-xl border text-left transition-all duration-150 flex flex-col justify-between space-y-1.5
                     ${
@@ -481,6 +494,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
                 <button
                   type="button"
                   onClick={() => setStagesMode("custom")}
+                  aria-pressed={stagesMode === "custom"}
                   className={`
                     p-3 rounded-xl border text-left transition-all duration-150 flex flex-col justify-between space-y-1.5
                     ${
@@ -504,6 +518,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
                 <button
                   type="button"
                   onClick={() => setStagesMode("template")}
+                  aria-pressed={stagesMode === "template"}
                   className={`
                     p-3 rounded-xl border text-left transition-all duration-150 flex flex-col justify-between space-y-1.5
                     ${
@@ -527,6 +542,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
                 <button
                   type="button"
                   onClick={() => setStagesMode("empty")}
+                  aria-pressed={stagesMode === "empty"}
                   className={`
                     p-3 rounded-xl border text-left transition-all duration-150 flex flex-col justify-between space-y-1.5
                     ${
@@ -563,7 +579,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
                     value={selectedTemplateId || "none"}
                     onValueChange={(val) => setSelectedTemplateId(val === "none" ? "" : val)}
                   >
-                    <SelectTrigger id="template_id" className="h-10 rounded-xl bg-background border-border/80">
+                    <SelectTrigger id="template_id" aria-label="Template corporativo" className="h-10 rounded-xl bg-background border-border/80">
                       <SelectValue placeholder="Selecione um template corporativo..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -661,7 +677,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Copy,
@@ -20,6 +20,8 @@ import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useData, type Project } from "@/lib/context/DataContext";
 import { useGlobalToast } from "@/components/ui/toast-notification";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { toDateOnly } from "@/lib/date-only";
 
 interface CloneProjectDialogProps {
   open: boolean;
@@ -69,22 +71,30 @@ export function CloneProjectDialog({
   const [error, setError] = useState("");
   const [clonedSuccess, setClonedSuccess] = useState<Project | null>(null);
 
+  // Inicializa só na abertura real ou ao trocar de projeto: um novo objeto
+  // `project` (refresh do DataContext) não pode apagar o que o usuário digitou
+  const initializedForRef = useRef<string | null>(null);
   useEffect(() => {
-    if (open && project) {
-      setName(`Cópia de ${project.name}`);
-      setDescription(project.description || "");
-      setColor(project.color || PROJECT_COLORS[0].value);
-      setStartDate(project.start_date ? project.start_date.split("T")[0] : "");
-      setTargetDate(project.target_date ? project.target_date.split("T")[0] : "");
-      setCloneTasks(true);
-      setCloneDependencies(true);
-      setResetStatus(true);
-      setKeepAssignees(true);
-      setShiftDates(false);
-      setTrackTime(project.track_time !== false);
-      setError("");
-      setClonedSuccess(null);
+    if (!open || !project) {
+      initializedForRef.current = null;
+      return;
     }
+    if (initializedForRef.current === project.id) return;
+    initializedForRef.current = project.id;
+
+    setName(`Cópia de ${project.name}`);
+    setDescription(project.description || "");
+    setColor(project.color || PROJECT_COLORS[0].value);
+    setStartDate(toDateOnly(project.start_date) ?? "");
+    setTargetDate(toDateOnly(project.target_date) ?? "");
+    setCloneTasks(true);
+    setCloneDependencies(true);
+    setResetStatus(true);
+    setKeepAssignees(true);
+    setShiftDates(false);
+    setTrackTime(project.track_time !== false);
+    setError("");
+    setClonedSuccess(null);
   }, [open, project]);
 
   if (!open || !project) return null;
@@ -137,16 +147,21 @@ export function CloneProjectDialog({
   };
 
   return (
-    <div
-      role="presentation"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs animate-fadeIn"
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && loading) return;
+        if (!next) setClonedSuccess(null);
+        onOpenChange(next);
+      }}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="clone-project-title"
-        className="relative w-full max-w-lg bg-card border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-        onClick={(e) => e.stopPropagation()}
+      <DialogContent
+        hideCloseButton
+        aria-describedby={undefined}
+        overlayClassName="bg-black/65 backdrop-blur-xs"
+        // Formulário: clique fora não descarta o que foi digitado
+        onPointerDownOutside={(e) => e.preventDefault()}
+        className="flex flex-col gap-0 p-0 w-[calc(100%-2rem)] max-w-lg max-h-[90vh] bg-card border-border rounded-2xl sm:rounded-2xl shadow-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600/15 via-blue-500/5 to-transparent border-b border-border p-6 shrink-0 relative">
@@ -171,9 +186,9 @@ export function CloneProjectDialog({
               <span className="text-[11px] font-bold text-blue-500 uppercase tracking-wider">
                 DUPLICAÇÃO DE PROJETO
               </span>
-              <h2 id="clone-project-title" className="text-xl font-bold tracking-tight text-foreground">
+              <DialogTitle className="text-xl font-bold leading-normal tracking-tight text-foreground">
                 Clonar Projeto
-              </h2>
+              </DialogTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Origem: <strong className="text-foreground">{project.name}</strong>
               </p>
@@ -283,9 +298,9 @@ export function CloneProjectDialog({
 
             {/* Seletor de Cor */}
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Cor do Projeto
-              </label>
+              </span>
               <div className="flex flex-wrap gap-2">
                 {PROJECT_COLORS.map((c) => (
                   <button
@@ -293,6 +308,8 @@ export function CloneProjectDialog({
                     type="button"
                     onClick={() => setColor(c.value)}
                     title={c.name}
+                    aria-label={c.name}
+                    aria-pressed={color === c.value}
                     className={`h-7 w-7 rounded-lg transition-transform ${
                       color === c.value
                         ? "ring-2 ring-foreground scale-110 shadow-md"
@@ -494,7 +511,7 @@ export function CloneProjectDialog({
             </div>
           </form>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
