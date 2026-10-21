@@ -408,6 +408,12 @@ export type Database = {
           email: string
           full_name: string | null
           avatar_url: string | null
+          telegram_chat_id: string | null
+          telegram_username: string | null
+          timezone: string
+          locale: string
+          notify_by_email: boolean
+          notify_by_telegram: boolean
           created_at: string
           updated_at: string
         }
@@ -416,6 +422,12 @@ export type Database = {
           email: string
           full_name?: string | null
           avatar_url?: string | null
+          telegram_chat_id?: string | null
+          telegram_username?: string | null
+          timezone?: string
+          locale?: string
+          notify_by_email?: boolean
+          notify_by_telegram?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -424,8 +436,38 @@ export type Database = {
           email?: string
           full_name?: string | null
           avatar_url?: string | null
+          telegram_chat_id?: string | null
+          telegram_username?: string | null
+          timezone?: string
+          locale?: string
+          notify_by_email?: boolean
+          notify_by_telegram?: boolean
           created_at?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      project_members: {
+        Row: {
+          id: string
+          project_id: string
+          user_id: string
+          role: "owner" | "admin" | "member" | "viewer"
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          user_id: string
+          role?: "owner" | "admin" | "member" | "viewer"
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          user_id?: string
+          role?: "owner" | "admin" | "member" | "viewer"
+          created_at?: string
         }
         Relationships: []
       }
@@ -494,34 +536,43 @@ export type Database = {
           id: string
           workspace_id: string
           email: string
-          role: string
+          role: "admin" | "member" | "viewer"
           token: string
-          created_by: string
+          invited_by: string
+          status: "pending" | "accepted" | "revoked" | "expired"
           expires_at: string
           accepted_at: string | null
-          created_at: string
+          accepted_by: string | null
+          created_at: string | null
+          updated_at: string | null
         }
         Insert: {
           id?: string
           workspace_id: string
           email: string
-          role?: string
-          token: string
-          created_by: string
-          expires_at: string
+          role?: "admin" | "member" | "viewer"
+          token?: string
+          invited_by: string
+          status?: "pending" | "accepted" | "revoked" | "expired"
+          expires_at?: string
           accepted_at?: string | null
-          created_at?: string
+          accepted_by?: string | null
+          created_at?: string | null
+          updated_at?: string | null
         }
         Update: {
           id?: string
           workspace_id?: string
           email?: string
-          role?: string
+          role?: "admin" | "member" | "viewer"
           token?: string
-          created_by?: string
+          invited_by?: string
+          status?: "pending" | "accepted" | "revoked" | "expired"
           expires_at?: string
           accepted_at?: string | null
-          created_at?: string
+          accepted_by?: string | null
+          created_at?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -534,6 +585,42 @@ export type Database = {
           p_user_id: string
         }
         Returns: boolean
+      }
+      is_workspace_admin: {
+        Args: {
+          p_workspace_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      has_project_access: {
+        Args: {
+          p_project_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      project_member_role: {
+        Args: {
+          p_project_id: string
+          p_user_id: string
+        }
+        Returns: string | null
+      }
+      accept_invite_token: {
+        Args: {
+          p_token: string
+          p_user_id: string
+        }
+        Returns: { workspace_id: string; role: string; email: string }[]
+      }
+      clone_project: {
+        Args: {
+          p_source_project_id: string
+          p_name: string
+          p_options?: Json
+        }
+        Returns: string
       }
     }
     Enums: Record<string, never>

@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/mode";
 import {
   fetchAllProjects,
   fetchProjectById,
+  cloneProjectRpc,
   fetchAllStages,
   fetchAllTasks,
   fetchAllDependencies,
@@ -81,6 +82,8 @@ export const dataProvider = {
     const projects = await fetchAllProjects();
     return { projects };
   },
+
+  cloneProjectRpc,
 
   getProjectById: async (id: string) => {
     if (getDataLayer() !== "supabase") return null;
