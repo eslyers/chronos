@@ -86,20 +86,73 @@ function dbToDependency(d: DbTaskDependency): TaskDependency {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Erros e paginação
+// Todas as operações lançam DataLayerError em caso de falha: um erro de
+// leitura não pode virar "lista vazia" e um erro de escrita não pode ser
+// tratado como salvo.
+// ─────────────────────────────────────────────────────────────
+
+type PostgrestErrorLike = { message?: string; code?: string; details?: string | null };
+
+export class DataLayerError extends Error {
+  readonly operation: string;
+  readonly code?: string;
+
+  constructor(operation: string, error: PostgrestErrorLike) {
+    super(error.message || "Erro desconhecido no banco de dados");
+    this.name = "DataLayerError";
+    this.operation = operation;
+    this.code = error.code;
+  }
+}
+
+function fail(operation: string, error: PostgrestErrorLike): never {
+  console.error(`[supabase-data] ${operation}`, error);
+  throw new DataLayerError(operation, error);
+}
+
+// PostgREST limita cada resposta (max-rows, padrão 1000) sem avisar
+const PAGE_SIZE = 1000;
+// Listas longas em .in() estouram o limite de tamanho da URL
+const IN_CHUNK_SIZE = 100;
+
+type PagedQuery = (
+  from: number,
+  to: number
+) => PromiseLike<{ data: unknown[] | null; error: PostgrestErrorLike | null }>;
+
+async function fetchAllPages<T>(operation: string, query: PagedQuery): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await query(from, from + PAGE_SIZE - 1);
+    if (error) fail(operation, error);
+    const page = (data ?? []) as T[];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) return rows;
+  }
+}
+
+function chunk<T>(items: T[], size = IN_CHUNK_SIZE): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+}
+
+// ─────────────────────────────────────────────────────────────
 // CRUD Operations via Supabase
 // ─────────────────────────────────────────────────────────────
 
 export async function fetchAllProjects(): Promise<Project[]> {
   const supabase = client();
-  const { data, error } = await supabase
-    .from("projects")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) {
-    console.error("[supabase-data] fetchAllProjects", error);
-    return [];
-  }
-  return ((data as DbProject[] | null) ?? []).map(dbToProject);
+  const rows = await fetchAllPages<DbProject>("fetchAllProjects", (from, to) =>
+    supabase
+      .from("projects")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(from, to)
+  );
+  return rows.map(dbToProject);
 }
 
 export async function fetchProjectById(id: string): Promise<Project | null> {
@@ -109,54 +162,54 @@ export async function fetchProjectById(id: string): Promise<Project | null> {
     .select("*")
     .eq("id", id)
     .limit(1);
-  if (error || !data || data.length === 0) {
-    if (error) console.error("[supabase-data] fetchProjectById", error);
-    return null;
-  }
+  if (error) fail("fetchProjectById", error);
+  if (!data || data.length === 0) return null;
   return dbToProject(data[0] as DbProject);
 }
 
 export async function fetchAllStages(projectIds: string[]): Promise<Stage[]> {
-  if (projectIds.length === 0) return [];
   const supabase = client();
-  const { data, error } = await supabase
-    .from("stages")
-    .select("*")
-    .in("project_id", projectIds)
-    .order("sort_order");
-  if (error) {
-    console.error("[supabase-data] fetchAllStages", error);
-    return [];
+  const rows: DbStage[] = [];
+  for (const ids of chunk(projectIds)) {
+    rows.push(
+      ...(await fetchAllPages<DbStage>("fetchAllStages", (from, to) =>
+        supabase
+          .from("stages")
+          .select("*")
+          .in("project_id", ids)
+          .order("sort_order")
+          .order("id")
+          .range(from, to)
+      ))
+    );
   }
-  return ((data as DbStage[] | null) ?? []).map(dbToStage);
+  return rows.map(dbToStage);
 }
 
 export async function fetchAllTasks(projectIds: string[]): Promise<Task[]> {
-  if (projectIds.length === 0) return [];
   const supabase = client();
-  const { data, error } = await supabase
-    .from("tasks")
-    .select("*")
-    .in("project_id", projectIds);
-  if (error) {
-    console.error("[supabase-data] fetchAllTasks", error);
-    return [];
+  const rows: DbTask[] = [];
+  for (const ids of chunk(projectIds)) {
+    rows.push(
+      ...(await fetchAllPages<DbTask>("fetchAllTasks", (from, to) =>
+        supabase.from("tasks").select("*").in("project_id", ids).order("id").range(from, to)
+      ))
+    );
   }
-  return ((data as DbTask[] | null) ?? []).map(dbToTask);
+  return rows.map(dbToTask);
 }
 
 export async function fetchAllDependencies(taskIds: string[]): Promise<TaskDependency[]> {
-  if (taskIds.length === 0) return [];
   const supabase = client();
-  const { data, error } = await supabase
-    .from("task_dependencies")
-    .select("*")
-    .in("task_id", taskIds);
-  if (error) {
-    console.error("[supabase-data] fetchAllDependencies", error);
-    return [];
+  const rows: DbTaskDependency[] = [];
+  for (const ids of chunk(taskIds)) {
+    rows.push(
+      ...(await fetchAllPages<DbTaskDependency>("fetchAllDependencies", (from, to) =>
+        supabase.from("task_dependencies").select("*").in("task_id", ids).order("id").range(from, to)
+      ))
+    );
   }
-  return ((data as DbTaskDependency[] | null) ?? []).map(dbToDependency);
+  return rows.map(dbToDependency);
 }
 
 export async function fetchProjectsBatchDetails(projectIds: string[]): Promise<{
@@ -185,7 +238,7 @@ export async function createProject(input: {
   workspace_id: string;
   created_by?: string | null;
   track_time?: boolean;
-}): Promise<Project | null> {
+}): Promise<Project> {
   const supabase = client();
   const payload: Record<string, any> = {
     workspace_id: input.workspace_id,
@@ -236,10 +289,7 @@ export async function createProject(input: {
     error = retry.error;
   }
 
-  if (error) {
-    console.error("[supabase-data] createProject", error);
-    return null;
-  }
+  if (error) fail("createProject", error);
   return dbToProject(data as DbProject);
 }
 
@@ -256,10 +306,7 @@ export async function createDefaultStages(projectId: string): Promise<Stage[]> {
     .from("stages")
     .insert(stages as any)
     .select();
-  if (error) {
-    console.error("[supabase-data] createDefaultStages", error);
-    return [];
-  }
+  if (error) fail("createDefaultStages", error);
   return ((data as DbStage[] | null) ?? []).map(dbToStage);
 }
 
@@ -279,13 +326,13 @@ export async function updateProject(id: string, patch: Partial<Project>): Promis
   if (patch.track_time !== undefined) payload.track_time = patch.track_time;
 
   const { error } = await (supabase.from("projects") as any).update(payload).eq("id", id);
-  if (error) console.error("[supabase-data] updateProject", error);
+  if (error) fail("updateProject", error);
 }
 
 export async function deleteProject(id: string): Promise<void> {
   const supabase = client();
   const { error } = await supabase.from("projects").delete().eq("id", id);
-  if (error) console.error("[supabase-data] deleteProject", error);
+  if (error) fail("deleteProject", error);
 }
 
 export async function createTask(input: {
@@ -295,6 +342,8 @@ export async function createTask(input: {
   description?: string | null;
   status?: Task["status"];
   priority?: Task["priority"];
+  progress?: number;
+  position?: number;
   due_date?: string | null;
   start_date?: string | null;
   estimated_hours?: number | null;
@@ -304,7 +353,7 @@ export async function createTask(input: {
   assignee_name?: string | null;
   assignee_status?: Task["assignee_status"];
   created_by: string;
-}): Promise<Task | null> {
+}): Promise<Task> {
   const supabase = client();
   const payload: Database["public"]["Tables"]["tasks"]["Insert"] = {
     project_id: input.project_id,
@@ -313,6 +362,8 @@ export async function createTask(input: {
     description: input.description ?? null,
     status: input.status ?? "todo",
     priority: input.priority ?? "medium",
+    progress: input.progress ?? 0,
+    position: input.position ?? 0,
     due_date: input.due_date ?? null,
     start_date: input.start_date ?? null,
     estimated_hours: input.estimated_hours ?? null,
@@ -350,10 +401,7 @@ export async function createTask(input: {
     error = retry.error;
   }
 
-  if (error) {
-    console.error("[supabase-data] createTask", error);
-    return null;
-  }
+  if (error) fail("createTask", error);
   return dbToTask(data as DbTask);
 }
 
@@ -366,6 +414,7 @@ export async function updateTask(id: string, patch: Partial<Task>): Promise<void
   if (patch.priority !== undefined) payload.priority = patch.priority;
   if (patch.stage_id !== undefined && patch.stage_id !== null) payload.stage_id = patch.stage_id;
   if (patch.progress !== undefined) payload.progress = patch.progress;
+  if (patch.position !== undefined) payload.position = patch.position;
   if (patch.due_date !== undefined) payload.due_date = patch.due_date;
   if (patch.start_date !== undefined) payload.start_date = patch.start_date;
   if (patch.estimated_hours !== undefined) payload.estimated_hours = patch.estimated_hours;
@@ -381,7 +430,7 @@ export async function updateTask(id: string, patch: Partial<Task>): Promise<void
     const retry = await (supabase.from("tasks") as any).update(payload).eq("id", id);
     error = retry.error;
   }
-  if (error) console.error("[supabase-data] updateTask", error);
+  if (error) fail("updateTask", error);
 }
 
 export async function moveTaskToStage(taskId: string, stageId: string, position?: number): Promise<void> {
@@ -391,13 +440,13 @@ export async function moveTaskToStage(taskId: string, stageId: string, position?
     payload.position = position;
   }
   const { error } = await (supabase.from("tasks") as any).update(payload).eq("id", taskId);
-  if (error) console.error("[supabase-data] moveTaskToStage", error);
+  if (error) fail("moveTaskToStage", error);
 }
 
 export async function deleteTask(id: string): Promise<void> {
   const supabase = client();
   const { error } = await supabase.from("tasks").delete().eq("id", id);
-  if (error) console.error("[supabase-data] deleteTask", error);
+  if (error) fail("deleteTask", error);
 }
 
 export async function createStage(input: {
@@ -407,7 +456,7 @@ export async function createStage(input: {
   sort_order: number;
   wip_limit?: number | null;
   is_done?: boolean;
-}): Promise<Stage | null> {
+}): Promise<Stage> {
   const supabase = client();
   const payload: Database["public"]["Tables"]["stages"]["Insert"] = {
     project_id: input.project_id,
@@ -418,10 +467,7 @@ export async function createStage(input: {
     is_done: input.is_done ?? false,
   };
   const { data, error } = await (supabase.from("stages") as any).insert(payload).select().single();
-  if (error) {
-    console.error("[supabase-data] createStage", error);
-    return null;
-  }
+  if (error) fail("createStage", error);
   return dbToStage(data as DbStage);
 }
 
@@ -435,19 +481,33 @@ export async function updateStage(id: string, patch: Partial<Stage>): Promise<vo
   if (patch.wip_limit !== undefined) payload.wip_limit = patch.wip_limit;
 
   const { error } = await (supabase.from("stages") as any).update(payload).eq("id", id);
-  if (error) console.error("[supabase-data] updateStage", error);
+  if (error) fail("updateStage", error);
 }
 
-export async function deleteStage(id: string): Promise<void> {
+/**
+ * Exclui uma etapa. tasks.stage_id é NOT NULL com ON DELETE CASCADE, então as
+ * tarefas da etapa seriam apagadas junto: elas são movidas para
+ * `moveTasksToStageId` antes da exclusão.
+ */
+export async function deleteStage(id: string, moveTasksToStageId?: string): Promise<void> {
   const supabase = client();
+  if (moveTasksToStageId) {
+    const { error: moveError } = await (supabase.from("tasks") as any)
+      .update({ stage_id: moveTasksToStageId })
+      .eq("stage_id", id);
+    if (moveError) fail("deleteStage (mover tarefas)", moveError);
+  }
   const { error } = await supabase.from("stages").delete().eq("id", id);
-  if (error) console.error("[supabase-data] deleteStage", error);
+  if (error) fail("deleteStage", error);
 }
 
 export async function getCurrentWorkspaceId(): Promise<string | null> {
   const supabase = client();
   const { data: authData } = await supabase.auth.getUser();
   const userId = authData?.user?.id;
+  // Só cria um workspace novo se TODAS as consultas responderam "nenhum":
+  // um erro transitório não pode gerar workspaces duplicados.
+  let lookupFailed = false;
 
   if (userId) {
     // 0. Preferência salva no localStorage para este usuário (se válida)
@@ -477,6 +537,7 @@ export async function getCurrentWorkspaceId(): Promise<string | null> {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const members = memberRows as Array<{ workspace_id: string; role: string; joined_at: string }> | null;
+    if (memberErr) lookupFailed = true;
     if (!memberErr && members && members.length > 0 && members[0]?.workspace_id) {
       const selected = members[0].workspace_id;
       if (typeof window !== "undefined") {
@@ -496,6 +557,7 @@ export async function getCurrentWorkspaceId(): Promise<string | null> {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const owned = ownedWs as Array<{ id: string }> | null;
+    if (ownerErr) lookupFailed = true;
     if (!ownerErr && owned && owned.length > 0 && owned[0]?.id) {
       return owned[0].id;
     }
@@ -505,16 +567,18 @@ export async function getCurrentWorkspaceId(): Promise<string | null> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: anyWs, error: anyErr } = await (supabase.from("workspaces") as any)
     .select("id")
+    .order("created_at")
     .limit(1);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const anyList = anyWs as Array<{ id: string }> | null;
+  if (anyErr) lookupFailed = true;
   if (!anyErr && anyList && anyList.length > 0 && anyList[0]?.id) {
     return anyList[0].id;
   }
 
   // 4. Se o usuário estiver autenticado mas não tiver NENHUM workspace, criar um automaticamente!
-  if (userId) {
+  if (userId && !lookupFailed) {
     try {
       const email = authData?.user?.email || "user";
       const slug = `ws-${email.split("@")[0].replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}-${userId.slice(0, 6)}`;
@@ -530,11 +594,14 @@ export async function getCurrentWorkspaceId(): Promise<string | null> {
 
       if (!createWsErr && createdWs && createdWs.length > 0 && createdWs[0].id) {
         // Adiciona como membro owner
-        await (supabase.from("workspace_members") as any).insert({
+        const { error: memberInsertErr } = await (supabase.from("workspace_members") as any).insert({
           workspace_id: createdWs[0].id,
           user_id: userId,
           role: "owner",
         });
+        if (memberInsertErr) {
+          console.error("[supabase-data] Auto-create workspace: falha ao adicionar owner", memberInsertErr);
+        }
         return createdWs[0].id;
       }
     } catch (createErr) {
@@ -554,26 +621,21 @@ export async function fetchProjectDependencies(
   projectId: string
 ): Promise<TaskDependency[]> {
   const supabase = client();
-  const { data: projectTasks, error: tasksErr } = await supabase
-    .from("tasks")
-    .select("id")
-    .eq("project_id", projectId);
-  if (tasksErr) {
-    console.error("[supabase-data] fetchProjectDependencies (tasks)", tasksErr);
-    return [];
-  }
-  const taskIds = ((projectTasks as { id: string }[] | null) ?? []).map((t) => t.id);
-  if (taskIds.length === 0) return [];
+  const projectTasks = await fetchAllPages<{ id: string }>("fetchProjectDependencies (tasks)", (from, to) =>
+    supabase.from("tasks").select("id").eq("project_id", projectId).order("id").range(from, to)
+  );
+  const taskIds = projectTasks.map((t) => t.id);
 
-  const { data, error } = await supabase
-    .from("task_dependencies")
-    .select("*")
-    .or(`task_id.in.(${taskIds.join(",")}),depends_on_task_id.in.(${taskIds.join(",")})`);
-  if (error) {
-    console.error("[supabase-data] fetchProjectDependencies", error);
-    return [];
+  const byId = new Map<string, DbTaskDependency>();
+  for (const ids of chunk(taskIds)) {
+    for (const column of ["task_id", "depends_on_task_id"] as const) {
+      const rows = await fetchAllPages<DbTaskDependency>("fetchProjectDependencies", (from, to) =>
+        supabase.from("task_dependencies").select("*").in(column, ids).order("id").range(from, to)
+      );
+      rows.forEach((r) => byId.set(r.id, r));
+    }
   }
-  return ((data as DbTaskDependency[] | null) ?? []).map(dbToDependency);
+  return [...byId.values()].map(dbToDependency);
 }
 
 /** Cria uma dependência (task A depende de task B) */
@@ -661,7 +723,7 @@ export async function fetchProjectMembers(projectId: string): Promise<ProjectMem
       user_id,
       role,
       created_at,
-      profiles:profiles (email, full_name, avatar_color)
+      profiles:profiles (email, full_name)
     `)
     .eq("project_id", projectId);
 
@@ -678,7 +740,8 @@ export async function fetchProjectMembers(projectId: string): Promise<ProjectMem
     created_at: row.created_at,
     email: row.profiles?.email ?? "",
     full_name: row.profiles?.full_name ?? null,
-    avatar_color: row.profiles?.avatar_color ?? "#3b82f6",
+    // profiles não tem coluna avatar_color; cor padrão
+    avatar_color: "#3b82f6",
   }));
 }
 

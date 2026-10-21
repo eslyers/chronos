@@ -5,6 +5,7 @@
 import * as XLSX from "xlsx";
 import type { Project, Task } from "@/lib/context/DataContext";
 import { compareTasksByDueDate } from "@/lib/task-sorting";
+import { toDateOnly, todayDateOnly } from "@/lib/date-only";
 
 // ─────────────────────────────────────────────────────────────
 // Helpers de Formatação de Data e Status
@@ -47,10 +48,11 @@ function levelOf(task: Task, allTasks: Task[]): number {
 
 function statusLabel(task: Task): string {
   const progress = task.progress ?? 0;
-  const due = task.due_date ? new Date(task.due_date) : null;
-  const now = new Date();
+  // Compara datas sem hora: new Date("YYYY-MM-DD") é meia-noite UTC e marcaria
+  // a tarefa como atrasada já na véspera do vencimento (UTC-3)
+  const due = toDateOnly(task.due_date);
   if (task.status === "done" || progress === 100) return "Concluído";
-  if (due && due < now) return "Atrasado";
+  if (due && due < todayDateOnly()) return "Atrasado";
   if (progress === 0) return "Não iniciado";
   return "Em progresso";
 }

@@ -91,6 +91,7 @@ function TimelineContent() {
     loading,
     loadProjectDetails,
     loadAllProjectsDetails,
+    isProjectLoaded,
   } = useData();
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.Week);
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projectParam || "all");
@@ -103,6 +104,14 @@ function TimelineContent() {
   }, [projectParam]);
 
   useEffect(() => {
+    // Só mostra o loader quando há algo a buscar: trocar o Gantt por um
+    // spinner a cada edição fechava o TaskDialog e perdia o scroll
+    const needsLoad =
+      selectedProjectId === "all"
+        ? projects.some((p) => !isProjectLoaded(p.id))
+        : !isProjectLoaded(selectedProjectId);
+    if (!needsLoad) return;
+    let cancelled = false;
     async function fetchDetails() {
       setLoadingDetails(true);
       if (selectedProjectId === "all") {
@@ -110,10 +119,14 @@ function TimelineContent() {
       } else {
         await loadProjectDetails(selectedProjectId);
       }
-      setLoadingDetails(false);
+      if (!cancelled) setLoadingDetails(false);
     }
     fetchDetails();
-  }, [selectedProjectId, loadProjectDetails, loadAllProjectsDetails]);
+    return () => {
+      cancelled = true;
+      setLoadingDetails(false);
+    };
+  }, [selectedProjectId, projects, isProjectLoaded, loadProjectDetails, loadAllProjectsDetails]);
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set());
   const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set());
   const [editingTask, setEditingTask] = useState<Task | null>(null);
