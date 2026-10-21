@@ -20,13 +20,9 @@ import { ProjectStatusReportPDF } from "@/components/ProjectStatusReportPDF";
 import { TaskIndicators } from "@/components/TaskIndicators";
 import { ProjectAnalyticsDialog } from "@/components/ProjectAnalyticsDialog";
 import { formatDateBR, daysUntil } from "@/lib/utils";
-
-const PRIORITY_COLORS = {
-  low: { bg: "bg-slate-500/15", text: "text-slate-600 dark:text-slate-400", label: "Baixa" },
-  medium: { bg: "bg-blue-500/15", text: "text-blue-600 dark:text-blue-400", label: "Média" },
-  high: { bg: "bg-blue-500/15", text: "text-blue-600 dark:text-blue-400", label: "Alta" },
-  critical: { bg: "bg-red-500/15", text: "text-red-600 dark:text-red-400", label: "Crítica" },
-};
+import { PRIORITY_BADGE_CLASS, priorityLabel } from "@/lib/priority";
+import { isTaskDone as isTaskDoneStatus, daysUntilDue } from "@/lib/task-status";
+import { planStageReorder, reopenPatchForStageChange } from "@/lib/board-moves";
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -38,6 +34,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     moveTask,
     updateTask,
     deleteTask,
+    refresh,
     loading,
     loadProjectDetails,
     isProjectLoaded,
@@ -148,29 +145,28 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   }
 
   async function reorderTasksInStage(targetStageId: string, draggedId: string, targetTaskId?: string) {
-    const stageTasks = getTasksByStage(targetStageId).sort((a, b) => a.position - b.position);
-    const filtered = stageTasks.filter((t) => t.id !== draggedId);
-
-    let targetIndex = filtered.length;
-    if (targetTaskId) {
-      const foundIdx = filtered.findIndex((t) => t.id === targetTaskId);
-      if (foundIdx !== -1) {
-        targetIndex = foundIdx;
-      }
-    }
-
     const draggedTaskObj = allTasks.find((t) => t.id === draggedId);
     if (!draggedTaskObj) return;
 
-    filtered.splice(targetIndex, 0, draggedTaskObj);
+    const plan = planStageReorder(getTasksByStage(targetStageId), draggedTaskObj, targetStageId, targetTaskId);
+    const fromDone = !!stages.find((s) => s.id === draggedTaskObj.stage_id)?.is_done;
+    const toDone = !!stages.find((s) => s.id === targetStageId)?.is_done;
+    const reopen = reopenPatchForStageChange(draggedTaskObj, fromDone, toDone);
 
-    for (let i = 0; i < filtered.length; i++) {
-      const task = filtered[i];
-      if (task.id === draggedId) {
-        await moveTask(draggedId, targetStageId, i);
-      } else if (task.position !== i) {
-        await updateTask(task.id, { position: i });
-      }
+    // Só grava o que mudou, em paralelo
+    const writes: Promise<void>[] = plan.updates.map((u) => updateTask(u.id, { position: u.position }));
+    if (reopen) {
+      writes.push(updateTask(draggedId, { stage_id: targetStageId, position: plan.movedPosition, ...reopen }));
+    } else if (plan.movedChanged) {
+      writes.push(moveTask(draggedId, targetStageId, plan.movedPosition));
+    }
+
+    try {
+      await Promise.all(writes);
+    } catch (err) {
+      // Toast já exibido pelo DataContext; recarrega para não deixar posições pela metade
+      console.error("[ProjectDetail] reorder error:", err);
+      await refresh().catch(() => {});
     }
   }
 
@@ -192,7 +188,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
   const formatDate = formatDateBR;
 
-  const completedTasks = allTasks.filter((t) => t.status === "done" || t.progress === 100).length;
+  const completedTasks = allTasks.filter(isTaskDoneStatus).length;
   const projectProgress = allTasks.length > 0 ? Math.round((completedTasks / allTasks.length) * 100) : (project.progress || 0);
 
   return (
@@ -339,9 +335,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
                 <div className="bg-secondary/30 rounded-b-lg p-2 space-y-2 min-h-[400px]">
                   {stageTasks.map((task) => {
-                    const priority = PRIORITY_COLORS[task.priority];
-                    const days = daysUntil(task.due_date);
-                    const isTaskDone = task.status === "done" || task.progress === 100 || stage.is_done;
+                    const days = daysUntilDue(task);
+                    const isTaskDone = isTaskDoneStatus(task) || stage.is_done;
                     const overdue = days !== null && days < 0 && !isTaskDone;
                     const dueSoon = days !== null && days >= 0 && days <= 2 && !isTaskDone;
 
@@ -354,7 +349,18 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                         onDragOver={handleDragOver}
                         onDrop={(e) => handleDropOnTask(e, task)}
                         onClick={() => openEditTask(task)}
-                        className={`bg-card rounded-md p-3 border hover:border-primary cursor-pointer transition-all hover:shadow-md group ${
+                        // Abrir pelo teclado (Enter/Espaço); o arraste aqui é HTML5 nativo, só de mouse
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Abrir tarefa "${task.title}"`}
+                        onKeyDown={(e) => {
+                          if (e.target !== e.currentTarget) return;
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openEditTask(task);
+                          }
+                        }}
+                        className={`bg-card rounded-md p-3 border hover:border-primary cursor-pointer transition-all hover:shadow-md group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                           isTaskDone ? "border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-950/10 shadow-xs" : ""
                         }`}
                       >
@@ -372,7 +378,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                               e.stopPropagation();
                               setDeleteTaskTarget(task);
                             }}
-                            className="opacity-0 group-hover:opacity-100 text-destructive p-0.5"
+                            aria-label={`Excluir tarefa "${task.title}"`}
+                            className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 text-destructive p-0.5"
                           >
                             <MoreVertical className="h-3.5 w-3.5" />
                           </button>
@@ -415,8 +422,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
                         <div className="flex items-center justify-between gap-2 mt-2">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <Badge className={`${priority.bg} ${priority.text} border-0`}>
-                              {priority.label}
+                            <Badge variant="outline" className={PRIORITY_BADGE_CLASS[task.priority] ?? PRIORITY_BADGE_CLASS.medium}>
+                              {priorityLabel(task.priority)}
                             </Badge>
                             {isTaskDone && (
                               <Badge variant="outline" className="text-[10px] px-1.5 py-0.2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-bold">

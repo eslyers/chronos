@@ -1,13 +1,16 @@
 "use client";
 
 import React from "react";
-import { CheckCircle2, Circle, Flag, Edit, Trash2, User, Lock } from "lucide-react";
+import { CheckCircle2, Circle, Flag, Edit, Trash2, Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { useData, type Task } from "@/lib/context/DataContext";
 import { formatWorkdayColumnHeader } from "@/lib/business-days";
 import { formatHoursBadge } from "@/lib/duration";
+import { PRIORITY_HEX, priorityLabel } from "@/lib/priority";
+import { isTaskDone } from "@/lib/task-status";
+import { TaskAssignee } from "@/components/TaskAssignee";
 
 interface FastCloseListViewProps {
   workdayOffsets: number[];
@@ -19,20 +22,6 @@ interface FastCloseListViewProps {
   onDeleteTask: (taskId: string) => void;
   onAddTaskToOffset: (offsetDate: Date) => void;
 }
-
-const PRIORITY_FLAG_COLORS = {
-  low: "#64748b",
-  medium: "#3b82f6",
-  high: "#3b82f6",
-  critical: "#ef4444",
-};
-
-const PRIORITY_LABELS = {
-  low: "Baixa",
-  medium: "Média",
-  high: "Alta",
-  critical: "Crítica",
-};
 
 export function FastCloseListView({
   workdayOffsets,
@@ -116,7 +105,8 @@ export function FastCloseListView({
             {/* Tabela de Tarefas do Dia */}
             <div className="divide-y divide-border/40">
               {tasks.map((task) => {
-                const isDone = task.status === "done" || task.progress === 100;
+                const isDone = isTaskDone(task);
+                const project = task.project_id ? getProject(task.project_id) : undefined;
                 return (
                   <div
                     key={task.id}
@@ -129,6 +119,8 @@ export function FastCloseListView({
                       <button
                         type="button"
                         onClick={() => onToggleTaskComplete(task)}
+                        aria-label={isDone ? `Reabrir "${task.title}"` : `Concluir "${task.title}"`}
+                        aria-pressed={isDone}
                         className="mt-0.5 sm:mt-0 text-muted-foreground hover:text-emerald-500 transition-colors shrink-0"
                       >
                         {isDone ? (
@@ -139,14 +131,15 @@ export function FastCloseListView({
                       </button>
 
                       <div className="space-y-0.5 min-w-0 flex-1">
-                        <span
+                        <button
+                          type="button"
                           onClick={() => onOpenEditTask(task)}
-                          className={`text-xs font-bold text-foreground hover:text-blue-500 transition-colors cursor-pointer block truncate ${
+                          className={`text-xs font-bold text-foreground hover:text-blue-500 transition-colors cursor-pointer block w-full text-left truncate rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                             isDone ? "line-through text-muted-foreground" : ""
                           }`}
                         >
                           {task.title}
-                        </span>
+                        </button>
                         {task.description && (
                           <p className="text-[11px] text-muted-foreground truncate leading-relaxed">
                             {task.description}
@@ -164,29 +157,26 @@ export function FastCloseListView({
                       >
                         <Flag
                           className="h-3 w-3"
-                          style={{
-                            color:
-                              PRIORITY_FLAG_COLORS[
-                                task.priority as keyof typeof PRIORITY_FLAG_COLORS
-                              ] || "#3b82f6",
-                          }}
+                          aria-hidden="true"
+                          style={{ color: PRIORITY_HEX[task.priority] ?? PRIORITY_HEX.medium }}
                         />
-                        <span>{PRIORITY_LABELS[task.priority as keyof typeof PRIORITY_LABELS] || task.priority}</span>
+                        <span>{priorityLabel(task.priority)}</span>
                       </Badge>
 
-                      {/* Responsável */}
-                      {task.assignee_name ? (
-                        <div className="text-[11px] font-semibold text-muted-foreground bg-muted px-2.5 py-1 rounded-lg flex items-center gap-1.5">
-                          <User className="h-3 w-3 text-blue-500" />
-                          <span>{task.assignee_name}</span>
-                        </div>
+                      {/* Responsável (membro resolvido pelo workspace do projeto) */}
+                      {task.assignee_id || task.assignee_name ? (
+                        <TaskAssignee
+                          assigneeId={task.assignee_id}
+                          assigneeName={task.assignee_name}
+                          workspaceId={project?.workspace_id}
+                          variant="badge"
+                        />
                       ) : (
                         <span className="text-[11px] text-muted-foreground/60 italic">Sem responsável</span>
                       )}
 
                       {/* Horas Estimadas / Reais */}
                       {(() => {
-                        const project = task.project_id ? getProject(task.project_id) : undefined;
                         const trackTime = project ? project.track_time !== false : true;
                         if (!trackTime) return null;
                         return (
@@ -222,6 +212,7 @@ export function FastCloseListView({
                           onClick={() => onOpenEditTask(task)}
                           className="h-8 w-8 hover:bg-muted"
                           title="Editar tarefa"
+                          aria-label={`Editar "${task.title}"`}
                         >
                           <Edit className="h-3.5 w-3.5" />
                         </Button>
@@ -231,6 +222,7 @@ export function FastCloseListView({
                           onClick={() => onDeleteTask(task.id)}
                           className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
                           title="Excluir tarefa"
+                          aria-label={`Excluir "${task.title}"`}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>

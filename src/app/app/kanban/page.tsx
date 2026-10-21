@@ -45,82 +45,47 @@ import { ProjectAnalyticsDialog } from "@/components/ProjectAnalyticsDialog";
 import { sortTasksWithHierarchy } from "@/lib/task-sorting";
 import { KanbanSkeleton } from "@/components/skeletons/KanbanSkeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Task } from "@/lib/context/DataContext";
+import { Task, Stage } from "@/lib/context/DataContext";
 import { formatHoursBadge } from "@/lib/duration";
-
-type TaskLike = {
-  id: string;
-  title: string;
-  description: string | null;
-  stage_id: string | null;
-  priority: keyof typeof PRIORITY_COLORS;
-  status?: string;
-  due_date: string | null;
-  progress: number;
-  estimated_hours?: number | null;
-  actual_hours?: number | null;
-  assignee_id: string | null;
-  assignee_name?: string | null;
-  parent_task_id?: string | null;
-};
-
-type StageLike = {
-  id: string;
-  name: string;
-  color: string;
-  position: number;
-  is_done: boolean;
-  project_id: string;
-  wip_limit?: number | null;
-};
-
-const PRIORITY_COLORS = {
-  critical: "border-l-red-500",
-  high: "border-l-indigo-500",
-  medium: "border-l-blue-500",
-  low: "border-l-slate-400",
-} as const;
-
-const PRIORITY_LABELS = {
-  critical: "Crítica",
-  high: "Alta",
-  medium: "Média",
-  low: "Baixa",
-} as const;
-
-const PRIORITY_FLAG_COLORS = {
-  critical: "#ef4444",
-  high: "#6366f1",
-  medium: "#3b82f6",
-  low: "#94a3b8",
-} as const;
-
-import { formatDateBR as formatDate, daysUntil } from "@/lib/utils";
+import { formatDateBR as formatDate } from "@/lib/utils";
+import { PRIORITY_HEX, priorityLabel } from "@/lib/priority";
+import { isTaskDone as isTaskDoneStatus, isTaskOverdue } from "@/lib/task-status";
+import { planStageReorder, reopenPatchForStageChange, type StageReorderPlan } from "@/lib/board-moves";
+import { useMediaQuery } from "@/lib/use-media-query";
+import { BOARD_ACCESSIBILITY, pointerOnlyListeners } from "@/components/kanban/dnd-a11y";
 
 function TaskCard({
   task,
   projectId,
+  workspaceId,
   isDone,
   router,
   isOverlay = false,
   trackTime = true,
 }: {
-  task: TaskLike;
+  task: Task;
   projectId: string;
+  workspaceId: string;
   isDone: boolean;
   router: ReturnType<typeof useRouter>;
   isOverlay?: boolean;
   trackTime?: boolean;
 }) {
-  const { attributes, listeners, setNodeRef: setDraggableRef, isDragging } = useDraggable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDraggableRef,
+    setActivatorNodeRef,
+    isDragging,
+  } = useDraggable({
     id: task.id,
-    data: { type: "task", stageId: task.stage_id, taskId: task.id },
+    data: { type: "task", stageId: task.stage_id, taskId: task.id, label: task.title },
     disabled: isOverlay,
   });
 
   const { setNodeRef: setDroppableRef } = useDroppable({
     id: `droppable-task-${task.id}`,
-    data: { type: "task", stageId: task.stage_id, taskId: task.id },
+    data: { type: "task", stageId: task.stage_id, taskId: task.id, label: `a tarefa "${task.title}"` },
     disabled: isOverlay,
   });
 
@@ -129,19 +94,22 @@ function TaskCard({
     setDroppableRef(node);
   };
 
-  const isTaskDone = isDone || task.status === "done" || task.progress === 100;
-  const days = daysUntil(task.due_date);
-  const overdue = days !== null && days < 0 && !isTaskDone;
+  const isTaskDone = isDone || isTaskDoneStatus(task);
+  const overdue = !isTaskDone && isTaskOverdue(task);
+
+  const openTask = () => {
+    if (!isDragging) router.push(`/app/projects/${projectId}?task=${task.id}`);
+  };
 
   return (
     <Card
       ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      className={`border-l-4 ${
+      // Mouse/toque arrastam pelo card inteiro; o teclado usa só o botão de arrastar
+      {...(isOverlay ? {} : pointerOnlyListeners(listeners))}
+      className={`relative border-l-4 ${
         isTaskDone
           ? "border-l-emerald-500 bg-emerald-500/5 dark:bg-emerald-950/10 border-border/80 shadow-xs"
-          : (PRIORITY_COLORS[task.priority as keyof typeof PRIORITY_COLORS] || "border-l-blue-500") + " bg-card border-border/80"
+          : "bg-card border-border/80"
       } ${
         isDragging && !isOverlay ? "opacity-30 scale-95" : ""
       } ${
@@ -149,12 +117,7 @@ function TaskCard({
           ? "shadow-2xl rotate-2 cursor-grabbing ring-2 ring-blue-500/50 scale-105"
           : "cursor-grab hover:shadow-md hover:border-border"
       } transition-all duration-200 group`}
-      onClick={(e) => {
-        if (!isDragging) {
-          e.stopPropagation();
-          router.push(`/app/projects/${projectId}?task=${task.id}`);
-        }
-      }}
+      style={isTaskDone ? undefined : { borderLeftColor: PRIORITY_HEX[task.priority] ?? PRIORITY_HEX.medium }}
     >
       <CardContent className="p-3.5 space-y-2.5">
         <div className="flex items-start justify-between gap-2">
@@ -162,16 +125,38 @@ function TaskCard({
             {isTaskDone && (
               <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
             )}
-            <span className={isTaskDone ? "text-foreground font-semibold" : ""}>
+            {/* O botão se estende (after:inset-0) sobre o card: clique ou Enter abrem a tarefa */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openTask();
+              }}
+              tabIndex={isOverlay ? -1 : undefined}
+              className={`text-left cursor-grab focus-visible:outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-blue-500 ${
+                isTaskDone ? "text-foreground font-semibold" : ""
+              }`}
+            >
               {task.title}
-            </span>
+            </button>
           </h4>
-          <div className="flex items-center gap-1 shrink-0">
-            <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+          <div className="relative z-10 flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              ref={setActivatorNodeRef}
+              {...(isOverlay ? {} : attributes)}
+              {...(isOverlay ? {} : listeners)}
+              aria-label="Arrastar tarefa"
+              tabIndex={isOverlay ? -1 : 0}
+              className="rounded p-0.5 -m-0.5 cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+            </button>
             <Flag
               className="h-3.5 w-3.5"
+              aria-hidden="true"
               style={{
-                color: isTaskDone ? "#10b981" : (PRIORITY_FLAG_COLORS[task.priority as keyof typeof PRIORITY_FLAG_COLORS] || "#3b82f6"),
+                color: isTaskDone ? "#10b981" : (PRIORITY_HEX[task.priority] ?? PRIORITY_HEX.medium),
               }}
             />
           </div>
@@ -197,7 +182,7 @@ function TaskCard({
               variant="outline"
               className="text-[10px] px-2 py-0.5 font-bold uppercase tracking-wider bg-muted/40 border-border/60"
             >
-              {PRIORITY_LABELS[task.priority as keyof typeof PRIORITY_LABELS] || "Média"}
+              {priorityLabel(task.priority)}
             </Badge>
 
             {isTaskDone && (
@@ -253,11 +238,12 @@ function TaskCard({
             <TaskAssignee
               assigneeId={task.assignee_id}
               assigneeName={task.assignee_name}
-              workspaceId={undefined as unknown as string}
+              workspaceId={workspaceId}
               variant="badge"
             />
           ) : <div />}
-          <TaskIndicators taskId={task.id} />
+          {/* No overlay de arraste não busca contagens de novo */}
+          {!isOverlay && <TaskIndicators taskId={task.id} />}
         </div>
       </CardContent>
     </Card>
@@ -268,14 +254,16 @@ function StageColumn({
   stage,
   tasks,
   projectId,
+  workspaceId,
   isDone,
   router,
   onAddTask,
   trackTime = true,
 }: {
-  stage: StageLike;
-  tasks: TaskLike[];
+  stage: Stage;
+  tasks: Task[];
   projectId: string;
+  workspaceId: string;
   isDone: boolean;
   router: ReturnType<typeof useRouter>;
   onAddTask: () => void;
@@ -283,7 +271,7 @@ function StageColumn({
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
-    data: { type: "stage", stageId: stage.id },
+    data: { type: "stage", stageId: stage.id, label: `a coluna "${stage.name}"` },
   });
 
   const wipLimit = stage.wip_limit ?? null;
@@ -329,7 +317,7 @@ function StageColumn({
           {isWipExceeded ? (
             <Badge
               variant="outline"
-              className="text-[11px] font-mono font-bold bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/40 animate-pulse px-2 py-0.5 inline-flex items-center gap-1"
+              className="text-[11px] font-mono font-bold bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/40 motion-safe:animate-pulse px-2 py-0.5 inline-flex items-center gap-1"
               title={`Limite WIP excedido: ${tasks.length} tarefas para um limite de ${wipLimit}`}
             >
               <AlertTriangle className="h-3 w-3 shrink-0 text-red-500" />
@@ -389,6 +377,7 @@ function StageColumn({
               key={task.id}
               task={task}
               projectId={projectId}
+              workspaceId={workspaceId}
               isDone={isDone}
               router={router}
               trackTime={trackTime}
@@ -409,10 +398,14 @@ export default function KanbanPage() {
     loading,
     moveTask,
     updateTask,
+    refresh,
     loadProjectDetails,
     loadAllProjectsDetails,
     isProjectLoaded,
   } = useData();
+  // Só um layout montado por vez: mobile e desktop no mesmo DndContext
+  // registrariam os mesmos ids de draggable/droppable duas vezes.
+  const isMobile = useMediaQuery("(max-width: 639px)");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [loadingProject, setLoadingProject] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
@@ -432,13 +425,19 @@ export default function KanbanPage() {
     fetchDetails();
   }, [selectedProjectId, loadProjectDetails, isProjectLoaded]);
 
-  const [activeTask, setActiveTask] = useState<TaskLike | null>(null);
-  const [moveError, setMoveError] = useState<string | null>(null);
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [wipWarning, setWipWarning] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [defaultStageId, setDefaultStageId] = useState<string | null>(null);
   const [activeMobileStageId, setActiveMobileStageId] = useState<string | null>(null);
-  const [completingTask, setCompletingTask] = useState<{ task: Task; targetStageName: string } | null>(null);
+  // Movimento para etapa de conclusão aguardando o CompleteTaskDialog:
+  // o card só sai da coluna de origem depois da confirmação.
+  const [completingTask, setCompletingTask] = useState<{
+    task: Task;
+    targetStageId: string;
+    targetStageName: string;
+    plan: StageReorderPlan;
+  } | null>(null);
 
   const projectStages = useMemo(() => {
     if (!selectedProjectId) return [];
@@ -473,10 +472,51 @@ export default function KanbanPage() {
   }, [tasks, selectedProjectId]);
 
   const handleDragStart = (event: DragStartEvent) => {
-    setMoveError(null);
     setWipWarning(null);
     const task = projectTasks.find((t) => t.id === event.active.id);
     if (task) setActiveTask(task);
+  };
+
+  // Aviso de WIP só quando o movimento entre etapas é de fato gravado
+  const warnIfWipExceeded = (task: Task, targetStageId: string) => {
+    if (task.stage_id === targetStageId) return;
+    const targetStage = stages.find((s) => s.id === targetStageId);
+    if (!targetStage?.wip_limit || targetStage.wip_limit <= 0) return;
+    const currentTasksInTarget = projectTasks.filter((t) => t.stage_id === targetStageId).length;
+    if (currentTasksInTarget >= targetStage.wip_limit) {
+      setWipWarning(
+        `⚠️ Atenção: O estágio "${targetStage.name}" ultrapassará o limite WIP de ${targetStage.wip_limit} tarefas (${currentTasksInTarget + 1}/${targetStage.wip_limit}).`
+      );
+    }
+  };
+
+  /**
+   * Grava o movimento: o card movido numa única escrita (etapa + posição +
+   * status) e os vizinhos que mudaram de posição em paralelo. Em caso de
+   * falha o DataContext já mostrou o toast; recarregamos o estado para não
+   * deixar posições pela metade e repassamos o erro.
+   */
+  const commitMove = async (
+    task: Task,
+    targetStageId: string,
+    plan: StageReorderPlan,
+    statusPatch?: Partial<Task> | null
+  ) => {
+    warnIfWipExceeded(task, targetStageId);
+    const writes: Promise<void>[] = plan.updates.map((u) => updateTask(u.id, { position: u.position }));
+    if (statusPatch) {
+      writes.push(updateTask(task.id, { stage_id: targetStageId, position: plan.movedPosition, ...statusPatch }));
+    } else if (plan.movedChanged) {
+      // moveTask marca como concluída quando a etapa destino é is_done
+      writes.push(moveTask(task.id, targetStageId, plan.movedPosition));
+    }
+    try {
+      await Promise.all(writes);
+    } catch (err) {
+      console.error("[Kanban] move error:", err);
+      await refresh().catch(() => {});
+      throw err;
+    }
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -503,59 +543,31 @@ export default function KanbanPage() {
     if (!movedTask) return;
 
     const targetTaskId = overData?.type === "task" ? overData.taskId : undefined;
+    const plan = planStageReorder(projectTasks, movedTask, targetStageId, targetTaskId);
+    if (!plan.movedChanged && plan.updates.length === 0) return;
 
-    // Verificar se o estágio destino possui limite WIP excedido
-    if (movedTask.stage_id !== targetStageId) {
-      const targetStage = stages.find((s) => s.id === targetStageId);
-      if (targetStage && targetStage.wip_limit && targetStage.wip_limit > 0) {
-        const currentTasksInTarget = projectTasks.filter((t) => t.stage_id === targetStageId).length;
-        if (currentTasksInTarget >= targetStage.wip_limit) {
-          setWipWarning(
-            `⚠️ Atenção: O estágio "${targetStage.name}" ultrapassará o limite WIP de ${targetStage.wip_limit} tarefas (${currentTasksInTarget + 1}/${targetStage.wip_limit}).`
-          );
-        }
-      }
+    const sourceStage = stages.find((s) => s.id === movedTask.stage_id);
+    const targetStage = stages.find((s) => s.id === targetStageId);
 
-      // Se moveu para uma coluna concluída
-      if (targetStage?.is_done) {
-        const currentProject = projects.find((p) => p.id === selectedProjectId);
-        const shouldTrackTime = currentProject ? currentProject.track_time !== false : true;
-
-        if (shouldTrackTime && !movedTask.actual_hours) {
-          setCompletingTask({ task: movedTask as Task, targetStageName: targetStage.name });
-        } else {
-          await updateTask(taskId, { status: "done", progress: 100 });
-        }
+    // Entrando numa coluna concluída: pede as horas reais antes de mover
+    if (movedTask.stage_id !== targetStageId && targetStage?.is_done) {
+      const currentProject = projects.find((p) => p.id === selectedProjectId);
+      const shouldTrackTime = currentProject ? currentProject.track_time !== false : true;
+      if (shouldTrackTime && !movedTask.actual_hours) {
+        setCompletingTask({ task: movedTask, targetStageId, targetStageName: targetStage.name, plan });
+        return;
       }
     }
 
     try {
-      const targetStageTasks = projectTasks
-        .filter((t) => t.stage_id === targetStageId && t.id !== taskId)
-        .sort((a, b) => a.position - b.position);
-
-      let targetIndex = targetStageTasks.length;
-      if (targetTaskId && targetTaskId !== taskId) {
-        const idx = targetStageTasks.findIndex((t) => t.id === targetTaskId);
-        if (idx !== -1) targetIndex = idx;
-      }
-
-      const updatedList = [...targetStageTasks];
-      updatedList.splice(targetIndex, 0, movedTask);
-
-      for (let i = 0; i < updatedList.length; i++) {
-        const t = updatedList[i];
-        if (t.id === taskId) {
-          await moveTask(taskId, targetStageId, i);
-        } else if (t.position !== i) {
-          await updateTask(t.id, { position: i });
-        }
-      }
-    } catch (err) {
-      console.error("[Kanban] move error:", err);
-      setMoveError(
-        err instanceof Error ? err.message : "Falha ao mover tarefa"
+      await commitMove(
+        movedTask,
+        targetStageId,
+        plan,
+        reopenPatchForStageChange(movedTask, !!sourceStage?.is_done, !!targetStage?.is_done)
       );
+    } catch {
+      // Toast já exibido pelo DataContext e estado recarregado em commitMove
     }
   };
 
@@ -616,9 +628,7 @@ export default function KanbanPage() {
             const projectStages = stages.filter((s) => s.project_id === project.id);
             const projectTasks = tasks.filter((t) => t.project_id === project.id);
             const projectTasksCount = projectTasks.length;
-            const doneCount = projectTasks.filter(
-              (t) => t.status === "done" || t.progress === 100
-            ).length;
+            const doneCount = projectTasks.filter(isTaskDoneStatus).length;
             const progress = projectTasksCount ? Math.round((doneCount / projectTasksCount) * 100) : (project.progress || 0);
 
             return (
@@ -750,22 +760,6 @@ export default function KanbanPage() {
         </div>
       )}
 
-      {/* Error Banner */}
-      {moveError && (
-        <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-500 font-semibold flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4" />
-            <span>{moveError}</span>
-          </div>
-          <button
-            onClick={() => setMoveError(null)}
-            className="text-xs underline hover:text-foreground"
-          >
-            Fechar
-          </button>
-        </div>
-      )}
-
       {/* Board DnD Columns */}
       {projectStages.length === 0 ? (
         <EmptyState
@@ -783,9 +777,11 @@ export default function KanbanPage() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onDragCancel={() => setActiveTask(null)}
+          accessibility={BOARD_ACCESSIBILITY}
         >
-          {/* Mobile View: Single Column with Segmented Tab Control */}
-          <div className="block sm:hidden space-y-4">
+          {isMobile ? (
+          /* Mobile View: Single Column with Segmented Tab Control */
+          <div className="space-y-4">
             <div className="flex gap-1.5 overflow-x-auto pb-2 border-b border-border/40 scrollbar-none">
               {projectStages.map((stage) => {
                 const isActive = activeMobileStageId === stage.id;
@@ -832,6 +828,7 @@ export default function KanbanPage() {
                     stage={stage}
                     tasks={stageTasks}
                     projectId={project.id}
+                    workspaceId={project.workspace_id}
                     isDone={stage.is_done}
                     router={router}
                     trackTime={project.track_time !== false}
@@ -843,9 +840,9 @@ export default function KanbanPage() {
                 );
               })}
           </div>
-
-          {/* Desktop View: Multi-column horizontal scroll (Original Layout) */}
-          <div className="hidden sm:flex gap-4 overflow-x-auto pb-6 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory">
+          ) : (
+          /* Desktop View: Multi-column horizontal scroll (Original Layout) */
+          <div className="flex gap-4 overflow-x-auto pb-6 snap-x snap-mandatory">
             {projectStages.map((stage) => {
               const stageTasks = sortTasksWithHierarchy(
                 projectTasks.filter((t) => t.stage_id === stage.id)
@@ -856,6 +853,7 @@ export default function KanbanPage() {
                   stage={stage}
                   tasks={stageTasks}
                   projectId={project.id}
+                  workspaceId={project.workspace_id}
                   isDone={stage.is_done}
                   router={router}
                   trackTime={project.track_time !== false}
@@ -867,12 +865,14 @@ export default function KanbanPage() {
               );
             })}
           </div>
+          )}
 
           <DragOverlay dropAnimation={null}>
             {activeTask ? (
               <TaskCard
                 task={activeTask}
                 projectId={project.id}
+                workspaceId={project.workspace_id}
                 isDone={
                   projectStages.find((s) => s.id === activeTask.stage_id)?.is_done ?? false
                 }
@@ -919,14 +919,16 @@ export default function KanbanPage() {
         task={completingTask?.task ?? null}
         targetStageName={completingTask?.targetStageName}
         onConfirm={async (actualHours) => {
-          if (completingTask) {
-            await updateTask(completingTask.task.id, {
-              status: "done",
-              progress: 100,
-              ...(actualHours !== null ? { actual_hours: actualHours } : {}),
-            });
-            setCompletingTask(null);
-          }
+          if (!completingTask) return;
+          // Só agora o card entra na coluna concluída. Cancelar o diálogo
+          // apenas limpa o estado: o card nunca saiu da coluna de origem.
+          // Se a gravação falhar, o erro sobe e o diálogo continua aberto.
+          await commitMove(completingTask.task, completingTask.targetStageId, completingTask.plan, {
+            status: "done",
+            progress: 100,
+            ...(actualHours !== null ? { actual_hours: actualHours } : {}),
+          });
+          setCompletingTask(null);
         }}
       />
     </div>
