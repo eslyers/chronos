@@ -117,6 +117,8 @@ export function DependencyManager({
       await removeDependency(dep.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao remover");
+      // Repassa para o ConfirmDialog continuar aberto
+      throw err;
     }
   };
 

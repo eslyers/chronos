@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Settings2, X, Plus, Check, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
 interface WorkdayConfigDialogProps {
   open: boolean;
@@ -23,12 +24,19 @@ export function WorkdayConfigDialog({
   const [offsets, setOffsets] = useState<number[]>(workdayOffsets);
   const [newOffsetInput, setNewOffsetInput] = useState("");
 
-  // Atualiza estados locais quando o modal abre
+  // Atualiza estados locais só quando o modal abre (um novo array de offsets
+  // vindo do pai a cada render não pode desfazer o que o usuário editou)
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    if (open) {
-      setCurrentUseD0(useD0);
-      setOffsets(workdayOffsets);
+    if (!open) {
+      wasOpenRef.current = false;
+      return;
     }
+    if (wasOpenRef.current) return;
+    wasOpenRef.current = true;
+    setCurrentUseD0(useD0);
+    setOffsets(workdayOffsets);
+    setNewOffsetInput("");
   }, [open, useD0, workdayOffsets]);
 
   if (!open) return null;
@@ -59,15 +67,11 @@ export function WorkdayConfigDialog({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative w-full max-w-lg bg-card border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
-        onClick={(e) => e.stopPropagation()}
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        hideCloseButton
+        overlayClassName="bg-black/65"
+        className="flex flex-col gap-0 p-0 w-[calc(100%-2rem)] max-w-lg max-h-[85vh] bg-card border-border rounded-2xl sm:rounded-2xl shadow-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600/10 via-purple-500/5 to-transparent border-b border-border p-5 flex items-center justify-between">
@@ -76,15 +80,16 @@ export function WorkdayConfigDialog({
               <Settings2 className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-foreground">Configurar Régua de Dias Úteis</h2>
-              <p className="text-xs text-muted-foreground">
+              <DialogTitle className="text-lg font-bold leading-normal tracking-normal text-foreground">Configurar Régua de Dias Úteis</DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
                 Personalize o marcador D0 e os dias positivos/negativos exibidos na matriz
-              </p>
+              </DialogDescription>
             </div>
           </div>
           <button
             type="button"
             onClick={() => onOpenChange(false)}
+            aria-label="Fechar"
             className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted transition-colors"
           >
             <X className="h-5 w-5" />
@@ -118,11 +123,12 @@ export function WorkdayConfigDialog({
 
           {/* Adicionar Novo Dia D */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-muted-foreground block">
+            <label htmlFor="workday-new-offset" className="text-xs font-bold text-muted-foreground block">
               Adicionar Dia D Personalizado (Positivo ou Negativo):
             </label>
             <div className="flex items-center gap-2">
               <input
+                id="workday-new-offset"
                 type="number"
                 placeholder="Ex: -10, -7, 7, 10, 15"
                 value={newOffsetInput}
@@ -198,7 +204,7 @@ export function WorkdayConfigDialog({
             Salvar Régua
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

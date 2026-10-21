@@ -5,6 +5,8 @@ import { Copy, X, Loader2, CheckSquare, Square, ArrowRight, ShieldCheck } from "
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Task } from "@/lib/context/DataContext";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { parseDateOnly } from "@/lib/date-only";
 
 interface CopyClosingDialogProps {
   open: boolean;
@@ -51,9 +53,8 @@ export function CopyClosingDialog({
   const availableSourceTasks = useMemo(() => {
     return tasks.filter((t) => {
       if (!t.due_date && !t.start_date) return true;
-      const raw = (t.due_date || t.start_date || "").split("T")[0];
-      const refDate = new Date(raw + "T00:00:00");
-      if (isNaN(refDate.getTime())) return true;
+      const refDate = parseDateOnly(t.due_date || t.start_date);
+      if (!refDate) return true;
       return refDate.getMonth() + 1 === sourceMonth && refDate.getFullYear() === sourceYear;
     });
   }, [tasks, sourceMonth, sourceYear]);
@@ -106,15 +107,17 @@ export function CopyClosingDialog({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && loading) return;
+        onOpenChange(next);
+      }}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative w-full max-w-xl bg-card border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
-        onClick={(e) => e.stopPropagation()}
+      <DialogContent
+        hideCloseButton
+        overlayClassName="bg-black/65"
+        className="flex flex-col gap-0 p-0 w-[calc(100%-2rem)] max-w-xl max-h-[85vh] bg-card border-border rounded-2xl sm:rounded-2xl shadow-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600/10 via-blue-500/5 to-transparent border-b border-border p-5 flex items-center justify-between">
@@ -123,15 +126,16 @@ export function CopyClosingDialog({
               <Copy className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-foreground">Copiar Fechamento Mensal</h2>
-              <p className="text-xs text-muted-foreground">
+              <DialogTitle className="text-lg font-bold leading-normal tracking-normal text-foreground">Copiar Fechamento Mensal</DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
                 Reaproveite e recalcule as rotinas do mês anterior para o novo ciclo
-              </p>
+              </DialogDescription>
             </div>
           </div>
           <button
             type="button"
             onClick={() => onOpenChange(false)}
+            aria-label="Fechar"
             className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted transition-colors"
           >
             <X className="h-5 w-5" />
@@ -304,7 +308,7 @@ export function CopyClosingDialog({
             )}
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

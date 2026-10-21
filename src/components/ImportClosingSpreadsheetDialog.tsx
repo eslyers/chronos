@@ -5,6 +5,9 @@ import { Upload, X, FileSpreadsheet, Loader2, CheckCircle2, AlertTriangle } from
 import { Button } from "@/components/ui/button";
 import { addBusinessDays, getClosingD0Date } from "@/lib/business-days";
 import type { ImportPreview } from "@/lib/excel-parser";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { formatDateOnly, toDateOnly } from "@/lib/date-only";
+import { priorityLabel } from "@/lib/priority";
 
 interface ImportClosingSpreadsheetDialogProps {
   open: boolean;
@@ -36,6 +39,20 @@ export function ImportClosingSpreadsheetDialog({
   const [parseResult, setParseResult] = useState<ImportPreview | null>(null);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState("");
+
+  // Mesmo critério do servidor: linhas sem erro (válidas ou com aviso) são importadas
+  const importableCount = parseResult ? parseResult.rows.filter((r) => r.status !== "error").length : 0;
+
+  // Fechar limpa o arquivo e a prévia (reabrir começa do zero)
+  const handleOpenChange = (next: boolean) => {
+    if (!next && importing) return;
+    if (!next) {
+      setFile(null);
+      setParseResult(null);
+      setError("");
+    }
+    onOpenChange(next);
+  };
 
   if (!open) return null;
 
@@ -93,12 +110,12 @@ export function ImportClosingSpreadsheetDialog({
         if (offsetMatch) {
           const offset = parseInt(offsetMatch[1], 10);
           const targetDate = addBusinessDays(d0Date, offset);
-          isoDueDate = targetDate.toISOString().split("T")[0];
+          isoDueDate = formatDateOnly(targetDate);
         } else if (row.parsed.due_date) {
-          isoDueDate = row.parsed.due_date;
+          isoDueDate = toDateOnly(row.parsed.due_date) ?? undefined;
         } else {
           // Padrão: D0
-          isoDueDate = d0Date.toISOString().split("T")[0];
+          isoDueDate = formatDateOnly(d0Date);
         }
 
         return {
@@ -111,7 +128,7 @@ export function ImportClosingSpreadsheetDialog({
       });
 
       await onImportSuccess(tasksToCreate);
-      onOpenChange(false);
+      handleOpenChange(false);
     } catch (err: unknown) {
       console.error("[ImportClosing] Import error:", err);
       const msg = err instanceof Error ? err.message : "Erro ao salvar tarefas importadas.";
@@ -122,15 +139,11 @@ export function ImportClosingSpreadsheetDialog({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="relative w-full max-w-xl bg-card border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
-        onClick={(e) => e.stopPropagation()}
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        hideCloseButton
+        overlayClassName="bg-black/65"
+        className="flex flex-col gap-0 p-0 w-[calc(100%-2rem)] max-w-xl max-h-[85vh] bg-card border-border rounded-2xl sm:rounded-2xl shadow-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-emerald-600/10 via-emerald-500/5 to-transparent border-b border-border p-5 flex items-center justify-between">
@@ -139,15 +152,16 @@ export function ImportClosingSpreadsheetDialog({
               <FileSpreadsheet className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-foreground">Importar Cronograma de Fechamento</h2>
-              <p className="text-xs text-muted-foreground">
+              <DialogTitle className="text-lg font-bold leading-normal tracking-normal text-foreground">Importar Cronograma de Fechamento</DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
                 Suporta planilhas .ODS, .XLSX e .CSV com reconhecimento automático de dias úteis (D-x a D+x)
-              </p>
+              </DialogDescription>
             </div>
           </div>
           <button
             type="button"
-            onClick={() => onOpenChange(false)}
+            onClick={() => handleOpenChange(false)}
+            aria-label="Fechar"
             className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted transition-colors"
           >
             <X className="h-5 w-5" />
@@ -176,6 +190,7 @@ export function ImportClosingSpreadsheetDialog({
                 accept=".ods,.xlsx,.xls,.csv"
                 onChange={handleFileChange}
                 className="hidden"
+                aria-label="Arquivo da planilha de fechamento"
               />
             </label>
           )}
@@ -199,11 +214,11 @@ export function ImportClosingSpreadsheetDialog({
               <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs font-bold text-emerald-600 dark:text-emerald-400">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4" />
-                  <span>{parseResult.validRows} rotinas válidas encontradas em {file?.name}</span>
+                  <span>{importableCount} rotinas importáveis encontradas em {file?.name}</span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => { setFile(null); setParseResult(null); }}
+                  onClick={() => { setFile(null); setParseResult(null); setError(""); }}
                   className="text-[11px] underline hover:opacity-80"
                 >
                   Trocar Arquivo
@@ -217,7 +232,7 @@ export function ImportClosingSpreadsheetDialog({
                       {row.parsed.title || String(row.raw[parseResult.columns[0]] || "Rotina sem título")}
                     </span>
                     <span className="text-[10px] font-mono bg-muted px-2 py-0.5 rounded text-muted-foreground shrink-0">
-                      {row.parsed.priority || "Médio"}
+                      {priorityLabel(row.parsed.priority)}
                     </span>
                   </div>
                 ))}
@@ -228,14 +243,14 @@ export function ImportClosingSpreadsheetDialog({
 
         {/* Footer */}
         <div className="p-4 border-t border-border bg-muted/20 flex items-center justify-between">
-          <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="ghost" size="sm" onClick={() => handleOpenChange(false)} disabled={importing}>
             Cancelar
           </Button>
 
           <Button
             type="button"
             size="sm"
-            disabled={!parseResult || importing || parseResult.validRows === 0}
+            disabled={!parseResult || importing || importableCount === 0}
             onClick={handleConfirmImport}
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 px-4 rounded-xl shadow-md shadow-emerald-500/20"
           >
@@ -247,12 +262,12 @@ export function ImportClosingSpreadsheetDialog({
             ) : (
               <>
                 <FileSpreadsheet className="h-4 w-4" />
-                Importar {parseResult?.validRows || 0} Tarefas
+                Importar {importableCount} Tarefas
               </>
             )}
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

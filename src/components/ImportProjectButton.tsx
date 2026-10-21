@@ -4,6 +4,7 @@ import * as React from "react";
 import { Upload, ChevronDown, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ImportDialog } from "@/components/ImportDialog";
+import { useData } from "@/lib/context/DataContext";
 
 type ProjectLike = {
   id: string;
@@ -46,6 +47,13 @@ export function ImportProjectButton(props: Props) {
   const [target, setTarget] = React.useState<ProjectLike | null>(null);
   const [popoverOpen, setPopoverOpen] = React.useState(false);
   const popoverRef = React.useRef<HTMLDivElement | null>(null);
+  const { refresh } = useData();
+
+  // Recarrega os dados em memória em vez de recarregar a página inteira.
+  // Falhas já viram toast no DataContext; aqui só evita rejeição não tratada.
+  const handleImported = React.useCallback(() => {
+    refresh().catch(() => {});
+  }, [refresh]);
 
   // Fecha popover ao clicar fora
   React.useEffect(() => {
@@ -83,7 +91,7 @@ export function ImportProjectButton(props: Props) {
             onOpenChange={setDialogOpen}
             projectId={target.id}
             workspaceId={target.workspace_id}
-            onImported={() => window.location.reload()}
+            onImported={handleImported}
           />
         )}
       </>
@@ -143,7 +151,7 @@ export function ImportProjectButton(props: Props) {
           onOpenChange={setDialogOpen}
           projectId={target.id}
           workspaceId={target.workspace_id}
-          onImported={() => window.location.reload()}
+          onImported={handleImported}
         />
       )}
     </div>
