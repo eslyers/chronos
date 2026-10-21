@@ -169,14 +169,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Fallback estável (mesma identidade a cada render) para uso fora do provider
+const NOOP_TOAST: ToastContextType = {
+  toasts: [],
+  addToast: () => "",
+  dismiss: () => {},
+};
+
 export function useGlobalToast() {
-  const ctx = React.useContext(ToastContext);
-  if (!ctx) {
-    return {
-      toasts: [],
-      addToast: () => "",
-      dismiss: () => {},
-    };
-  }
-  return ctx;
+  return React.useContext(ToastContext) ?? NOOP_TOAST;
 }

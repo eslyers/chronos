@@ -6,6 +6,7 @@ import React, {
   useEffect,
   useState,
   useCallback,
+  useMemo,
   useRef,
 } from "react";
 import {
@@ -15,6 +16,9 @@ import {
   getDataLayer,
 } from "@/lib/data/data-provider";
 import { sortTasksWithHierarchy } from "@/lib/task-sorting";
+import { orderTasksParentsFirst, collectDescendantIds } from "@/lib/task-hierarchy";
+import { daysBetweenDateOnly, shiftDateOnly, toDateOnly } from "@/lib/date-only";
+import { useGlobalToast } from "@/components/ui/toast-notification";
 
 // ─────────────────────────────────────────────────────────────
 // CHRONOS — DataContext
@@ -355,6 +359,34 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [userId, setUserId] = useState<string>(USER_ID);
   const [workspaceId, setWorkspaceId] = useState<string>("ws-local");
   const [loadedProjects, setLoadedProjects] = useState<Record<string, boolean>>({});
+  // Espelho síncrono de loadedProjects + requisições em andamento: mantém os
+  // loaders estáveis (sem depender do state inteiro) e evita buscas duplicadas.
+  const loadedRef = useRef<Record<string, boolean>>({});
+  const inflightRef = useRef(new Map<string, Promise<void>>());
+  const markLoaded = useCallback((ids: string[]) => {
+    const next = { ...loadedRef.current };
+    ids.forEach((id) => {
+      next[id] = true;
+    });
+    loadedRef.current = next;
+    setLoadedProjects(next);
+  }, []);
+
+  // Erros de persistência viram toast e são repassados ao chamador, que não
+  // deve fechar o formulário como se tivesse salvo.
+  const { addToast } = useGlobalToast();
+  const reportError = useCallback(
+    (title: string, err: unknown): never => {
+      console.error(`[DataContext] ${title}:`, err);
+      addToast({
+        variant: "error",
+        title,
+        description: err instanceof Error ? err.message : undefined,
+      });
+      throw err;
+    },
+    [addToast]
+  );
 
   // Load inicial — escolhe automaticamente entre Supabase e localStorage
   useEffect(() => {
@@ -367,12 +399,23 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setUserId(ctx.userId);
         setWorkspaceId(ctx.workspaceId ?? "ws-local");
 
-        // Limpa chave legada global para evitar vazamento de projetos entre usuários no mesmo navegador
+        // Limpa a chave global (modo demo / versões antigas) para evitar vazamento
+        // de projetos entre usuários no mesmo navegador
         if (typeof window !== "undefined") {
-          window.localStorage.removeItem("chronos_data_state_v1");
+          window.localStorage.removeItem(STORAGE_KEY);
         }
 
-        const data = await dataProvider.loadProjectsOnly();
+        let data: Awaited<ReturnType<typeof dataProvider.loadProjectsOnly>> = null;
+        try {
+          data = await dataProvider.loadProjectsOnly();
+        } catch (err) {
+          console.error("[DataContext] Falha ao carregar projetos:", err);
+          addToast({
+            variant: "warning",
+            title: "Não foi possível carregar os projetos",
+            description: "Exibindo a última cópia salva neste navegador.",
+          });
+        }
         if (cancelled) return;
 
         if (data && data.projects) {
@@ -385,6 +428,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             dependencies: [],
             loading: false,
           });
+          loadedRef.current = {};
           setLoadedProjects({});
           saveToStorage({
             projects: data.projects,
@@ -409,25 +453,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const stored = loadFromStorage();
       if (stored) {
         setState({ ...stored, loading: false });
-        const loaded: Record<string, boolean> = {};
-        stored.projects.forEach((p) => {
-          loaded[p.id] = true;
-        });
-        setLoadedProjects(loaded);
+        markLoaded(stored.projects.map((p) => p.id));
       } else {
         const seeded = seedMockData();
         saveToStorage(seeded);
         setState({ ...seeded, loading: false });
-        const loaded: Record<string, boolean> = {};
-        seeded.projects.forEach((p) => {
-          loaded[p.id] = true;
-        });
-        setLoadedProjects(loaded);
+        markLoaded(seeded.projects.map((p) => p.id));
       }
     }
     init();
     return () => { cancelled = true; };
-  }, []);
+  }, [addToast, markLoaded]);
 
   // Persist (salva em localStorage como backup sempre que o state mudar e não estiver carregando)
   useEffect(() => {
@@ -438,20 +474,25 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (getDataLayer() === "supabase") {
-      const data = await dataProvider.loadProjectsOnly();
+      let data: Awaited<ReturnType<typeof dataProvider.loadProjectsOnly>> = null;
+      let details: Awaited<ReturnType<typeof dataProvider.loadProjectsBatch>> = null;
+      const loadedIds = Object.keys(loadedRef.current).filter((id) => loadedRef.current[id]);
+      try {
+        data = await dataProvider.loadProjectsOnly();
+        if (loadedIds.length > 0) details = await dataProvider.loadProjectsBatch(loadedIds);
+      } catch (err) {
+        reportError("Não foi possível atualizar os dados", err);
+      }
       if (data) {
         setState((prev) => {
           const nextState: DataState = {
             ...prev,
             projects: data.projects,
           };
-          saveToStorage(nextState, userId);
           return nextState;
         });
 
-        const loadedIds = Object.keys(loadedProjects).filter((id) => loadedProjects[id]);
         if (loadedIds.length > 0) {
-          const details = await dataProvider.loadProjectsBatch(loadedIds);
           if (details) {
             setState((prev) => {
               const filteredStages = prev.stages.filter((s) => !loadedIds.includes(s.project_id));
@@ -467,7 +508,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 tasks: [...filteredTasks, ...details.tasks],
                 dependencies: [...filteredDeps, ...details.dependencies],
               };
-              saveToStorage(nextState, userId);
               return nextState;
             });
           }
@@ -477,7 +517,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
     const stored = loadFromStorage();
     if (stored) setState({ ...stored, loading: false });
-  }, [loadedProjects, userId]);
+  }, [reportError]);
 
   // ── Projects ────────────────────────────────────────────────
   const createProject = useCallback(async (
@@ -488,34 +528,36 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   ): Promise<Project> => {
     // Modo PRODUÇÃO: Supabase real
     if (getDataLayer() === "supabase") {
-      const result = await dataProvider.createProject({
-        name: data.name ?? "Novo Projeto",
-        description: data.description ?? undefined,
-        color: data.color,
-        start_date: data.start_date ?? undefined,
-        target_date: data.target_date ?? undefined,
-        track_time: data.track_time !== false,
-        templateId: data.templateId,
-        customStages: data.customStages,
-      });
-      if (result) {
-        const { project, stages } = result;
-        setState((prev) => {
-          const nextState: DataState = {
-            ...prev,
-            projects: [project, ...prev.projects.filter((p) => p.id !== project.id)],
-            stages: [...prev.stages.filter((s) => s.project_id !== project.id), ...stages],
-          };
-          saveToStorage(nextState);
-          return nextState;
+      let result: Awaited<ReturnType<typeof dataProvider.createProject>> = null;
+      try {
+        result = await dataProvider.createProject({
+          name: data.name ?? "Novo Projeto",
+          description: data.description ?? undefined,
+          color: data.color,
+          start_date: data.start_date ?? undefined,
+          target_date: data.target_date ?? undefined,
+          track_time: data.track_time !== false,
+          templateId: data.templateId,
+          customStages: data.customStages,
         });
-        setLoadedProjects((prev) => ({ ...prev, [project.id]: true }));
-        return Object.assign(project, { stages });
+      } catch (err) {
+        reportError("Não foi possível criar o projeto", err);
       }
-      console.warn("[DataContext] createProject no Supabase retornou nulo, aplicando fallback local resiliente.");
+      if (!result) return reportError("Não foi possível criar o projeto", new Error("Resposta vazia do servidor"));
+      const { project, stages } = result;
+      setState((prev) => {
+        const nextState: DataState = {
+          ...prev,
+          projects: [project, ...prev.projects.filter((p) => p.id !== project.id)],
+          stages: [...prev.stages.filter((s) => s.project_id !== project.id), ...stages],
+        };
+        return nextState;
+      });
+      markLoaded([project.id]);
+      return Object.assign(project, { stages });
     }
 
-    // Modo DEMO ou fallback
+    // Modo DEMO
     const now = new Date().toISOString();
     const project: Project = {
       id: generateId("project"),
@@ -551,16 +593,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         projects: [project, ...prev.projects],
         stages: [...prev.stages, ...stages],
       };
-      saveToStorage(nextState);
       return nextState;
     });
-    setLoadedProjects((prev) => ({ ...prev, [project.id]: true }));
+    markLoaded([project.id]);
     return Object.assign(project, { stages });
-  }, [userId, workspaceId]);
+  }, [userId, workspaceId, reportError, markLoaded]);
 
   const updateProject = useCallback(async (id: string, data: Partial<Project>) => {
     if (getDataLayer() === "supabase") {
-      await dataProvider.updateProject(id, data);
+      try {
+        await dataProvider.updateProject(id, data);
+      } catch (err) {
+        reportError("Não foi possível salvar o projeto", err);
+      }
     }
     setState((prev) => {
       const nextProjects = prev.projects.map((p) =>
@@ -570,49 +615,56 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         projects: nextProjects,
       };
-      saveToStorage(nextState);
       return nextState;
     });
-  }, []);
+  }, [reportError]);
 
   const deleteProject = useCallback(async (id: string) => {
     if (getDataLayer() === "supabase") {
-      await dataProvider.deleteProject(id);
+      try {
+        await dataProvider.deleteProject(id);
+      } catch (err) {
+        reportError("Não foi possível excluir o projeto", err);
+      }
     }
     setState((prev) => {
+      // O banco apaga etapas, tarefas e dependências em cascata
+      const removedTaskIds = new Set(prev.tasks.filter((t) => t.project_id === id).map((t) => t.id));
       const nextState: DataState = {
         ...prev,
         projects: prev.projects.filter((p) => p.id !== id),
         stages: prev.stages.filter((s) => s.project_id !== id),
         tasks: prev.tasks.filter((t) => t.project_id !== id),
+        dependencies: prev.dependencies.filter(
+          (d) => !removedTaskIds.has(d.task_id) && !removedTaskIds.has(d.depends_on_task_id)
+        ),
       };
-      saveToStorage(nextState);
       return nextState;
     });
-  }, []);
+  }, [reportError]);
 
   // ── Stages ──────────────────────────────────────────────────
   const createStage = useCallback(async (data: Partial<Stage>): Promise<Stage> => {
-    if (getDataLayer() === "supabase" && data.project_id) {
-      const stage = await dataProvider.createStage({
-        project_id: data.project_id,
-        name: data.name ?? "Nova Etapa",
-        color: data.color,
-        sort_order: data.position ?? 0,
-        wip_limit: null,
-      });
-      if (stage) {
-        const result: Stage = {
-          id: stage.id,
-          project_id: stage.project_id,
-          name: stage.name,
-          color: stage.color,
-          position: stage.position,
-          is_done: stage.is_done,
-        };
-        setState((prev) => ({ ...prev, stages: [...prev.stages, result] }));
-        return result;
+    if (getDataLayer() === "supabase") {
+      if (!data.project_id) {
+        return reportError("Não foi possível criar a etapa", new Error("Projeto não informado"));
       }
+      let stage: Stage | null = null;
+      try {
+        stage = await dataProvider.createStage({
+          project_id: data.project_id,
+          name: data.name ?? "Nova Etapa",
+          color: data.color,
+          sort_order: data.position ?? 0,
+          wip_limit: data.wip_limit ?? null,
+          is_done: data.is_done ?? false,
+        });
+      } catch (err) {
+        reportError("Não foi possível criar a etapa", err);
+      }
+      const result = stage as Stage;
+      setState((prev) => ({ ...prev, stages: [...prev.stages, result] }));
+      return result;
     }
     const stage: Stage = {
       id: generateId("stage"),
@@ -624,57 +676,103 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     };
     setState((prev) => ({ ...prev, stages: [...prev.stages, stage] }));
     return stage;
-  }, []);
+  }, [reportError]);
 
   const updateStage = useCallback(async (id: string, data: Partial<Stage>) => {
     if (getDataLayer() === "supabase") {
-      await dataProvider.updateStage(id, data);
+      try {
+        await dataProvider.updateStage(id, data);
+      } catch (err) {
+        reportError("Não foi possível salvar a etapa", err);
+      }
     }
     setState((prev) => ({
       ...prev,
       stages: prev.stages.map((s) => (s.id === id ? { ...s, ...data } : s)),
     }));
-  }, []);
+  }, [reportError]);
 
   const deleteStage = useCallback(async (id: string) => {
+    const current = stateRef.current;
+    const stage = current.stages.find((s) => s.id === id);
+    const hasTasks = current.tasks.some((t) => t.stage_id === id);
+    // tasks.stage_id é NOT NULL + ON DELETE CASCADE: as tarefas iriam junto
+    // com a etapa. Elas vão para a primeira etapa restante do projeto.
+    const fallbackStage = current.stages
+      .filter((s) => s.project_id === stage?.project_id && s.id !== id)
+      .sort((a, b) => a.position - b.position)[0];
+    if (hasTasks && !fallbackStage) {
+      return reportError(
+        "Não foi possível excluir a etapa",
+        new Error("Mova as tarefas para outra etapa antes de excluir a única etapa do projeto")
+      );
+    }
+
     if (getDataLayer() === "supabase") {
-      await dataProvider.deleteStage(id);
+      try {
+        await dataProvider.deleteStage(id, hasTasks ? fallbackStage?.id : undefined);
+      } catch (err) {
+        reportError("Não foi possível excluir a etapa", err);
+      }
     }
     setState((prev) => ({
       ...prev,
       stages: prev.stages.filter((s) => s.id !== id),
-      tasks: prev.tasks.map((t) => (t.stage_id === id ? { ...t, stage_id: null } : t)),
+      tasks: prev.tasks.map((t) =>
+        t.stage_id === id && fallbackStage ? { ...t, stage_id: fallbackStage.id } : t
+      ),
     }));
-  }, []);
+  }, [reportError]);
 
   // ── Tasks ───────────────────────────────────────────────────
   const createTask = useCallback(async (data: Partial<Task>): Promise<Task> => {
-    if (getDataLayer() === "supabase" && data.project_id && data.stage_id) {
-      const task = await dataProvider.createTask({
-        project_id: data.project_id,
-        stage_id: data.stage_id,
-        title: data.title ?? "Nova Tarefa",
-        description: data.description ?? undefined,
-        status: data.status ?? "todo",
-        priority: data.priority ?? "medium",
-        due_date: data.due_date ?? undefined,
-        start_date: data.start_date ?? undefined,
-        estimated_hours: data.estimated_hours ?? undefined,
-        actual_hours: data.actual_hours ?? undefined,
-        parent_task_id: data.parent_task_id ?? undefined,
-        assignee_id: data.assignee_id ?? undefined,
-        assignee_name: data.assignee_name ?? undefined,
-        assignee_status: data.assignee_status ?? undefined,
-        created_by: userId,
-      });
-      if (task) {
-        setState((prev) => ({ ...prev, tasks: [...prev.tasks, task] }));
-        return task;
-      }
-    }
-    const now = new Date().toISOString();
     const initialProgress = data.progress ?? 0;
     const initialStatus = data.status ?? (initialProgress === 100 ? "done" : "todo");
+    const startDate = toDateOnly(data.start_date);
+    const dueDate = toDateOnly(data.due_date);
+
+    if (getDataLayer() === "supabase") {
+      // stage_id é obrigatório no banco: sem etapa, usa a primeira do projeto
+      const stageId =
+        data.stage_id ||
+        stateRef.current.stages
+          .filter((s) => s.project_id === data.project_id)
+          .sort((a, b) => a.position - b.position)[0]?.id;
+      if (!data.project_id || !stageId) {
+        return reportError(
+          "Não foi possível criar a tarefa",
+          new Error("O projeto precisa ter ao menos uma etapa")
+        );
+      }
+      let task: Task | null = null;
+      try {
+        task = await dataProvider.createTask({
+          project_id: data.project_id,
+          stage_id: stageId,
+          title: data.title ?? "Nova Tarefa",
+          description: data.description ?? undefined,
+          status: initialStatus,
+          priority: data.priority ?? "medium",
+          progress: initialProgress,
+          position: data.position ?? 0,
+          due_date: dueDate ?? undefined,
+          start_date: startDate ?? undefined,
+          estimated_hours: data.estimated_hours ?? undefined,
+          actual_hours: data.actual_hours ?? undefined,
+          parent_task_id: data.parent_task_id ?? undefined,
+          assignee_id: data.assignee_id ?? undefined,
+          assignee_name: data.assignee_name ?? undefined,
+          assignee_status: data.assignee_status ?? undefined,
+          created_by: userId,
+        });
+      } catch (err) {
+        reportError("Não foi possível criar a tarefa", err);
+      }
+      const created = task as Task;
+      setState((prev) => ({ ...prev, tasks: [...prev.tasks, created] }));
+      return created;
+    }
+    const now = new Date().toISOString();
 
     const task: Task = {
       id: generateId("task"),
@@ -685,8 +783,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       priority: data.priority ?? "medium",
       status: initialStatus,
       progress: initialProgress,
-      start_date: data.start_date ?? null,
-      due_date: data.due_date ?? null,
+      start_date: startDate,
+      due_date: dueDate,
       estimated_hours: data.estimated_hours ?? null,
       actual_hours: data.actual_hours ?? null,
       assignee_id: data.assignee_id ?? userId,
@@ -699,7 +797,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     };
     setState((prev) => ({ ...prev, tasks: [...prev.tasks, task] }));
     return task;
-  }, [userId]);
+  }, [userId, reportError]);
 
   const updateTask = useCallback(async (id: string, data: Partial<Task>) => {
     const patch = { ...data };
@@ -708,9 +806,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     } else if (patch.status === "done" && patch.progress === undefined) {
       patch.progress = 100;
     }
+    // As colunas são DATE: guarda só YYYY-MM-DD para o state bater com o banco
+    if (patch.start_date !== undefined) patch.start_date = toDateOnly(patch.start_date);
+    if (patch.due_date !== undefined) patch.due_date = toDateOnly(patch.due_date);
 
     if (getDataLayer() === "supabase") {
-      await dataProvider.updateTask(id, patch);
+      try {
+        await dataProvider.updateTask(id, patch);
+      } catch (err) {
+        reportError("Não foi possível salvar a tarefa", err);
+      }
     }
     setState((prev) => ({
       ...prev,
@@ -718,20 +823,31 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         t.id === id ? { ...t, ...patch, updated_at: new Date().toISOString() } : t
       ),
     }));
-  }, []);
+  }, [reportError]);
 
   const deleteTask = useCallback(async (id: string) => {
     if (getDataLayer() === "supabase") {
-      await dataProvider.deleteTask(id);
+      try {
+        await dataProvider.deleteTask(id);
+      } catch (err) {
+        reportError("Não foi possível excluir a tarefa", err);
+      }
     }
-    setState((prev) => ({
-      ...prev,
-      tasks: prev.tasks.filter((t) => t.id !== id),
-    }));
-  }, []);
+    setState((prev) => {
+      // O banco apaga subtarefas (parent_task_id) e dependências em cascata
+      const removed = collectDescendantIds(id, prev.tasks);
+      return {
+        ...prev,
+        tasks: prev.tasks.filter((t) => !removed.has(t.id)),
+        dependencies: prev.dependencies.filter(
+          (d) => !removed.has(d.task_id) && !removed.has(d.depends_on_task_id)
+        ),
+      };
+    });
+  }, [reportError]);
 
   const moveTask = useCallback(async (id: string, stageId: string, position: number) => {
-    const targetStage = state.stages.find((s) => s.id === stageId);
+    const targetStage = stateRef.current.stages.find((s) => s.id === stageId);
     const updates: Partial<Task> = {
       stage_id: stageId,
       position,
@@ -742,9 +858,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (getDataLayer() === "supabase") {
-      await dataProvider.moveTask(id, stageId, position);
-      if (targetStage?.is_done) {
-        await dataProvider.updateTask(id, { status: "done", progress: 100 });
+      try {
+        // Uma única escrita: etapa, posição e conclusão juntas
+        await dataProvider.updateTask(id, updates);
+      } catch (err) {
+        reportError("Não foi possível mover a tarefa", err);
       }
     }
     setState((prev) => ({
@@ -753,7 +871,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         t.id === id ? { ...t, ...updates, updated_at: new Date().toISOString() } : t
       ),
     }));
-  }, [state.stages]);
+  }, [reportError]);
 
   // ── Dependencies (RF-06) ────────────────────────────────────
   const addDependency = useCallback(
@@ -795,13 +913,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const removeDependency = useCallback(async (id: string): Promise<void> => {
     if (getDataLayer() === "supabase") {
-      await dependencyProvider.delete(id);
+      try {
+        await dependencyProvider.delete(id);
+      } catch (err) {
+        reportError("Não foi possível remover a dependência", err);
+      }
     }
     setState((prev) => ({
       ...prev,
       dependencies: prev.dependencies.filter((d) => d.id !== id),
     }));
-  }, []);
+  }, [reportError]);
 
   // ── Helpers ─────────────────────────────────────────────────
   const getProject = useCallback(
@@ -840,9 +962,54 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [state.dependencies]
   );
 
+  // Busca etapas/tarefas/dependências dos projetos ainda não carregados.
+  // Reaproveita requisições em andamento e só marca como carregado em caso
+  // de sucesso (um erro não pode deixar o projeto "vazio" até o refresh).
+  const loadDetails = useCallback(async (projectIds: string[]) => {
+    const inflight = inflightRef.current;
+    const pending = projectIds.filter((id) => !loadedRef.current[id] && !inflight.has(id));
+    const waiting = projectIds.filter((id) => inflight.has(id)).map((id) => inflight.get(id)!);
+
+    if (pending.length > 0) {
+      const request = (async () => {
+        try {
+          const details = await dataProvider.loadProjectsBatch(pending);
+          if (!details) return;
+          const pendingSet = new Set(pending);
+          setState((prev) => {
+            const detailTaskIds = new Set(details.tasks.map((t) => t.id));
+            return {
+              ...prev,
+              stages: [...prev.stages.filter((s) => !pendingSet.has(s.project_id)), ...details.stages],
+              tasks: [...prev.tasks.filter((t) => !pendingSet.has(t.project_id)), ...details.tasks],
+              dependencies: [
+                ...prev.dependencies.filter((d) => !detailTaskIds.has(d.task_id)),
+                ...details.dependencies,
+              ],
+            };
+          });
+          markLoaded(pending);
+        } catch (err) {
+          console.error("[DataContext] Erro ao carregar detalhes dos projetos:", err);
+          addToast({
+            variant: "error",
+            title: "Não foi possível carregar as tarefas",
+            description: err instanceof Error ? err.message : undefined,
+          });
+        } finally {
+          pending.forEach((id) => inflight.delete(id));
+        }
+      })();
+      pending.forEach((id) => inflight.set(id, request));
+      waiting.push(request);
+    }
+
+    await Promise.all(waiting);
+  }, [addToast, markLoaded]);
+
   const loadProjectDetails = useCallback(async (projectId: string) => {
     // 1. Se o projeto não estiver na lista de projetos em memória, busca ele no Supabase ou localStorage
-    const existing = (stateRef.current || state).projects.find((p) => p.id === projectId);
+    const existing = stateRef.current.projects.find((p) => p.id === projectId);
     if (!existing) {
       if (getDataLayer() === "supabase") {
         try {
@@ -853,7 +1020,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 ...prev,
                 projects: [single, ...prev.projects.filter((p) => p.id !== projectId)],
               };
-              saveToStorage(nextState);
               return nextState;
             });
           }
@@ -871,7 +1037,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
               ...prev,
               projects: [localP, ...prev.projects.filter((p) => p.id !== projectId)],
             };
-            saveToStorage(nextState);
             return nextState;
           });
         }
@@ -879,81 +1044,23 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (getDataLayer() !== "supabase") return;
-    if (loadedProjects[projectId]) return;
+    await loadDetails([projectId]);
+  }, [loadDetails]);
 
-    try {
-      const details = await dataProvider.loadProjectDetails(projectId);
-      if (details) {
-        setState((prev) => {
-          const filteredStages = prev.stages.filter((s) => s.project_id !== projectId);
-          const filteredTasks = prev.tasks.filter((t) => t.project_id !== projectId);
-          const detailTaskIds = details.tasks.map((t) => t.id);
-          const filteredDeps = prev.dependencies.filter(
-            (d) => !detailTaskIds.includes(d.task_id)
-          );
-
-          const nextState: DataState = {
-            ...prev,
-            stages: [...filteredStages, ...details.stages],
-            tasks: [...filteredTasks, ...details.tasks],
-            dependencies: [...filteredDeps, ...details.dependencies],
-          };
-          saveToStorage(nextState);
-          return nextState;
-        });
-        setLoadedProjects((prev) => ({ ...prev, [projectId]: true }));
-      }
-    } catch (error) {
-      console.error("[DataContext] Error loading project details:", error);
-    }
-  }, [loadedProjects, state]);
-
+  // Depende só da lista de projetos (não do state inteiro): páginas que
+  // chamam este loader em efeitos não disparam novas buscas a cada edição.
   const loadAllProjectsDetails = useCallback(async () => {
     if (getDataLayer() !== "supabase") return;
-    const pendingIds = state.projects
-      .map((p) => p.id)
-      .filter((id) => !loadedProjects[id]);
-
-    if (pendingIds.length === 0) return;
-
-    try {
-      const details = await dataProvider.loadProjectsBatch(pendingIds);
-      if (details) {
-        setState((prev) => {
-          const filteredStages = prev.stages.filter((s) => !pendingIds.includes(s.project_id));
-          const filteredTasks = prev.tasks.filter((t) => !pendingIds.includes(t.project_id));
-          const detailTaskIds = new Set(details.tasks.map((t) => t.id));
-          const filteredDeps = prev.dependencies.filter(
-            (d) => !detailTaskIds.has(d.task_id)
-          );
-
-          return {
-            ...prev,
-            stages: [...filteredStages, ...details.stages],
-            tasks: [...filteredTasks, ...details.tasks],
-            dependencies: [...filteredDeps, ...details.dependencies],
-          };
-        });
-        setLoadedProjects((prev) => {
-          const updated = { ...prev };
-          pendingIds.forEach((id) => {
-            updated[id] = true;
-          });
-          return updated;
-        });
-      }
-    } catch (error) {
-      console.error("[DataContext] Error loading all projects details in batch:", error);
-    }
-  }, [state.projects, loadedProjects]);
+    await loadDetails(state.projects.map((p) => p.id));
+  }, [state.projects, loadDetails]);
 
   const isProjectLoaded = useCallback(
     (projectId: string) => {
-      const p = (stateRef.current || state).projects.find((proj) => proj.id === projectId);
+      const p = state.projects.find((proj) => proj.id === projectId);
       if (!p) return false;
       return Boolean(loadedProjects[projectId] || getDataLayer() === "local");
     },
-    [loadedProjects, state]
+    [loadedProjects, state.projects]
   );
 
   const cloneProject = useCallback(
@@ -984,14 +1091,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
                 dependencies: [...filteredDeps, ...details.dependencies],
               };
             });
-            setLoadedProjects((prev) => ({ ...prev, [sourceProjectId]: true }));
+            markLoaded([sourceProjectId]);
           }
         } catch (err) {
-          console.error("[cloneProject] Error fetching source project details from Supabase:", err);
+          // Sem os dados de origem o clone sairia vazio/incompleto
+          reportError("Não foi possível carregar o projeto de origem", err);
         }
       }
 
-      const currentState = stateRef.current || state;
+      const currentState = stateRef.current;
 
       // Fallback para state se não veio do Supabase
       if (sourceStages.length === 0) {
@@ -1011,17 +1119,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const sourceProject = currentState.projects.find((p) => p.id === sourceProjectId);
       if (!sourceProject) throw new Error("Projeto de origem não encontrado");
 
-      const normalizeDateOnly = (dateStr: string | null | undefined): string | null => {
-        if (!dateStr) return null;
-        const clean = dateStr.split("T")[0].trim();
-        if (!clean || !/^\d{4}-\d{2}-\d{2}$/.test(clean)) return null;
-        return clean;
-      };
-
-      const sourceStartClean = normalizeDateOnly(sourceProject.start_date);
-      const sourceTargetClean = normalizeDateOnly(sourceProject.target_date);
-      const optionStartClean = normalizeDateOnly(options.startDate);
-      const optionTargetClean = normalizeDateOnly(options.targetDate);
+      const sourceStartClean = toDateOnly(sourceProject.start_date);
+      const sourceTargetClean = toDateOnly(sourceProject.target_date);
+      const optionStartClean = toDateOnly(options.startDate);
+      const optionTargetClean = toDateOnly(options.targetDate);
 
       const customStages = sourceStages.map((s) => ({
         name: s.name,
@@ -1074,111 +1175,69 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const taskIdMap = new Map<string, string>();
 
       if (options.cloneTasks !== false && sourceTasks.length > 0) {
-        let dateOffsetDays = 0;
-        if (options.shiftDates && optionStartClean && sourceStartClean) {
-          const oldStart = new Date(sourceStartClean + "T00:00:00").getTime();
-          const newStart = new Date(optionStartClean + "T00:00:00").getTime();
-          if (!isNaN(oldStart) && !isNaN(newStart)) {
-            dateOffsetDays = Math.round((newStart - oldStart) / (1000 * 60 * 60 * 24));
-          }
-        }
-        if (isNaN(dateOffsetDays)) {
-          dateOffsetDays = 0;
-        }
+        const dateOffsetDays =
+          options.shiftDates && optionStartClean && sourceStartClean
+            ? daysBetweenDateOnly(sourceStartClean, optionStartClean)
+            : 0;
 
-        const shiftDateString = (dateStr: string | null | undefined): string | undefined => {
-          if (!dateStr) return undefined;
-          const clean = normalizeDateOnly(dateStr);
-          if (!clean) return undefined;
-          if (!dateOffsetDays || dateOffsetDays === 0) return clean;
-          const d = new Date(clean + "T00:00:00");
-          if (isNaN(d.getTime())) return clean;
-          d.setDate(d.getDate() + dateOffsetDays);
-          if (isNaN(d.getTime())) return clean;
-          return d.toISOString().split("T")[0];
-        };
+        try {
+          // Pais antes dos filhos, em qualquer profundidade, para que todo
+          // parent_task_id já tenha sido mapeado quando o filho for criado
+          for (const t of orderTasksParentsFirst(sourceTasks)) {
+            const targetStageId =
+              (t.stage_id ? stageIdMap.get(t.stage_id) : null) ||
+              newStages[0]?.id ||
+              null;
+            const keepAssignee = options.keepAssignees === true;
 
-        const rootTasks = sourceTasks.filter((t) => !t.parent_task_id);
-        const subtasks = sourceTasks.filter((t) => !!t.parent_task_id);
+            const created = await createTask({
+              project_id: newProject.id,
+              stage_id: targetStageId,
+              title: t.title,
+              description: t.description,
+              priority: t.priority,
+              status: options.resetStatus ? "todo" : t.status,
+              progress: options.resetStatus ? 0 : t.progress,
+              start_date: shiftDateOnly(t.start_date, dateOffsetDays),
+              due_date: shiftDateOnly(t.due_date, dateOffsetDays),
+              estimated_hours: t.estimated_hours,
+              actual_hours: options.resetStatus ? null : (t.actual_hours ?? null),
+              // chk_assignee_consistency: membro (id) OU convite pendente (nome + status)
+              assignee_id: keepAssignee ? t.assignee_id : null,
+              assignee_name: keepAssignee && !t.assignee_id ? t.assignee_name : null,
+              assignee_status: keepAssignee && !t.assignee_id ? t.assignee_status : null,
+              position: t.position,
+              parent_task_id: t.parent_task_id ? taskIdMap.get(t.parent_task_id) ?? null : null,
+            });
 
-        // Clona tarefas raiz
-        for (const t of rootTasks) {
-          const targetStageId =
-            (t.stage_id ? stageIdMap.get(t.stage_id) : null) ||
-            newStages[0]?.id ||
-            null;
-
-          const created = await createTask({
-            project_id: newProject.id,
-            stage_id: targetStageId,
-            title: t.title,
-            description: t.description,
-            priority: t.priority,
-            status: options.resetStatus ? "todo" : t.status,
-            progress: options.resetStatus ? 0 : t.progress,
-            start_date: shiftDateString(t.start_date),
-            due_date: shiftDateString(t.due_date),
-            estimated_hours: t.estimated_hours,
-            actual_hours: options.resetStatus ? null : (t.actual_hours ?? null),
-            assignee_id: options.keepAssignees ? t.assignee_id : null,
-            assignee_name: options.keepAssignees ? t.assignee_name : null,
-            position: t.position,
-            parent_task_id: null,
-          });
-
-          if (created) {
             taskIdMap.set(t.id, created.id);
             createdNewTasks.push(created);
           }
-        }
 
-        // Clona subtarefas
-        for (const t of subtasks) {
-          const targetStageId =
-            (t.stage_id ? stageIdMap.get(t.stage_id) : null) ||
-            newStages[0]?.id ||
-            null;
-          const newParentId = t.parent_task_id
-            ? taskIdMap.get(t.parent_task_id) || null
-            : null;
-
-          const created = await createTask({
-            project_id: newProject.id,
-            stage_id: targetStageId,
-            title: t.title,
-            description: t.description,
-            priority: t.priority,
-            status: options.resetStatus ? "todo" : t.status,
-            progress: options.resetStatus ? 0 : t.progress,
-            start_date: shiftDateString(t.start_date),
-            due_date: shiftDateString(t.due_date),
-            estimated_hours: t.estimated_hours,
-            actual_hours: options.resetStatus ? null : (t.actual_hours ?? null),
-            assignee_id: options.keepAssignees ? t.assignee_id : null,
-            assignee_name: options.keepAssignees ? t.assignee_name : null,
-            position: t.position,
-            parent_task_id: newParentId,
-          });
-
-          if (created) {
-            taskIdMap.set(t.id, created.id);
-            createdNewTasks.push(created);
-          }
-        }
-
-        // Clona dependências
-        if (options.cloneDependencies !== false && sourceDeps.length > 0) {
-          for (const dep of sourceDeps) {
-            const newTaskId = taskIdMap.get(dep.task_id);
-            const newDependsOnTaskId = taskIdMap.get(dep.depends_on_task_id);
-            if (newTaskId && newDependsOnTaskId) {
-              try {
+          // Clona dependências
+          if (options.cloneDependencies !== false && sourceDeps.length > 0) {
+            for (const dep of sourceDeps) {
+              const newTaskId = taskIdMap.get(dep.task_id);
+              const newDependsOnTaskId = taskIdMap.get(dep.depends_on_task_id);
+              if (newTaskId && newDependsOnTaskId) {
                 await addDependency(newTaskId, newDependsOnTaskId, dep.type);
-              } catch (err) {
-                console.warn("[cloneProject] Could not clone dependency:", err);
               }
             }
           }
+        } catch (err) {
+          // Sem transação no client: desfaz o clone parcial
+          if (getDataLayer() === "supabase") {
+            await dataProvider.deleteProject(newProject.id).catch((cleanupErr) =>
+              console.error("[cloneProject] Falha ao desfazer clone parcial:", cleanupErr)
+            );
+          }
+          setState((prev) => ({
+            ...prev,
+            projects: prev.projects.filter((p) => p.id !== newProject.id),
+            stages: prev.stages.filter((s) => s.project_id !== newProject.id),
+            tasks: prev.tasks.filter((t) => t.project_id !== newProject.id),
+          }));
+          throw err;
         }
       }
 
@@ -1199,15 +1258,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           tasks: [...prev.tasks, ...missingTasks],
         };
 
-        saveToStorage(nextState);
 
         return nextState;
       });
 
-      setLoadedProjects((prev) => ({
-        ...prev,
-        [newProject.id]: true,
-      }));
+      markLoaded([newProject.id]);
 
       return newProject;
     },
@@ -1216,6 +1271,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       createProject,
       createTask,
       addDependency,
+      reportError,
+      markLoaded,
     ]
   );
 
@@ -1231,9 +1288,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           .select("*")
           .eq("task_id", taskId)
           .order("created_at", { ascending: true });
-        if (!error && data) return data as TaskComment[];
+        if (error) throw error;
+        return (data ?? []) as TaskComment[];
       } catch (err) {
         console.error("[DataContext] getTaskComments error:", err);
+        return [];
       }
     }
     const raw = typeof window !== "undefined" ? localStorage.getItem(`chronos:comments:${taskId}`) : null;
@@ -1267,9 +1326,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             })
             .select()
             .single();
-          if (!error && data) return data as TaskComment;
+          if (error) throw new Error(error.message);
+          return data as TaskComment;
         } catch (err) {
-          console.error("[DataContext] addTaskComment error:", err);
+          return reportError("Não foi possível publicar o comentário", err);
         }
       }
 
@@ -1280,7 +1340,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
       return commentObj;
     },
-    [userId, getTaskComments]
+    [userId, getTaskComments, reportError]
   );
 
   const deleteTaskComment = useCallback(async (commentId: string) => {
@@ -1290,12 +1350,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         const supabase = createSPAClient();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const client = supabase.from("task_comments") as any;
-        await client.delete().eq("id", commentId);
+        const { error } = await client.delete().eq("id", commentId);
+        if (error) throw new Error(error.message);
       } catch (err) {
-        console.error("[DataContext] deleteTaskComment error:", err);
+        reportError("Não foi possível excluir o comentário", err);
       }
     }
-  }, []);
+  }, [reportError]);
 
   const getTaskAttachments = useCallback(async (taskId: string): Promise<TaskAttachment[]> => {
     if (getDataLayer() === "supabase") {
@@ -1308,9 +1369,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           .select("*")
           .eq("task_id", taskId)
           .order("uploaded_at", { ascending: false });
-        if (!error && data) return data as TaskAttachment[];
+        if (error) throw error;
+        return (data ?? []) as TaskAttachment[];
       } catch (err) {
         console.error("[DataContext] getTaskAttachments error:", err);
+        return [];
       }
     }
     const raw = typeof window !== "undefined" ? localStorage.getItem(`chronos:attachments:${taskId}`) : null;
@@ -1351,9 +1414,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             })
             .select()
             .single();
-          if (!error && data) return data as TaskAttachment;
+          if (error) throw new Error(error.message);
+          return data as TaskAttachment;
         } catch (err) {
-          console.error("[DataContext] addTaskAttachment error:", err);
+          return reportError("Não foi possível anexar o arquivo", err);
         }
       }
 
@@ -1364,7 +1428,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
       return attachmentObj;
     },
-    [userId, getTaskAttachments]
+    [userId, getTaskAttachments, reportError]
   );
 
   const deleteTaskAttachment = useCallback(async (attachmentId: string) => {
@@ -1374,51 +1438,82 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         const supabase = createSPAClient();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const client = supabase.from("task_attachments") as any;
-        await client.delete().eq("id", attachmentId);
+        const { error } = await client.delete().eq("id", attachmentId);
+        if (error) throw new Error(error.message);
       } catch (err) {
-        console.error("[DataContext] deleteTaskAttachment error:", err);
+        reportError("Não foi possível excluir o anexo", err);
       }
     }
-  }, []);
+  }, [reportError]);
 
-  return (
-    <DataContext.Provider
-      value={{
-        ...state,
-        createProject,
-        cloneProject,
-        updateProject,
-        deleteProject,
-        createStage,
-        updateStage,
-        deleteStage,
-        createTask,
-        updateTask,
-        deleteTask,
-        moveTask,
-        addDependency,
-        removeDependency,
-        getTaskComments,
-        addTaskComment,
-        deleteTaskComment,
-        getTaskAttachments,
-        addTaskAttachment,
-        deleteTaskAttachment,
-        getProject,
-        getStagesByProject,
-        getTasksByProject,
-        getTasksByStage,
-        getDependenciesForTask,
-        getReverseDependenciesForTask,
-        refresh,
-        loadProjectDetails,
-        loadAllProjectsDetails,
-        isProjectLoaded,
-      }}
-    >
-      {children}
-    </DataContext.Provider>
+  const value = useMemo<DataContextType>(
+    () => ({
+      ...state,
+      createProject,
+      cloneProject,
+      updateProject,
+      deleteProject,
+      createStage,
+      updateStage,
+      deleteStage,
+      createTask,
+      updateTask,
+      deleteTask,
+      moveTask,
+      addDependency,
+      removeDependency,
+      getTaskComments,
+      addTaskComment,
+      deleteTaskComment,
+      getTaskAttachments,
+      addTaskAttachment,
+      deleteTaskAttachment,
+      getProject,
+      getStagesByProject,
+      getTasksByProject,
+      getTasksByStage,
+      getDependenciesForTask,
+      getReverseDependenciesForTask,
+      refresh,
+      loadProjectDetails,
+      loadAllProjectsDetails,
+      isProjectLoaded,
+    }),
+    [
+      state,
+      createProject,
+      cloneProject,
+      updateProject,
+      deleteProject,
+      createStage,
+      updateStage,
+      deleteStage,
+      createTask,
+      updateTask,
+      deleteTask,
+      moveTask,
+      addDependency,
+      removeDependency,
+      getTaskComments,
+      addTaskComment,
+      deleteTaskComment,
+      getTaskAttachments,
+      addTaskAttachment,
+      deleteTaskAttachment,
+      getProject,
+      getStagesByProject,
+      getTasksByProject,
+      getTasksByStage,
+      getDependenciesForTask,
+      getReverseDependenciesForTask,
+      refresh,
+      loadProjectDetails,
+      loadAllProjectsDetails,
+      isProjectLoaded,
+    ]
   );
+
+  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
 
 export function useData(): DataContextType {

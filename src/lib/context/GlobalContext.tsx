@@ -209,6 +209,17 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     await supabaseSignOut();
+    // Remove o cache local de dados (projetos/tarefas) para não deixar
+    // informações do workspace em computadores compartilhados
+    try {
+      for (const key of Object.keys(window.localStorage)) {
+        if (key.startsWith("chronos_data_state_") || key === "chronos:data:v1") {
+          window.localStorage.removeItem(key);
+        }
+      }
+    } catch {
+      // localStorage indisponível
+    }
     setUser(null);
     setWorkspaceRole(null);
     window.location.href = "/";

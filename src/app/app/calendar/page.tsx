@@ -65,7 +65,7 @@ function addMonths(d: Date, n: number): Date {
 
 export default function CalendarPage() {
   const router = useRouter();
-  const { tasks, projects, loading, loadAllProjectsDetails } = useData();
+  const { tasks, projects, loading, loadAllProjectsDetails, isProjectLoaded } = useData();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loadingDetails, setLoadingDetails] = useState(false);
 
@@ -110,13 +110,20 @@ export default function CalendarPage() {
   }, []);
 
   useEffect(() => {
+    // Só mostra o loader quando há projeto ainda não carregado
+    if (!projects.some((p) => !isProjectLoaded(p.id))) return;
+    let cancelled = false;
     async function fetchDetails() {
       setLoadingDetails(true);
       await loadAllProjectsDetails();
-      setLoadingDetails(false);
+      if (!cancelled) setLoadingDetails(false);
     }
     fetchDetails();
-  }, [loadAllProjectsDetails]);
+    return () => {
+      cancelled = true;
+      setLoadingDetails(false);
+    };
+  }, [projects, isProjectLoaded, loadAllProjectsDetails]);
 
   // Filtro de Tarefas por Usuário / Permissões
   // Donos do Projeto / Workspace vêm TODAS as tarefas com indicativo visual de quem é o responsável.

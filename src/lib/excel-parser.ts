@@ -8,6 +8,7 @@
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
 import type { Task } from "@/lib/context/DataContext";
+import { formatDateOnly, toDateOnly } from "@/lib/date-only";
 
 // ── Tipos ────────────────────────────────────────────────────
 
@@ -163,22 +164,21 @@ function parseDate(value: unknown): string | null {
   // Se for string → tenta formatos comuns
   const str = String(value).trim();
 
-  // ISO: 2026-07-22 ou 2026-07-22T10:00:00
-  const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  // ISO: 2026-07-22 ou 2026-07-22T10:00:00 (toDateOnly rejeita dia/mês inexistente)
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return toDateOnly(str);
 
   // BR: dd/mm/yyyy ou dd-mm-yyyy
   const brMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
   if (brMatch) {
     const [, d, m, yRaw] = brMatch;
     const y = yRaw!.length === 2 ? `20${yRaw}` : yRaw;
-    return `${y}-${m!.padStart(2, "0")}-${d!.padStart(2, "0")}`;
+    return toDateOnly(`${y}-${m!.padStart(2, "0")}-${d!.padStart(2, "0")}`);
   }
 
-  // Tentar Date.parse como fallback
+  // Tentar Date.parse como fallback (interpreta no fuso local)
   const ts = Date.parse(str);
   if (!isNaN(ts)) {
-    return new Date(ts).toISOString().split("T")[0];
+    return formatDateOnly(new Date(ts));
   }
 
   return null;
@@ -437,16 +437,18 @@ export function buildPreview(
     for (const [colName, fieldName] of Object.entries(mapping)) {
       if (fieldName === "ignore") continue;
 
+      // `continue`, não `break`: este bloco está no for...of, e um break
+      // descartava todas as colunas mapeadas depois de "Nível"
       if (fieldName === "level") {
         const raw = row[colName];
-        if (raw === null || raw === undefined || raw === "") break;
+        if (raw === null || raw === undefined || raw === "") continue;
         const n = typeof raw === "number" ? raw : parseInt(String(raw).trim(), 10);
         if (isNaN(n) || n < 1) {
           warnings.push(`Nível "${raw}" inválido — esperado número >= 1`);
-          break;
+          continue;
         }
         level = n;
-        break;
+        continue;
       }
       const raw = row[colName];
 

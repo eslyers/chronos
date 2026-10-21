@@ -21,6 +21,7 @@ import {
   deleteTask as supabaseDeleteTask,
   getCurrentWorkspaceId,
 } from "@/lib/data/supabase-data";
+import type { Stage } from "@/lib/context/DataContext";
 
 // ─────────────────────────────────────────────────────────────
 // CHRONOS — Data Provider
@@ -116,8 +117,7 @@ export const dataProvider = {
     if (getDataLayer() !== "supabase") return null;
     const { workspaceId, userId } = await loadWorkspaceContext();
     if (!workspaceId) {
-      console.error("[dataProvider.createProject] Nenhum workspaceId encontrado para o usuário!");
-      return null;
+      throw new Error("Nenhum workspace ativo encontrado para o usuário");
     }
     const project = await supabaseCreateProject({
       name: input.name,
@@ -129,84 +129,61 @@ export const dataProvider = {
       created_by: userId || null,
       track_time: input.track_time,
     });
-    if (!project) {
-      console.error("[dataProvider.createProject] Falha ao criar projeto no Supabase!");
-      return null;
-    }
 
-    // Caminho 1: customStages enviado (lista já customizada pelo user no editor)
-    if (input.customStages && input.customStages.length > 0) {
-      const createdStages: import("@/lib/context/DataContext").Stage[] = [];
-      for (const s of input.customStages) {
-        const stage = await supabaseCreateStage({
-          project_id: project.id,
-          name: s.name,
-          color: s.color,
-          sort_order: s.sort_order,
-          wip_limit: s.wip_limit ?? null,
-          is_done: s.is_done ?? false,
-        });
-        if (stage) {
-          createdStages.push({
-            id: stage.id,
-            project_id: stage.project_id,
-            name: stage.name,
-            color: stage.color,
-            position: stage.position,
-            is_done: s.is_done ?? stage.is_done,
-          });
-        }
+    type StageInput = { name: string; color: string; sort_order: number; wip_limit?: number | null; is_done?: boolean };
+    const createStages = async (list: StageInput[]) => {
+      const created: Stage[] = [];
+      for (const s of list) {
+        created.push(
+          await supabaseCreateStage({
+            project_id: project.id,
+            name: s.name,
+            color: s.color,
+            sort_order: s.sort_order,
+            wip_limit: s.wip_limit ?? null,
+            is_done: s.is_done ?? false,
+          })
+        );
       }
-      return { project, stages: createdStages };
-    }
+      return created;
+    };
 
-    // Caminho 2: templateId — clona as stages do template
-    if (input.templateId) {
-      const { createSPAClient } = await import("@/lib/supabase/client");
-      const supabase = createSPAClient();
-      const { data: tpl } = await supabase
-        .from("templates")
-        .select("stages")
-        .eq("id", input.templateId)
-        .single();
-      const templateStages = ((tpl as { stages?: unknown } | null)?.stages as Array<{
-        name: string;
-        color: string;
-        sort_order: number;
-        wip_limit?: number | null;
-        is_done?: boolean;
-      }>) ?? [];
-      const createdStages: import("@/lib/context/DataContext").Stage[] = [];
-      for (const s of templateStages) {
-        const stage = await supabaseCreateStage({
-          project_id: project.id,
-          name: s.name,
-          color: s.color,
-          sort_order: s.sort_order,
-          wip_limit: s.wip_limit ?? null,
-        });
-        if (stage) {
-          createdStages.push({
-            id: stage.id,
-            project_id: stage.project_id,
-            name: stage.name,
-            color: stage.color,
-            position: stage.position,
-            is_done: s.is_done ?? stage.is_done,
-          });
-        }
+    // Sem transação no client: se as etapas falharem, desfaz o projeto em vez
+    // de deixá-lo incompleto.
+    try {
+      // Caminho 1: customStages enviado (lista já customizada pelo user no editor)
+      if (input.customStages && input.customStages.length > 0) {
+        return { project, stages: await createStages(input.customStages) };
       }
-      return { project, stages: createdStages };
-    }
 
-    // Caminho 3: useDefaultStages=false → projeto sem stages (user cria depois)
-    if (input.useDefaultStages === false) {
-      return { project, stages: [] };
-    }
+      // Caminho 2: templateId — clona as stages do template
+      if (input.templateId) {
+        const { createSPAClient } = await import("@/lib/supabase/client");
+        const supabase = createSPAClient();
+        const { data: tpl, error: tplError } = await supabase
+          .from("templates")
+          .select("stages")
+          .eq("id", input.templateId)
+          .single();
+        if (tplError) throw new Error(`Falha ao carregar template: ${tplError.message}`);
+        const templateStages = ((tpl as { stages?: unknown } | null)?.stages as StageInput[]) ?? [];
+        return { project, stages: await createStages(templateStages) };
+      }
 
-    // Caminho 4 (fallback): 5 stages padrão (backlog, a fazer, em progresso, em revisão, concluído)
-    const stages = await createDefaultStages(project.id);
-    return { project, stages };
+      // Caminho 3: useDefaultStages=false → projeto sem stages (user cria depois)
+      if (input.useDefaultStages === false) {
+        return { project, stages: [] };
+      }
+
+      // Caminho 4 (fallback): 5 stages padrão (backlog, a fazer, em progresso, em revisão, concluído)
+      const stages = await createDefaultStages(project.id);
+      return { project, stages };
+    } catch (err) {
+      await supabaseDeleteProject(project.id).catch((cleanupErr) =>
+        console.error("[dataProvider.createProject] Falha ao desfazer projeto incompleto:", cleanupErr)
+      );
+      throw err;
+    }
   },
 
   updateProject: supabaseUpdateProject,
