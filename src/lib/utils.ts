@@ -56,3 +56,14 @@ export function daysUntil(iso: string | null): number | null {
   target.setHours(0, 0, 0, 0);
   return Math.ceil((target.getTime() - today.getTime()) / 86400000);
 }
+/**
+ * Normaliza um destino de redirect vindo da URL (?redirect=) para um caminho
+ * interno. Bloqueia URLs absolutas e protocol-relative ("//host") para evitar
+ * open redirect após o login.
+ */
+export function safeRedirectPath(raw: string | null | undefined, fallback = "/app"): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) {
+    return fallback;
+  }
+  return raw;
+}

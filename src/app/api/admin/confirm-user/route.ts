@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { hasValidBearerSecret } from "@/lib/server-secret";
 
 // ─────────────────────────────────────────────────────────────
 // CHRONOS — API: Confirmar usuário manualmente (dev only)
@@ -14,13 +15,11 @@ const confirmUserSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    // Proteção: apenas em desenvolvimento ou com ADMIN_SECRET/CRON_SECRET válido
+    // Proteção: apenas em desenvolvimento ou com ADMIN_SECRET válido
+    // (não reaproveita o CRON_SECRET, que é enviado a outros serviços)
     const isDev = process.env.NODE_ENV === "development";
-    const adminSecret = process.env.ADMIN_SECRET ?? process.env.CRON_SECRET;
-    const authHeader = request.headers.get("authorization");
-    const providedSecret = authHeader?.replace(/^Bearer\s+/i, "");
 
-    if (!isDev && (!adminSecret || providedSecret !== adminSecret)) {
+    if (!isDev && !hasValidBearerSecret(request, process.env.ADMIN_SECRET)) {
       return NextResponse.json(
         { error: "Não autorizado" },
         { status: 401 }

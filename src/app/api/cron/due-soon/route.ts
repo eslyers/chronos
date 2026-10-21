@@ -4,6 +4,7 @@
 // Uso: GET/POST /api/cron/due-soon (com Authorization: Bearer CRON_SECRET)
 // ─────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from "next/server";
+import { hasValidBearerSecret } from "@/lib/server-secret";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Edge Function pode demorar
@@ -30,10 +31,7 @@ async function triggerDueSoon(req: NextRequest, method: string) {
     }
 
     // Aceita apenas Bearer token (Vercel Cron envia header Authorization)
-    const authHeader = req.headers.get("authorization");
-    const providedSecret = authHeader?.replace(/^Bearer\s+/i, "");
-
-    if (!providedSecret || providedSecret !== CRON_SECRET) {
+    if (!hasValidBearerSecret(req, CRON_SECRET)) {
       return NextResponse.json(
         { error: "Não autorizado. Use header Authorization: Bearer <CRON_SECRET>" },
         { status: 401 }
