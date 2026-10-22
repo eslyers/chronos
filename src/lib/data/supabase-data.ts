@@ -11,7 +11,7 @@ import type {
   Stage,
   Task,
   TaskDependency,
-} from "@/lib/context/DataContext";
+} from "@/lib/data/models";
 
 function client() {
   return createSPAClient();

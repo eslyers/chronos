@@ -19,108 +19,37 @@ import { sortTasksWithHierarchy } from "@/lib/task-sorting";
 import { orderTasksParentsFirst, collectDescendantIds } from "@/lib/task-hierarchy";
 import { daysBetweenDateOnly, shiftDateOnly, toDateOnly } from "@/lib/date-only";
 import { useGlobalToast } from "@/components/ui/toast-notification";
+import type {
+  CloneProjectOptions,
+  DataState,
+  Project,
+  Stage,
+  Task,
+  TaskAttachment,
+  TaskComment,
+  TaskDependency,
+} from "@/lib/data/models";
+import { USER_ID, defaultStagesForProject, generateId, seedMockData } from "@/lib/data/demo-seed";
+import { STORAGE_KEY, loadFromStorage, saveToStorage } from "@/lib/data/local-cache";
+import { useTaskDiscussion } from "@/lib/context/useTaskDiscussion";
 
 // ─────────────────────────────────────────────────────────────
 // CHRONOS — DataContext
 // Dual mode: usa Supabase real se configurado, senão cai pro localStorage
 // Sprint 3.C: persistência real no Postgres via Supabase
+// Tipos em lib/data/models, dados demo em lib/data/demo-seed, cache local em
+// lib/data/local-cache e comentários/anexos em useTaskDiscussion.
 // ─────────────────────────────────────────────────────────────
 
-export type Stage = {
-  id: string;
-  project_id: string;
-  name: string;
-  color: string;
-  position: number;
-  is_done: boolean;
-  wip_limit?: number | null;
-};
-
-export type Task = {
-  id: string;
-  project_id: string;
-  stage_id: string | null;
-  title: string;
-  description: string | null;
-  priority: "low" | "medium" | "high" | "critical";
-  status: "todo" | "in_progress" | "review" | "done" | "blocked";
-  progress: number;
-  start_date: string | null; // ISO
-  due_date: string | null; // ISO
-  estimated_hours?: number | null;
-  actual_hours?: number | null;
-  assignee_id: string | null;
-  assignee_name: string | null; // texto original quando assignee não é membro
-  assignee_status: "pending" | "invited" | null;
-  position: number;
-  parent_task_id: string | null; // WBS hierarchy
-  created_at: string;
-  updated_at: string;
-};
-
-export type Project = {
-  id: string;
-  workspace_id: string;
-  owner_id: string;
-  name: string;
-  description: string | null;
-  color: string;
-  status: "active" | "completed" | "archived";
-  start_date: string | null;
-  target_date: string | null;
-  progress: number;
-  track_time: boolean;
-  created_at: string;
-  updated_at: string;
-};
-
-export type TaskDependency = {
-  id: string;
-  task_id: string;
-  depends_on_task_id: string;
-  type: "FS" | "SS" | "FF" | "SF"; // Finish-to-Start, Start-to-Start, Finish-to-Finish, Start-to-Finish
-};
-
-export type TaskComment = {
-  id: string;
-  task_id: string;
-  user_id: string | null;
-  user_name: string;
-  content: string;
-  created_at: string;
-};
-
-export type TaskAttachment = {
-  id: string;
-  task_id: string;
-  user_id: string | null;
-  file_name: string;
-  file_size: number;
-  file_type: string;
-  file_url: string;
-  uploaded_at: string;
-};
-
-type DataState = {
-  projects: Project[];
-  stages: Stage[];
-  tasks: Task[];
-  dependencies: TaskDependency[];
-  loading: boolean;
-};
-
-export type CloneProjectOptions = {
-  name: string;
-  description?: string;
-  color?: string;
-  startDate?: string;
-  targetDate?: string;
-  cloneTasks?: boolean;
-  cloneDependencies?: boolean;
-  resetStatus?: boolean;
-  keepAssignees?: boolean;
-  shiftDates?: boolean;
-  trackTime?: boolean;
+// Reexporta os tipos: as telas importam de "@/lib/context/DataContext"
+export type {
+  Stage,
+  Task,
+  Project,
+  TaskDependency,
+  TaskComment,
+  TaskAttachment,
+  CloneProjectOptions,
 };
 
 type DataContextType = DataState & {
@@ -165,181 +94,6 @@ type DataContextType = DataState & {
   isProjectLoaded: (projectId: string) => boolean;
 };
 
-const STORAGE_KEY = "chronos:data:v1";
-const USER_ID = "local-user-esly"; // mock user id
-
-function generateId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-}
-
-function defaultStagesForProject(projectId: string): Stage[] {
-  return [
-    { id: generateId("stage"), project_id: projectId, name: "Backlog", color: "#94a3b8", position: 0, is_done: false },
-    { id: generateId("stage"), project_id: projectId, name: "A Fazer", color: "#3b82f6", position: 1, is_done: false },
-    { id: generateId("stage"), project_id: projectId, name: "Em Progresso", color: "#3b82f6", position: 2, is_done: false },
-    { id: generateId("stage"), project_id: projectId, name: "Em Revisão", color: "#a855f7", position: 3, is_done: false },
-    { id: generateId("stage"), project_id: projectId, name: "Concluído", color: "#10b981", position: 4, is_done: true },
-  ];
-}
-
-function seedMockData(): DataState {
-  const now = new Date();
-  const projectId1 = generateId("project");
-  const projectId2 = generateId("project");
-
-  const stagesP1 = defaultStagesForProject(projectId1);
-  const stagesP2 = defaultStagesForProject(projectId2);
-
-  const project1: Project = {
-    id: projectId1,
-    workspace_id: "ws-local",
-    owner_id: USER_ID,
-    name: "CHRONOS MVP",
-    description: "Sistema de gestão de cronograma — Sprint 2 em diante",
-    color: "#3b82f6",
-    status: "active",
-    start_date: new Date(now.getTime() - 14 * 86400000).toISOString(),
-    target_date: new Date(now.getTime() + 30 * 86400000).toISOString(),
-    progress: 35,
-    track_time: true,
-    created_at: now.toISOString(),
-    updated_at: now.toISOString(),
-  };
-
-  const project2: Project = {
-    id: projectId2,
-    workspace_id: "ws-local",
-    owner_id: USER_ID,
-    name: "Lançamento Produto Q4",
-    description: "Plano completo de lançamento com etapas, dependências e notificações",
-    color: "#a855f7",
-    status: "active",
-    start_date: new Date(now.getTime() - 7 * 86400000).toISOString(),
-    target_date: new Date(now.getTime() + 60 * 86400000).toISOString(),
-    progress: 12,
-    track_time: true,
-    created_at: now.toISOString(),
-    updated_at: now.toISOString(),
-  };
-
-  const tasks: Task[] = [
-    // CHRONOS MVP
-    {
-      id: generateId("task"),
-      project_id: projectId1,
-      stage_id: stagesP1[1].id, // A Fazer
-      title: "Implementar CRUD de Projects",
-      description: "Modal de criar/editar projeto, com validação de campos",
-      priority: "high",
-      status: "todo",
-      progress: 0,
-      start_date: new Date().toISOString(),
-      due_date: new Date(now.getTime() + 2 * 86400000).toISOString(),
-      assignee_id: USER_ID,
-      assignee_name: null,
-      assignee_status: null,
-      position: 0,
-      parent_task_id: null,
-      created_at: now.toISOString(),
-      updated_at: now.toISOString(),
-    },
-    {
-      id: generateId("task"),
-      project_id: projectId1,
-      stage_id: stagesP1[2].id, // Em Progresso
-      title: "Schema DB aplicado no Supabase",
-      description: "Rodar migration no Supabase production",
-      priority: "critical",
-      status: "in_progress",
-      progress: 50,
-      start_date: new Date(now.getTime() - 1 * 86400000).toISOString(),
-      due_date: new Date(now.getTime() + 1 * 86400000).toISOString(),
-      assignee_id: USER_ID,
-      assignee_name: null,
-      assignee_status: null,
-      position: 0,
-      parent_task_id: null,
-      created_at: now.toISOString(),
-      updated_at: now.toISOString(),
-    },
-    {
-      id: generateId("task"),
-      project_id: projectId1,
-      stage_id: stagesP1[4].id, // Concluído
-      title: "Definir identidade visual",
-      description: "Paleta azul corporativa + tipografia + logo conceitual",
-      priority: "medium",
-      status: "done",
-      progress: 100,
-      start_date: new Date(now.getTime() - 7 * 86400000).toISOString(),
-      due_date: new Date(now.getTime() - 5 * 86400000).toISOString(),
-      assignee_id: USER_ID,
-      assignee_name: null,
-      assignee_status: null,
-      position: 0,
-      parent_task_id: null,
-      created_at: now.toISOString(),
-      updated_at: now.toISOString(),
-    },
-    // Lançamento
-    {
-      id: generateId("task"),
-      project_id: projectId2,
-      stage_id: stagesP2[0].id, // Backlog
-      title: "Pesquisa de mercado",
-      description: "Levantar concorrentes e definir positioning",
-      priority: "medium",
-      status: "todo",
-      progress: 0,
-      start_date: new Date(now.getTime() + 5 * 86400000).toISOString(),
-      due_date: new Date(now.getTime() + 14 * 86400000).toISOString(),
-      assignee_id: USER_ID,
-      assignee_name: null,
-      assignee_status: null,
-      position: 0,
-      parent_task_id: null,
-      created_at: now.toISOString(),
-      updated_at: now.toISOString(),
-    },
-  ];
-
-  return {
-    projects: [project1, project2],
-    stages: [...stagesP1, ...stagesP2],
-    tasks,
-    dependencies: [],
-    loading: false,
-  };
-}
-
-function getStorageKey(uid?: string): string {
-  if (uid && uid !== "local-user-esly" && uid !== "") {
-    return `chronos_data_state_${uid}`;
-  }
-  return STORAGE_KEY;
-}
-
-function loadFromStorage(uid?: string): DataState | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const key = getStorageKey(uid);
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return null;
-    return JSON.parse(raw) as DataState;
-  } catch {
-    return null;
-  }
-}
-
-function saveToStorage(state: DataState, uid?: string) {
-  if (typeof window === "undefined") return;
-  try {
-    const key = getStorageKey(uid);
-    window.localStorage.setItem(key, JSON.stringify(state));
-  } catch {
-    // Ignore storage quota or serialization issues
-  }
-}
 
 const DataContext = createContext<DataContextType | null>(null);
 
@@ -1326,174 +1080,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   );
 
   // ── Comments & Attachments (Proposta 4) ─────────────────────
-  const getTaskComments = useCallback(async (taskId: string): Promise<TaskComment[]> => {
-    if (getDataLayer() === "supabase") {
-      try {
-        const { createSPAClient } = await import("@/lib/supabase/client");
-        const supabase = createSPAClient();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const client = supabase.from("task_comments") as any;
-        const { data, error } = await client
-          .select("*")
-          .eq("task_id", taskId)
-          .order("created_at", { ascending: true });
-        if (error) throw error;
-        return (data ?? []) as TaskComment[];
-      } catch (err) {
-        console.error("[DataContext] getTaskComments error:", err);
-        return [];
-      }
-    }
-    const raw = typeof window !== "undefined" ? localStorage.getItem(`chronos:comments:${taskId}`) : null;
-    return raw ? JSON.parse(raw) : [];
-  }, []);
-
-  const addTaskComment = useCallback(
-    async (taskId: string, content: string, userName?: string): Promise<TaskComment> => {
-      const now = new Date().toISOString();
-      const commentObj: TaskComment = {
-        id: generateId("comment"),
-        task_id: taskId,
-        user_id: userId || null,
-        user_name: userName || "Usuário",
-        content,
-        created_at: now,
-      };
-
-      if (getDataLayer() === "supabase") {
-        try {
-          const { createSPAClient } = await import("@/lib/supabase/client");
-          const supabase = createSPAClient();
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const client = supabase.from("task_comments") as any;
-          const { data, error } = await client
-            .insert({
-              task_id: taskId,
-              user_id: userId || null,
-              user_name: userName || "Usuário",
-              content,
-            })
-            .select()
-            .single();
-          if (error) throw new Error(error.message);
-          return data as TaskComment;
-        } catch (err) {
-          return reportError("Não foi possível publicar o comentário", err);
-        }
-      }
-
-      const current = await getTaskComments(taskId);
-      const updated = [...current, commentObj];
-      if (typeof window !== "undefined") {
-        localStorage.setItem(`chronos:comments:${taskId}`, JSON.stringify(updated));
-      }
-      return commentObj;
-    },
-    [userId, getTaskComments, reportError]
-  );
-
-  const deleteTaskComment = useCallback(async (commentId: string) => {
-    if (getDataLayer() === "supabase") {
-      try {
-        const { createSPAClient } = await import("@/lib/supabase/client");
-        const supabase = createSPAClient();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const client = supabase.from("task_comments") as any;
-        const { error } = await client.delete().eq("id", commentId);
-        if (error) throw new Error(error.message);
-      } catch (err) {
-        reportError("Não foi possível excluir o comentário", err);
-      }
-    }
-  }, [reportError]);
-
-  const getTaskAttachments = useCallback(async (taskId: string): Promise<TaskAttachment[]> => {
-    if (getDataLayer() === "supabase") {
-      try {
-        const { createSPAClient } = await import("@/lib/supabase/client");
-        const supabase = createSPAClient();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const client = supabase.from("task_attachments") as any;
-        const { data, error } = await client
-          .select("*")
-          .eq("task_id", taskId)
-          .order("uploaded_at", { ascending: false });
-        if (error) throw error;
-        return (data ?? []) as TaskAttachment[];
-      } catch (err) {
-        console.error("[DataContext] getTaskAttachments error:", err);
-        return [];
-      }
-    }
-    const raw = typeof window !== "undefined" ? localStorage.getItem(`chronos:attachments:${taskId}`) : null;
-    return raw ? JSON.parse(raw) : [];
-  }, []);
-
-  const addTaskAttachment = useCallback(
-    async (
-      taskId: string,
-      file: { name: string; size: number; type: string; url: string }
-    ): Promise<TaskAttachment> => {
-      const now = new Date().toISOString();
-      const attachmentObj: TaskAttachment = {
-        id: generateId("attach"),
-        task_id: taskId,
-        user_id: userId || null,
-        file_name: file.name,
-        file_size: file.size,
-        file_type: file.type,
-        file_url: file.url,
-        uploaded_at: now,
-      };
-
-      if (getDataLayer() === "supabase") {
-        try {
-          const { createSPAClient } = await import("@/lib/supabase/client");
-          const supabase = createSPAClient();
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const client = supabase.from("task_attachments") as any;
-          const { data, error } = await client
-            .insert({
-              task_id: taskId,
-              user_id: userId || null,
-              file_name: file.name,
-              file_size: file.size,
-              file_type: file.type,
-              file_url: file.url,
-            })
-            .select()
-            .single();
-          if (error) throw new Error(error.message);
-          return data as TaskAttachment;
-        } catch (err) {
-          return reportError("Não foi possível anexar o arquivo", err);
-        }
-      }
-
-      const current = await getTaskAttachments(taskId);
-      const updated = [attachmentObj, ...current];
-      if (typeof window !== "undefined") {
-        localStorage.setItem(`chronos:attachments:${taskId}`, JSON.stringify(updated));
-      }
-      return attachmentObj;
-    },
-    [userId, getTaskAttachments, reportError]
-  );
-
-  const deleteTaskAttachment = useCallback(async (attachmentId: string) => {
-    if (getDataLayer() === "supabase") {
-      try {
-        const { createSPAClient } = await import("@/lib/supabase/client");
-        const supabase = createSPAClient();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const client = supabase.from("task_attachments") as any;
-        const { error } = await client.delete().eq("id", attachmentId);
-        if (error) throw new Error(error.message);
-      } catch (err) {
-        reportError("Não foi possível excluir o anexo", err);
-      }
-    }
-  }, [reportError]);
+  const {
+    getTaskComments,
+    addTaskComment,
+    deleteTaskComment,
+    getTaskAttachments,
+    addTaskAttachment,
+    deleteTaskAttachment,
+  } = useTaskDiscussion(userId, reportError);
 
   const value = useMemo<DataContextType>(
     () => ({

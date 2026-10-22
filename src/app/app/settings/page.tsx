@@ -1,38 +1,16 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useGlobal } from "@/lib/context/GlobalContext";
 import { createSPAClient } from "@/lib/supabase/client";
-import { User, Key, CheckCircle, Bell, Send, Loader2, Clock, Mail, Settings } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-interface Profile {
-  id: string;
-  email: string;
-  full_name: string | null;
-  telegram_chat_id: string | null;
-  telegram_username: string | null;
-  timezone: string;
-  notify_by_email: boolean;
-  notify_by_telegram: boolean;
-}
-
-interface Subscriber {
-  project_id: string;
-  telegram_enabled: boolean;
-  email_enabled: boolean;
-  notify_on_stage_change: boolean;
-  notify_on_due_soon: boolean;
-  notify_on_overdue: boolean;
-  notify_on_assigned: boolean;
-  due_soon_hours: number;
-  quiet_hours_start: string | null;
-  quiet_hours_end: string | null;
-}
+import { CheckCircle, Loader2 } from "lucide-react";
+import type { Profile, Subscriber } from "@/components/settings/types";
+import { SettingsHeader } from "@/components/settings/SettingsHeader";
+import { ProfileSection } from "@/components/settings/ProfileSection";
+import { PasswordSection } from "@/components/settings/PasswordSection";
+import { TelegramSection } from "@/components/settings/TelegramSection";
+import { ProjectNotificationsSection } from "@/components/settings/ProjectNotificationsSection";
 
 export default function SettingsPage() {
   const { user, refreshUser } = useGlobal();
@@ -91,7 +69,7 @@ export default function SettingsPage() {
             throw new Error(
               `Não foi possível criar seu perfil (RLS bloqueou INSERT). ` +
                 `Aplique a migration 20260716000000_fix_profile_insert_policies.sql ` +
-                `no Supabase Dashboard (ver SUPABASE-FIX-SETTINGS.md). Detalhes: ${createErr.message}`
+                `no Supabase Dashboard (ver docs/notes/SUPABASE-FIX-SETTINGS.md). Detalhes: ${createErr.message}`
             );
           }
           if (created) p = created as Profile;
@@ -322,24 +300,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-8 max-w-4xl animate-fadeIn pb-12">
       {/* Executive Header Banner */}
-      <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-r from-card via-card to-blue-500/5 p-6 sm:p-8 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-          <div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-xs font-semibold">
-                CONFIGURAÇÕES DO SISTEMA
-              </Badge>
-            </div>
-            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight mt-2 flex items-center gap-3">
-              <Settings className="h-7 w-7 text-blue-500" />
-              Configurações do Workspace
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-              Gerencie os dados do seu perfil, preferências globais de notificação por e-mail e regras por projeto.
-            </p>
-          </div>
-        </div>
-      </div>
+      <SettingsHeader />
 
       {error && (
         <Alert variant="destructive">
@@ -354,280 +315,40 @@ export default function SettingsPage() {
       )}
 
       {/* Profile */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Perfil
-          </CardTitle>
-          <CardDescription>Informações da sua conta (salvas no Supabase)</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Email</label>
-              <p className="mt-1 text-sm font-medium text-foreground">{profile.email}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-muted-foreground">Timezone</label>
-              <p className="mt-1 text-sm">{profile.timezone}</p>
-            </div>
-            <div className="md:col-span-2 space-y-1.5 pt-2 border-t border-border/60">
-              <label className="text-sm font-semibold text-foreground">
-                Nome de Exibição / Completo
-              </label>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <Input
-                  value={profile.full_name || ""}
-                  onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
-                  placeholder="Ex: Eder Silva ou Esly"
-                  className="max-w-md bg-background"
-                />
-                <Button
-                  type="button"
-                  onClick={handleSaveProfile}
-                  disabled={loading}
-                  size="sm"
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm"
-                >
-                  Salvar Nome
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Este nome será exibido na saudação de boas-vindas do Dashboard e nos registros de tarefas.
-              </p>
-            </div>
-            <div className="md:col-span-2 pt-2 border-t border-border/40">
-              <label className="text-xs font-medium text-muted-foreground">ID do Usuário</label>
-              <p className="mt-0.5 text-xs font-mono text-muted-foreground/80 truncate">{profile.id}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <ProfileSection
+        profile={profile}
+        onFullNameChange={(value) => setProfile({ ...profile, full_name: value })}
+        onSave={handleSaveProfile}
+        loading={loading}
+      />
 
       {/* Password */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Key className="h-5 w-5" />
-            Senha
-          </CardTitle>
-          <CardDescription>Atualize sua senha de acesso</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handlePasswordChange} className="space-y-4 max-w-md">
-            <div>
-              <label htmlFor="new-password" className="block text-sm font-medium mb-1.5">
-                Nova senha
-              </label>
-              <Input
-                type="password"
-                id="new-password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Mínimo 8 caracteres"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="confirm-password" className="block text-sm font-medium mb-1.5">
-                Confirmar nova senha
-              </label>
-              <Input
-                type="password"
-                id="confirm-password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
-            </div>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Atualizando..." : "Atualizar senha"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      <PasswordSection
+        newPassword={newPassword}
+        onNewPasswordChange={setNewPassword}
+        confirmPassword={confirmPassword}
+        onConfirmPasswordChange={setConfirmPassword}
+        onSubmit={handlePasswordChange}
+        loading={loading}
+      />
 
       {/* Telegram */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bell className="h-5 w-5" />
-            Telegram
-          </CardTitle>
-          <CardDescription>
-            Receba notificações de prazos e transições direto no Telegram
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 max-w-md">
-          <div>
-            <label htmlFor="chat-id" className="block text-sm font-medium mb-1.5">
-              Telegram Chat ID
-            </label>
-            <Input
-              id="chat-id"
-              value={profile.telegram_chat_id || ""}
-              onChange={(e) =>
-                setProfile({ ...profile, telegram_chat_id: e.target.value })
-              }
-              placeholder="Ex: 123456789"
-            />
-            <p className="text-xs text-muted-foreground mt-1.5">
-              Pra descobrir: abra o Telegram → procure <span className="font-mono">@userinfobot</span> → mande /start.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={handleSaveTelegram} disabled={loading}>
-              {loading ? "Salvando..." : "Salvar"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleTestTelegram}
-              disabled={testingTelegram || !profile.telegram_chat_id}
-            >
-              <Send className="mr-2 h-4 w-4" />
-              {testingTelegram ? "Enviando..." : "Enviar teste"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <TelegramSection
+        chatId={profile.telegram_chat_id}
+        onChatIdChange={(value) => setProfile({ ...profile, telegram_chat_id: value })}
+        onSave={handleSaveTelegram}
+        onTest={handleTestTelegram}
+        loading={loading}
+        testing={testingTelegram}
+      />
 
       {/* Notification Preferences por Projeto */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5" />
-            Preferências de notificação por projeto
-          </CardTitle>
-          <CardDescription>
-            Configure quando você quer receber alertas em cada projeto
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {projects.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Você ainda não tem projetos. Crie um em /app/projects pra configurar notificações.
-            </p>
-          ) : (
-            <div className="space-y-6">
-              {projects.map((proj) => {
-                const sub = subscribers[proj.id];
-                return (
-                  <div key={proj.id} className="border rounded-lg p-4 space-y-3">
-                    <div className="font-semibold text-base">{proj.name}</div>
-
-                    {/* Canais */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={sub?.telegram_enabled ?? true}
-                          onChange={(e) =>
-                            toggleSubscriberPref(proj.id, "telegram_enabled", e.target.checked)
-                          }
-                          className="h-4 w-4 rounded border-gray-300"
-                          disabled={loading}
-                        />
-                        <span className="text-sm">📱 Telegram</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={sub?.email_enabled ?? true}
-                          onChange={(e) =>
-                            toggleSubscriberPref(proj.id, "email_enabled", e.target.checked)
-                          }
-                          className="h-4 w-4 rounded border-gray-300"
-                          disabled={loading}
-                        />
-                        <span className="text-sm">📧 Email</span>
-                      </label>
-                    </div>
-
-                    {/* Tipos de evento */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={sub?.notify_on_assigned ?? true}
-                          onChange={(e) =>
-                            toggleSubscriberPref(proj.id, "notify_on_assigned", e.target.checked)
-                          }
-                          className="h-4 w-4 rounded border-gray-300"
-                          disabled={loading}
-                        />
-                        <span className="text-sm">📥 Quando me atribuírem tarefa</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={sub?.notify_on_stage_change ?? true}
-                          onChange={(e) =>
-                            toggleSubscriberPref(proj.id, "notify_on_stage_change", e.target.checked)
-                          }
-                          className="h-4 w-4 rounded border-gray-300"
-                          disabled={loading}
-                        />
-                        <span className="text-sm">🔄 Quando tarefa muda de etapa</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={sub?.notify_on_due_soon ?? true}
-                          onChange={(e) =>
-                            toggleSubscriberPref(proj.id, "notify_on_due_soon", e.target.checked)
-                          }
-                          className="h-4 w-4 rounded border-gray-300"
-                          disabled={loading}
-                        />
-                        <span className="text-sm">⏰ Tarefa perto de vencer</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={sub?.notify_on_overdue ?? true}
-                          onChange={(e) =>
-                            toggleSubscriberPref(proj.id, "notify_on_overdue", e.target.checked)
-                          }
-                          className="h-4 w-4 rounded border-gray-300"
-                          disabled={loading}
-                        />
-                        <span className="text-sm">🔴 Tarefa atrasada</span>
-                      </label>
-                    </div>
-
-                    {/* Due soon hours */}
-                    <div className="flex items-center gap-2 pt-2 border-t">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <label className="text-sm">Alertar tarefas vencendo em</label>
-                      <Select
-                        value={String(sub?.due_soon_hours ?? 24)}
-                        onValueChange={(val) =>
-                          toggleSubscriberPref(proj.id, "due_soon_hours", parseInt(val))
-                        }
-                        disabled={loading}
-                      >
-                        <SelectTrigger className="w-[180px] h-8 text-xs font-medium border-border/80 bg-background">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="1">1 hora</SelectItem>
-                          <SelectItem value="3">3 horas</SelectItem>
-                          <SelectItem value="6">6 horas</SelectItem>
-                          <SelectItem value="12">12 horas</SelectItem>
-                          <SelectItem value="24">24 horas (1 dia)</SelectItem>
-                          <SelectItem value="48">48 horas (2 dias)</SelectItem>
-                          <SelectItem value="72">72 horas (3 dias)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <ProjectNotificationsSection
+        projects={projects}
+        subscribers={subscribers}
+        loading={loading}
+        onPrefChange={toggleSubscriberPref}
+      />
     </div>
   );
 }
