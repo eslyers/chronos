@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
   Clock,
   FolderKanban,
@@ -19,21 +20,16 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { useGlobal } from "@/lib/context/GlobalContext";
-import { useData, type Project } from "@/lib/context/DataContext";
+import { useData, type Project, type Task } from "@/lib/context/DataContext";
 import { createSPAClient } from "@/lib/supabase/client";
-import { formatDateBR, daysUntil as getDaysUntilDiff } from "@/lib/utils";
+import { getDataLayer } from "@/lib/data/data-provider";
+import { formatDateBR } from "@/lib/utils";
+import { toDateOnly, todayDateOnly, shiftDateOnly } from "@/lib/date-only";
+import { isTaskDone, isTaskOverdue, daysUntilDue } from "@/lib/task-status";
+import { PRIORITY_BADGE_CLASS, priorityLabel, type Priority } from "@/lib/priority";
+import { timeAgo } from "@/lib/time-ago";
 import { DashboardSkeleton } from "@/components/skeletons/DashboardSkeleton";
 import { EmptyState } from "@/components/ui/empty-state";
-
-type UpcomingTask = {
-  id: string;
-  title: string;
-  due_date: string | null;
-  priority: string;
-  status: string;
-  project_id: string;
-  projects: { name: string; color: string } | null;
-};
 
 type RecentNotification = {
   id: string;
@@ -44,19 +40,34 @@ type RecentNotification = {
   created_at: string;
 };
 
-const PRIORITY_LABELS: Record<
-  string,
-  { label: string; variant: "default" | "secondary" | "warning" | "destructive"; bg: string }
-> = {
-  low: { label: "Baixa", variant: "secondary", bg: "bg-slate-500/10 text-slate-500 border-slate-500/30" },
-  medium: { label: "Média", variant: "default", bg: "bg-blue-500/10 text-blue-500 border-blue-500/30" },
-  high: { label: "Alta", variant: "warning", bg: "bg-amber-500/10 text-amber-500 border-amber-500/30" },
-  critical: { label: "Crítica", variant: "destructive", bg: "bg-red-500/10 text-red-500 border-red-500/30 font-bold animate-pulse" },
+const TASK_STATUS_LABEL: Record<Task["status"], string> = {
+  todo: "A Fazer",
+  in_progress: "Em Andamento",
+  review: "Revisão",
+  done: "Concluída",
+  blocked: "Bloqueada",
 };
+
+function priorityBadgeClass(priority: string): string {
+  const p = (priority in PRIORITY_BADGE_CLASS ? priority : "medium") as Priority;
+  // Só a crítica pulsa, e apenas para quem não pediu movimento reduzido
+  return p === "critical"
+    ? `${PRIORITY_BADGE_CLASS[p]} font-bold motion-safe:animate-pulse`
+    : PRIORITY_BADGE_CLASS[p];
+}
+
+function dueLabel(days: number | null): string | null {
+  if (days === null) return null;
+  if (days < 0) return "Atrasado";
+  if (days === 0) return "Vence Hoje";
+  if (days === 1) return "Amanhã";
+  return `em ${days} dias`;
+}
 
 function getWelcomeDisplayName(
   fullName: string | null | undefined,
-  email: string | null | undefined
+  email: string | null | undefined,
+  isMasterAdmin: boolean
 ): string {
   const cleanName = fullName?.trim();
   const emailPrefix = email?.split("@")[0]?.toLowerCase();
@@ -71,8 +82,8 @@ function getWelcomeDisplayName(
     return parts[0];
   }
 
-  // 2. Se for a conta Master Admin (eslyers@gmail.com) e o nome for vazio ou "eslyers"
-  if (email?.toLowerCase() === "eslyers@gmail.com" || cleanName?.toLowerCase() === "eslyers") {
+  // 2. Conta Master Admin sem nome amigável cadastrado
+  if (isMasterAdmin) {
     return "Esly";
   }
 
@@ -94,87 +105,60 @@ function getWelcomeDisplayName(
 }
 
 export default function DashboardPage() {
-  const { user, loading: userLoading } = useGlobal();
+  const { user, isMasterAdmin, loading: userLoading } = useGlobal();
   const { projects, tasks, getTasksByProject, loading: dataLoading, loadAllProjectsDetails } = useData();
-  const [upcomingTasks, setUpcomingTasks] = useState<UpcomingTask[]>([]);
+  const router = useRouter();
   const [recentNotifications, setRecentNotifications] = useState<RecentNotification[]>([]);
-  const [welcomeName, setWelcomeName] = useState<string>("Esly");
+  const userId = user?.id;
+
+  // Nome vem do GlobalContext (profiles.full_name, já atualizado por refreshUser)
+  const welcomeName = useMemo(
+    () => getWelcomeDisplayName(user?.name, user?.email, isMasterAdmin),
+    [user?.name, user?.email, isMasterAdmin]
+  );
+
+  // "Hoje" no fuso local, comparado como texto YYYY-MM-DD
+  const today = todayDateOnly();
 
   useEffect(() => {
     loadAllProjectsDetails();
   }, [loadAllProjectsDetails]);
 
   useEffect(() => {
-    if (!user) return;
+    // Notificações só existem no Supabase (modo demo não tem a tabela)
+    if (!userId || getDataLayer() !== "supabase") return;
+    let cancelled = false;
 
-    // Inicializa imediatamente com base no contexto global
-    setWelcomeName(getWelcomeDisplayName(user.name, user.email));
-
-    // Carregar perfil atualizado e notificações recentes do Supabase
     (async () => {
       try {
         const supabase = createSPAClient();
-
-        // 1. Buscar perfil do usuário para garantir o nome mais atualizado
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: profile } = await (supabase.from("profiles") as any)
-          .select("full_name")
-          .eq("id", user.id)
-          .maybeSingle();
-
-        if (profile?.full_name) {
-          setWelcomeName(getWelcomeDisplayName(profile.full_name, user.email));
-        } else {
-          // Se perfil não tiver full_name, checar user_metadata do auth
-          const { data: authData } = await supabase.auth.getUser();
-          const metaName =
-            (authData?.user?.user_metadata?.full_name as string) ||
-            (authData?.user?.user_metadata?.name as string);
-          if (metaName) {
-            setWelcomeName(getWelcomeDisplayName(metaName, user.email));
-          }
-        }
-
-        // 2. Notificações recentes
         const { data: notifs } = await supabase
           .from("notifications")
           .select("id, type, status, channels, payload, created_at")
           .order("created_at", { ascending: false })
           .limit(5);
-        setRecentNotifications((notifs ?? []) as RecentNotification[]);
+        if (!cancelled) setRecentNotifications((notifs ?? []) as RecentNotification[]);
       } catch (err) {
         console.error("Erro ao carregar notificações", err);
       }
     })();
-  }, [user]);
 
-  useEffect(() => {
-    if (!user) return;
-    const now = Date.now();
-    const upcoming = tasks
-      .filter(
-        (t) =>
-          t.due_date &&
-          t.status !== "done" &&
-          t.progress !== 100 &&
-          new Date(t.due_date).getTime() > now - 86400000
-      )
-      .sort((a, b) => new Date(a.due_date!).getTime() - new Date(b.due_date!).getTime())
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  // Pendentes com prazo a partir de ontem, mais próximas primeiro
+  const upcomingTasks = useMemo(() => {
+    const since = shiftDateOnly(today, -1)!;
+    const projectById = new Map(projects.map((p) => [p.id, p]));
+    return tasks
+      .map((t) => ({ task: t, due: toDateOnly(t.due_date) }))
+      .filter((x): x is { task: Task; due: string } => !!x.due && !isTaskDone(x.task) && x.due >= since)
+      .sort((a, b) => a.due.localeCompare(b.due))
       .slice(0, 5)
-      .map((t) => {
-        const p = projects.find((p) => p.id === t.project_id);
-        return {
-          id: t.id,
-          title: t.title,
-          due_date: t.due_date,
-          priority: t.priority,
-          status: t.status,
-          project_id: t.project_id,
-          projects: p ? { name: p.name, color: p.color } : null,
-        };
-      });
-    setUpcomingTasks(upcoming);
-  }, [user, tasks, projects]);
+      .map(({ task }) => ({ task, project: projectById.get(task.project_id) ?? null }));
+  }, [tasks, projects, today]);
 
   if (userLoading || dataLoading) {
     return <DashboardSkeleton />;
@@ -184,18 +168,12 @@ export default function DashboardPage() {
   const totalProjects = projects.length;
   const activeProjects = projects.filter((p) => p.status === "active").length;
   const totalTasks = tasks.length;
-  const completedTasks = tasks.filter((t) => t.status === "done" || t.progress === 100).length;
-  const overdueTasks = tasks.filter(
-    (t) =>
-      t.due_date &&
-      new Date(t.due_date).getTime() < Date.now() &&
-      t.status !== "done" &&
-      t.progress !== 100
-  ).length;
+  const completedTasks = tasks.filter((t) => isTaskDone(t)).length;
+  const overdueTasks = tasks.filter((t) => isTaskOverdue(t, today)).length;
   const dueSoonTasks = tasks.filter((t) => {
-    if (!t.due_date || t.status === "done" || t.progress === 100) return false;
-    const diff = new Date(t.due_date).getTime() - Date.now();
-    return diff > 0 && diff <= 86400000 * 3; // 3 dias
+    if (isTaskDone(t)) return false;
+    const days = daysUntilDue(t, today);
+    return days !== null && days >= 0 && days <= 3; // hoje até 3 dias
   }).length;
   const myTasks = tasks.filter((t) => t.assignee_id === user?.id).length;
   const tasksProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
@@ -222,25 +200,6 @@ export default function DashboardPage() {
     healthScore >= 80 ? "Excelente" : healthScore >= 50 ? "Estável" : "Atenção Crítica";
 
   const formatDate = formatDateBR;
-
-  function daysUntil(iso: string | null) {
-    const days = getDaysUntilDiff(iso);
-    if (days === null) return null;
-    if (days < 0) return "Atrasado";
-    if (days === 0) return "Vence Hoje";
-    if (days === 1) return "Amanhã";
-    return `em ${days} dias`;
-  }
-
-  function timeAgo(iso: string): string {
-    const diff = Date.now() - new Date(iso).getTime();
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return "agora";
-    if (minutes < 60) return `${minutes}min`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h`;
-    return `${Math.floor(hours / 24)}d`;
-  }
 
   return (
     <div className="space-y-8 animate-fadeIn pb-12">
@@ -365,7 +324,7 @@ export default function DashboardPage() {
             {projects.slice(0, 4).map((project: Project) => {
               const projectTasksList = getTasksByProject(project.id);
               const total = projectTasksList.length;
-              const done = projectTasksList.filter((t) => t.status === "done" || t.progress === 100).length;
+              const done = projectTasksList.filter((t) => isTaskDone(t)).length;
               const pct = total > 0 ? Math.round((done / total) * 100) : (project.progress || 0);
 
               return (
@@ -427,9 +386,7 @@ export default function DashboardPage() {
               title="Nenhum projeto encontrado"
               description="Crie seu primeiro projeto para começar a monitorar o cronograma e os indicadores de fechamento."
               actionLabel="Criar Projeto"
-              onAction={() => {
-                window.location.href = "/app/projects";
-              }}
+              onAction={() => router.push("/app/projects")}
               actionIcon={Plus}
             />
           )}
@@ -450,9 +407,9 @@ export default function DashboardPage() {
             </div>
 
             <div className="space-y-3">
-              {upcomingTasks.slice(0, 4).map((t) => {
-                const priorityInfo = PRIORITY_LABELS[t.priority] ?? PRIORITY_LABELS.medium;
-                const timeText = daysUntil(t.due_date);
+              {upcomingTasks.slice(0, 4).map(({ task: t, project: p }) => {
+                const days = daysUntilDue(t, today);
+                const timeText = dueLabel(days);
 
                 return (
                   <Card key={t.id} className="p-3.5 border border-border/80 bg-card shadow-sm hover:border-blue-500/40 transition-all">
@@ -460,19 +417,23 @@ export default function DashboardPage() {
                       <div>
                         <p className="text-xs font-bold leading-tight line-clamp-1">{t.title}</p>
                         <p className="text-[10px] text-muted-foreground mt-1">
-                          {t.projects?.name || "Projeto"}
+                          {p?.name || "Projeto"}
                         </p>
                       </div>
-                      <Badge className={`text-[10px] px-2 py-0.5 border ${priorityInfo.bg}`}>
-                        {priorityInfo.label}
+                      <Badge className={`text-[10px] px-2 py-0.5 border ${priorityBadgeClass(t.priority)}`}>
+                        {priorityLabel(t.priority)}
                       </Badge>
                     </div>
 
                     <div className="mt-2.5 flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-border/40">
-                      <span className="flex items-center gap-1 text-amber-500 font-medium">
+                      <span
+                        className={`flex items-center gap-1 font-medium ${
+                          days !== null && days < 0 ? "text-red-500" : "text-amber-500"
+                        }`}
+                      >
                         <Clock className="h-3 w-3" /> {timeText}
                       </span>
-                      <span className="capitalize">{t.status.replace("_", " ")}</span>
+                      <span>{TASK_STATUS_LABEL[t.status] ?? t.status}</span>
                     </div>
                   </Card>
                 );

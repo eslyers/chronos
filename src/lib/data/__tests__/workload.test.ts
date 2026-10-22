@@ -2,10 +2,12 @@ import {
   calculateWorkload,
   getTaskAssigneeKey,
   getTaskEstimatedHours,
+  UNKNOWN_MEMBER_LABEL,
 } from "@/lib/workload";
 import type { Task } from "@/lib/context/DataContext";
 
 describe("Workload Calculations", () => {
+  // Por padrão, um convite pendente: sem assignee_id, só com nome (constraint do banco)
   const mockTask = (overrides: Partial<Task>): Task => ({
     id: "task-1",
     project_id: "proj-1",
@@ -20,7 +22,7 @@ describe("Workload Calculations", () => {
     estimated_hours: 8,
     assignee_id: null,
     assignee_name: "Ana Silva",
-    assignee_status: null,
+    assignee_status: "pending",
     position: 0,
     parent_task_id: null,
     created_at: "2026-09-01T00:00:00Z",
@@ -28,9 +30,12 @@ describe("Workload Calculations", () => {
     ...overrides,
   });
 
+  // Membro do workspace: assignee_id preenchido e assignee_name NULL
+  const memberTask = (userId: string, overrides: Partial<Task> = {}): Task =>
+    mockTask({ assignee_id: userId, assignee_name: null, assignee_status: null, ...overrides });
+
   test("normalizes assignee key correctly", () => {
-    const taskWithId = mockTask({ assignee_id: "user-123", assignee_name: "Carlos" });
-    expect(getTaskAssigneeKey(taskWithId)).toEqual({
+    expect(getTaskAssigneeKey(memberTask("user-123"), { "user-123": "Carlos" })).toEqual({
       key: "user-123",
       name: "Carlos",
       id: "user-123",
@@ -43,12 +48,48 @@ describe("Workload Calculations", () => {
       id: null,
     });
 
-    const taskUnassigned = mockTask({ assignee_id: null, assignee_name: null });
+    const taskUnassigned = mockTask({ assignee_id: null, assignee_name: null, assignee_status: null });
     expect(getTaskAssigneeKey(taskUnassigned)).toEqual({
       key: "unassigned",
       name: "Não Atribuído",
       id: null,
     });
+  });
+
+  test("falls back to a generic label when the member name is unknown", () => {
+    expect(getTaskAssigneeKey(memberTask("user-999")).name).toBe(UNKNOWN_MEMBER_LABEL);
+    expect(getTaskAssigneeKey(memberTask("user-999"), { "user-1": "Outro" }).name).toBe(
+      UNKNOWN_MEMBER_LABEL
+    );
+  });
+
+  test("keeps workspace members apart and names them from memberNames", () => {
+    const tasks: Task[] = [
+      memberTask("u-ana", { id: "t1", estimated_hours: 10 }),
+      memberTask("u-ana", { id: "t2", estimated_hours: 6 }),
+      memberTask("u-bruno", { id: "t3", estimated_hours: 4 }),
+      mockTask({ id: "t4", assignee_name: "Convidado Externo", estimated_hours: 2 }),
+    ];
+
+    const result = calculateWorkload(tasks, {
+      memberNames: { "u-ana": "Ana Souza", "u-bruno": "bruno" },
+    });
+
+    expect(result.totalMembers).toBe(3);
+    const byKey = Object.fromEntries(result.members.map((m) => [m.memberKey, m]));
+    expect(byKey["u-ana"].memberName).toBe("Ana Souza");
+    expect(byKey["u-ana"].memberId).toBe("u-ana");
+    expect(byKey["u-ana"].pendingHours).toBe(16);
+    expect(byKey["u-bruno"].memberName).toBe("bruno");
+    expect(byKey["u-bruno"].pendingHours).toBe(4);
+    expect(byKey["convidado externo"].memberName).toBe("Convidado Externo");
+    expect(byKey["convidado externo"].memberId).toBeNull();
+  });
+
+  test("groups by assignee_id even without names (no collapse into one member)", () => {
+    const result = calculateWorkload([memberTask("u-1", { id: "a" }), memberTask("u-2", { id: "b" })]);
+    expect(result.totalMembers).toBe(2);
+    expect(result.members.map((m) => m.memberKey).sort()).toEqual(["u-1", "u-2"]);
   });
 
   test("retrieves estimated hours accurately", () => {
@@ -72,7 +113,7 @@ describe("Workload Calculations", () => {
       mockTask({ id: "t4", assignee_name: "Clara", estimated_hours: 16, status: "todo" }),
 
       // Tarefa não atribuída
-      mockTask({ id: "t5", assignee_name: null, estimated_hours: 10, status: "todo" }),
+      mockTask({ id: "t5", assignee_name: null, assignee_status: null, estimated_hours: 10, status: "todo" }),
     ];
 
     const result = calculateWorkload(tasks, { weeklyCapacityHours: 40 });

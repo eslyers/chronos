@@ -31,9 +31,13 @@ import {
 import { createSPAClient } from "@/lib/supabase/client";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { TaskCommentsSection } from "@/components/task-dialog/TaskCommentsSection";
 import { TaskAttachmentsSection } from "@/components/task-dialog/TaskAttachmentsSection";
 import { parseDurationToHours, formatHoursToHHMM, formatHoursBadge } from "@/lib/duration";
+import { toDateOnly, todayDateOnly } from "@/lib/date-only";
+import { PRIORITY_BADGE_CLASS, PRIORITY_LABEL, type Priority } from "@/lib/priority";
+import { buildAssigneePayload } from "@/lib/task-assignee";
 
 interface TaskDialogProps {
   open: boolean;
@@ -44,42 +48,12 @@ interface TaskDialogProps {
   projectId?: string;
 }
 
-const PRIORITIES = [
-  {
-    value: "low",
-    label: "Baixa",
-    icon: "⬇️",
-    activeClass: "bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-400/40 ring-1 ring-slate-400/50",
-    hoverClass: "hover:bg-slate-500/10 hover:border-slate-300",
-  },
-  {
-    value: "medium",
-    label: "Média",
-    icon: "➡️",
-    activeClass: "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-400/40 ring-1 ring-blue-400/50",
-    hoverClass: "hover:bg-blue-500/10 hover:border-blue-300",
-  },
-  {
-    value: "high",
-    label: "Alta",
-    icon: "⬆️",
-    activeClass: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-400/40 ring-1 ring-amber-400/50",
-    hoverClass: "hover:bg-amber-500/10 hover:border-amber-300",
-  },
-  {
-    value: "critical",
-    label: "Crítica",
-    icon: "🔥",
-    activeClass: "bg-red-500/15 text-red-700 dark:text-red-300 border-red-400/40 ring-1 ring-red-400/50",
-    hoverClass: "hover:bg-red-500/10 hover:border-red-300",
-  },
-] as const;
-
-const DEFAULT_KANBAN_STAGES: Array<{ id: string; name: string; is_done: boolean }> = [
-  { id: "todo", name: "A Fazer", is_done: false },
-  { id: "in_progress", name: "Em Andamento", is_done: false },
-  { id: "review", name: "Em Revisão", is_done: false },
-  { id: "done", name: "Concluído", is_done: true },
+// Rótulos e cores vêm de lib/priority (DESIGN.md); aqui só ícone e hover
+const PRIORITIES: Array<{ value: Priority; icon: string; hoverClass: string }> = [
+  { value: "low", icon: "⬇️", hoverClass: "hover:bg-slate-500/10 hover:border-slate-500/30" },
+  { value: "medium", icon: "➡️", hoverClass: "hover:bg-blue-500/10 hover:border-blue-500/30" },
+  { value: "high", icon: "⬆️", hoverClass: "hover:bg-orange-500/10 hover:border-orange-500/30" },
+  { value: "critical", icon: "🔥", hoverClass: "hover:bg-red-500/10 hover:border-red-500/30" },
 ];
 
 export function TaskDialog({
@@ -102,22 +76,22 @@ export function TaskDialog({
     getTaskAttachments,
     addTaskAttachment,
     deleteTaskAttachment,
+    isProjectLoaded,
+    loadProjectDetails,
   } = useData();
-  const projectStages = useMemo<Stage[]>(
-    () => (projectId ? getStagesByProject(projectId) : []),
-    [projectId, getStagesByProject]
-  );
-  const stages = useMemo<Array<{ id: string; name: string; is_done?: boolean }>>(
-    () => (projectStages.length > 0 ? projectStages : DEFAULT_KANBAN_STAGES),
-    [projectStages]
+  // Aberto de uma visão "Todos" o projectId vem vazio: o projeto é o da própria tarefa
+  const currentProjectId = projectId ?? task?.project_id;
+  // Só etapas reais do projeto (nunca ids fictícios como "todo"/"in_progress")
+  const stages = useMemo<Stage[]>(
+    () => (currentProjectId ? getStagesByProject(currentProjectId) : []),
+    [currentProjectId, getStagesByProject]
   );
   const projectTasks = useMemo<Task[]>(
-    () => (projectId ? getTasksByProject(projectId) : []),
-    [projectId, getTasksByProject]
+    () => (currentProjectId ? getTasksByProject(currentProjectId) : []),
+    [currentProjectId, getTasksByProject]
   );
   const isEdit = !!task;
 
-  const currentProjectId = projectId || task?.project_id;
   const currentProject = currentProjectId ? getProject(currentProjectId) : undefined;
   const trackTime = currentProject ? currentProject.track_time !== false : true;
 
@@ -184,9 +158,18 @@ export function TaskDialog({
     }
   }, [open, task?.id, refreshComments, refreshAttachments]);
 
+  // Garante etapas/tarefas do projeto em memória (visões globais carregam sob demanda)
+  useEffect(() => {
+    if (!open || !currentProjectId || isProjectLoaded(currentProjectId)) return;
+    loadProjectDetails(currentProjectId).catch((err) =>
+      console.error("[TaskDialog] error loading project details:", err)
+    );
+  }, [open, currentProjectId, isProjectLoaded, loadProjectDetails]);
+
   // Carregar membros do workspace
   useEffect(() => {
-    if (!open || !projectId) return;
+    if (!open || !currentProjectId) return;
+    const memberProjectId = currentProjectId;
 
     let isMounted = true;
     async function loadMembers() {
@@ -195,7 +178,7 @@ export function TaskDialog({
         const { data: proj } = await supabase
           .from("projects")
           .select("workspace_id")
-          .eq("id", projectId!)
+          .eq("id", memberProjectId)
           .maybeSingle();
 
         const projData = proj as { workspace_id: string } | null;
@@ -237,7 +220,7 @@ export function TaskDialog({
     return () => {
       isMounted = false;
     };
-  }, [open, projectId]);
+  }, [open, currentProjectId]);
 
   // Sincronizar campos do formulário (apenas na abertura real ou ao trocar de tarefa)
   useEffect(() => {
@@ -266,8 +249,8 @@ export function TaskDialog({
       setParentTaskId(task.parent_task_id ?? "");
       setPriority(task.priority ?? "medium");
       setProgress(task.progress ?? 0);
-      setStartDate(task.start_date ? task.start_date.split("T")[0] : "");
-      setDueDate(task.due_date ? task.due_date.split("T")[0] : "");
+      setStartDate(toDateOnly(task.start_date) ?? "");
+      setDueDate(toDateOnly(task.due_date) ?? "");
       setEstimatedHours(task.estimated_hours != null ? formatHoursToHHMM(task.estimated_hours) : "");
       setActualHours(task.actual_hours != null ? formatHoursToHHMM(task.actual_hours) : "");
 
@@ -275,9 +258,10 @@ export function TaskDialog({
       const currentAssigneeName = task.assignee_name ?? null;
 
       if (currentAssigneeId) {
+        // Membro: o nome exibido vem do perfil (assignee_name fica NULL no banco)
         setAssigneeMode("member");
         setAssigneeId(currentAssigneeId);
-        setAssigneeName(currentAssigneeName);
+        setAssigneeName(null);
       } else if (currentAssigneeName) {
         setAssigneeMode("custom");
         setAssigneeId("");
@@ -296,8 +280,8 @@ export function TaskDialog({
       setParentTaskId("");
       setPriority("medium");
       setProgress(0);
-      setStartDate(new Date().toISOString().split("T")[0]);
-      setDueDate(defaultDueDate || "");
+      setStartDate(todayDateOnly());
+      setDueDate(toDateOnly(defaultDueDate) ?? "");
       setEstimatedHours("");
       setActualHours("");
       setAssigneeMode("member");
@@ -312,25 +296,11 @@ export function TaskDialog({
     }, 100);
   }, [open, task, defaultStageId, defaultDueDate, stages]);
 
-  // Fechar com ESC
+  // Etapas carregadas depois da abertura: nova tarefa assume a primeira etapa real
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onOpenChange(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onOpenChange]);
-
-  // Bloquear scroll do body
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-      return () => {
-        document.body.style.overflow = "";
-      };
-    }
-  }, [open]);
+    if (!open || task || stageId || stages.length === 0) return;
+    setStageId(stages[0].id);
+  }, [open, task, stageId, stages]);
 
   // Convidar responsável pendente por email
   async function handleInvite() {
@@ -351,12 +321,9 @@ export function TaskDialog({
         }),
       });
       if (res.ok) {
+        // Só no estado local: chk_assignee_consistency aceita apenas 'pending' para
+        // responsável externo (assignee_id NULL + assignee_name), então não persiste 'invited'
         setAssigneeStatus("invited");
-        if (task?.id && updateTask) {
-          Promise.resolve(
-            updateTask(task.id, { assignee_status: "invited" } as Record<string, unknown>)
-          ).catch(console.error);
-        }
       } else {
         const data = await res.json().catch(() => ({}));
         setError(data.error || "Erro ao enviar convite");
@@ -389,41 +356,45 @@ export function TaskDialog({
       const parsedEst = parseDurationToHours(estimatedHours);
       const parsedAct = parseDurationToHours(actualHours);
 
+      // Etapa só se for uma etapa real do projeto; senão mantém a atual (edição)
+      // ou deixa o DataContext escolher a primeira (criação)
+      const validStageId = stages.some((s) => s.id === stageId) ? stageId : null;
+
       const taskData: Partial<Task> = {
         title: title.trim(),
         description: description.trim() || null,
-        stage_id: stageId || null,
         parent_task_id: parentTaskId || null,
         priority,
         status: calculatedStatus,
         progress,
-        start_date: startDate ? new Date(startDate).toISOString() : null,
-        due_date: dueDate ? new Date(dueDate).toISOString() : null,
+        // Colunas DATE: envia só "YYYY-MM-DD" (toISOString deslocaria o dia)
+        start_date: toDateOnly(startDate),
+        due_date: toDateOnly(dueDate),
         estimated_hours: trackTime && parsedEst !== null && !isNaN(parsedEst) ? parsedEst : null,
         actual_hours: trackTime && parsedAct !== null && !isNaN(parsedAct) ? parsedAct : null,
-        assignee_id: assigneeMode === "member" && assigneeId ? assigneeId : null,
-        assignee_name: assigneeMode === "custom" && assigneeName ? assigneeName.trim() : null,
-        assignee_status: assigneeStatus as Task["assignee_status"],
+        ...buildAssigneePayload(assigneeMode, assigneeId, assigneeName),
       };
+      if (validStageId) taskData.stage_id = validStageId;
 
       if (isEdit && task) {
         await updateTask(task.id, taskData);
       } else {
-        if (!projectId) {
+        if (!currentProjectId) {
           setError("Projeto não identificado para criação da tarefa");
-          setLoading(false);
           return;
         }
         await createTask({
           ...taskData,
-          project_id: projectId,
+          project_id: currentProjectId,
         });
       }
 
+      // Fecha só depois de salvar com sucesso
       onOpenChange(false);
     } catch (err: unknown) {
+      // O DataContext já exibiu o toast com o motivo; mantém o formulário aberto
       console.error("[TaskDialog] submit error:", err);
-      setError("Erro ao salvar tarefa. Tente novamente.");
+      setError("Não foi possível salvar a tarefa. Revise os dados e tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -431,17 +402,27 @@ export function TaskDialog({
 
   if (!open) return null;
 
+  // Radix Dialog: Esc/clique fora respeitam camadas (um Select ou DatePicker aberto
+  // fecha só ele), foco preso no modal e devolvido ao gatilho ao fechar
   return (
-    <div
-      role="presentation"
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-xs"
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && loading) return;
+        onOpenChange(next);
+      }}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="task-dialog-title"
-        className="relative w-full sm:max-w-lg bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden h-[92vh] sm:h-auto max-h-[92vh] sm:max-h-[90vh] flex flex-col animate-fadeIn"
-        onClick={(e) => e.stopPropagation()}
+      <DialogContent
+        hideCloseButton
+        aria-describedby={undefined}
+        overlayClassName="bg-black/60 backdrop-blur-xs"
+        // Formulário: clique fora não descarta o que foi digitado (só Esc / Cancelar / X)
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          titleInputRef.current?.focus();
+        }}
+        className="flex flex-col gap-0 p-0 w-full max-w-none sm:max-w-lg bg-card border-border rounded-t-2xl rounded-b-none sm:rounded-2xl shadow-2xl overflow-hidden h-[92vh] sm:h-auto max-h-[92vh] sm:max-h-[90vh] top-auto bottom-0 translate-y-0 sm:top-[50%] sm:bottom-auto sm:translate-y-[-50%]"
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600/10 via-blue-500/5 to-transparent border-b border-border p-6 shrink-0 relative">
@@ -464,9 +445,9 @@ export function TaskDialog({
                   {isEdit ? "Edição de Entregável" : "Novo Entregável"}
                 </span>
               </div>
-              <h2 id="task-dialog-title" className="text-xl font-bold leading-tight mt-0.5">
+              <DialogTitle className="text-xl font-bold leading-tight tracking-normal mt-0.5">
                 {isEdit ? "Editar Tarefa" : "Criar Nova Tarefa"}
-              </h2>
+              </DialogTitle>
             </div>
           </div>
         </div>
@@ -608,7 +589,10 @@ export function TaskDialog({
               {/* Responsável */}
               <div className="space-y-2 col-span-1 sm:col-span-2 border border-border/60 p-3.5 rounded-2xl bg-muted/20">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <label
+                    htmlFor={assigneeMode === "member" ? "task-assignee" : "task-assignee-name"}
+                    className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"
+                  >
                     <UserCircle2 className="h-3.5 w-3.5 text-blue-500" />
                     Responsável pela Tarefa
                   </label>
@@ -616,10 +600,12 @@ export function TaskDialog({
                   <button
                     type="button"
                     onClick={() => {
+                      // Troca de modo limpa o responsável anterior: membro e externo
+                      // são formas exclusivas no banco (chk_assignee_consistency)
                       setAssigneeMode((prev) => (prev === "member" ? "custom" : "member"));
-                      if (assigneeMode === "member") {
-                        setAssigneeId("");
-                      }
+                      setAssigneeId("");
+                      setAssigneeName(null);
+                      setAssigneeStatus(null);
                     }}
                     className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 transition-colors"
                   >
@@ -641,10 +627,9 @@ export function TaskDialog({
                   <Select
                     value={assigneeId || "unassigned"}
                     onValueChange={(val) => {
-                      const selectedId = val === "unassigned" ? "" : val;
-                      setAssigneeId(selectedId);
-                      const member = assignees.find((a) => a.id === selectedId);
-                      setAssigneeName(member ? (member.full_name || member.email) : null);
+                      // Membro: só o id é salvo; o nome exibido vem do perfil
+                      setAssigneeId(val === "unassigned" ? "" : val);
+                      setAssigneeName(null);
                       setAssigneeStatus(null);
                     }}
                   >
@@ -663,11 +648,23 @@ export function TaskDialog({
                           </div>
                         </SelectItem>
                       ))}
+                      {/* Responsável atual fora da lista (membros ainda carregando ou removido do
+                          workspace): mantém a opção para o gatilho não ficar em branco */}
+                      {assigneeId && !assignees.some((a) => a.id === assigneeId) && (
+                        <SelectItem value={assigneeId}>
+                          <div className="flex items-center gap-2">
+                            <UserCircle2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <span className="truncate text-muted-foreground">Responsável atual (fora do workspace)</span>
+                          </div>
+                        </SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                 ) : (
                   <div className="space-y-1.5">
                     <input
+                      id="task-assignee-name"
+                      aria-label="Nome ou e-mail do responsável externo"
                       type="text"
                       value={assigneeName || ""}
                       onChange={(e) => {
@@ -748,26 +745,30 @@ export function TaskDialog({
 
             {/* Prioridade */}
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <span
+                id="task-priority-label"
+                className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"
+              >
                 <Flag className="h-3.5 w-3.5 text-blue-500" />
                 Nível de Prioridade
-              </label>
-              <div className="grid grid-cols-4 gap-2">
+              </span>
+              <div role="group" aria-labelledby="task-priority-label" className="grid grid-cols-4 gap-2">
                 {PRIORITIES.map((p) => {
                   const isSelected = priority === p.value;
                   return (
                     <button
                       key={p.value}
                       type="button"
-                      onClick={() => setPriority(p.value as typeof priority)}
+                      aria-pressed={isSelected}
+                      onClick={() => setPriority(p.value)}
                       className={`
                         flex items-center justify-center gap-1.5 h-10 px-2 rounded-xl text-xs font-semibold
                         border transition-all duration-150
-                        ${isSelected ? p.activeClass : `border-input bg-background text-muted-foreground ${p.hoverClass}`}
+                        ${isSelected ? `${PRIORITY_BADGE_CLASS[p.value]} ring-1 ring-current` : `border-input bg-background text-muted-foreground ${p.hoverClass}`}
                       `}
                     >
-                      <span>{p.icon}</span>
-                      <span>{p.label}</span>
+                      <span aria-hidden="true">{p.icon}</span>
+                      <span>{PRIORITY_LABEL[p.value]}</span>
                     </button>
                   );
                 })}
@@ -1032,7 +1033,7 @@ export function TaskDialog({
             </div>
           </form>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

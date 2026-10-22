@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { createPortal } from "react-dom";
+import React, { useState, useEffect, useMemo } from "react";
+import * as PopoverPrimitive from "@radix-ui/react-popover";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -9,6 +9,7 @@ import {
   X,
   Clock,
 } from "lucide-react";
+import { formatDateOnly, parseDateOnly } from "@/lib/date-only";
 
 interface DatePickerProps {
   value?: string | null; // ISO string or YYYY-MM-DD
@@ -35,27 +36,9 @@ export function DatePicker({
   className = "",
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const triggerRef = useRef<HTMLDivElement>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Parsed selected date
-  const selectedDate = useMemo(() => {
-    if (!value) return null;
-    const clean = value.split("T")[0];
-    const parts = clean.split("-");
-    if (parts.length !== 3) return null;
-    const year = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1;
-    const day = parseInt(parts[2], 10);
-    if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
-    return new Date(year, month, day);
-  }, [value]);
+  // Data selecionada (meia-noite local, sem deslocamento de fuso)
+  const selectedDate = useMemo(() => parseDateOnly(value), [value]);
 
   // Calendar navigation month/year view state
   const [viewDate, setViewDate] = useState(() => selectedDate || new Date());
@@ -64,92 +47,6 @@ export function DatePicker({
   useEffect(() => {
     if (selectedDate) setViewDate(selectedDate);
   }, [selectedDate]);
-
-  // Posicionamento inteligente com trava absoluta dentro do Viewport
-  const updatePosition = useCallback(() => {
-    if (!triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    const popoverWidth = 310;
-    const popoverHeight = 330;
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-
-    let top = rect.bottom + 6;
-
-    // Se o calendário estouraria o final da tela ao abrir abaixo...
-    if (top + popoverHeight > viewportHeight - 12) {
-      const topAbove = rect.top - popoverHeight - 6;
-      // Tenta abrir acima do campo
-      if (topAbove >= 12) {
-        top = topAbove;
-      } else {
-        // Se a tela for pequena, fixa dentro dos limites visíveis do viewport
-        top = Math.max(12, viewportHeight - popoverHeight - 12);
-      }
-    }
-
-    let left = rect.left;
-    if (left + popoverWidth > viewportWidth - 12) {
-      left = Math.max(12, viewportWidth - popoverWidth - 12);
-    }
-
-    setPopoverPos({ top, left });
-  }, []);
-
-  // Rola o campo para visualização e calcula posição ao abrir
-  useEffect(() => {
-    if (!open) return;
-    if (triggerRef.current) {
-      triggerRef.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
-    updatePosition();
-
-    const handleScrollOrResize = () => {
-      updatePosition();
-    };
-
-    window.addEventListener("scroll", handleScrollOrResize, true);
-    window.addEventListener("resize", handleScrollOrResize);
-    return () => {
-      window.removeEventListener("scroll", handleScrollOrResize, true);
-      window.removeEventListener("resize", handleScrollOrResize);
-    };
-  }, [open, updatePosition]);
-
-  // Click outside protegido contra cliques em scrollbars de modals
-  useEffect(() => {
-    if (!open) return;
-    function handleClickOutside(e: MouseEvent) {
-      const target = e.target as Element;
-      if (!target) return;
-
-      // Se o clique foi no gatilho ou dentro do calendário popover, ignora
-      if (
-        triggerRef.current?.contains(target) ||
-        popoverRef.current?.contains(target)
-      ) {
-        return;
-      }
-
-      // Se o clique foi em uma barra de rolagem (ex: da modal), ignora para não fechar
-      const isWindowScrollbar = e.clientX >= document.documentElement.clientWidth || e.clientY >= document.documentElement.clientHeight;
-      if (isWindowScrollbar) return;
-
-      setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
-  // Key listener para Escape
-  useEffect(() => {
-    if (!open) return;
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open]);
 
   // Formatação de exibição (dd/mm/yyyy)
   const displayText = useMemo(() => {
@@ -173,11 +70,7 @@ export function DatePicker({
   };
 
   const handleSelectDay = (dayDate: Date) => {
-    const y = dayDate.getFullYear();
-    const m = String(dayDate.getMonth() + 1).padStart(2, "0");
-    const d = String(dayDate.getDate()).padStart(2, "0");
-    const isoDateStr = `${y}-${m}-${d}`;
-    onChange(isoDateStr);
+    onChange(formatDateOnly(dayDate));
     setOpen(false);
   };
 
@@ -185,8 +78,7 @@ export function DatePicker({
     handleSelectDay(new Date());
   };
 
-  const handleClear = (e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
+  const handleClear = () => {
     onChange("");
     setOpen(false);
   };
@@ -243,63 +135,68 @@ export function DatePicker({
     return days;
   }, [viewYear, viewMonth, selectedDate]);
 
+  // Popover do Radix: entra na pilha de camadas (Esc e clique fora fecham só o
+  // calendário, não o Dialog que o contém) e recebe pointer-events mesmo com o
+  // body bloqueado por um Dialog modal.
   return (
-    <div className="relative inline-block w-full">
-      {/* Trigger Input / Button */}
-      <div
-        ref={triggerRef}
-        id={id}
-        tabIndex={disabled ? -1 : 0}
-        role="button"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => !disabled && setOpen((prev) => !prev)}
-        onKeyDown={(e) => {
-          if (!disabled && (e.key === "Enter" || e.key === " ")) {
-            e.preventDefault();
-            setOpen((prev) => !prev);
-          }
-        }}
-        className={`
-          group flex h-11 w-full items-center justify-between rounded-xl border border-input
-          bg-background px-3.5 py-2 text-sm transition-all duration-200 cursor-pointer
-          ${open ? "ring-2 ring-blue-500 border-blue-500 shadow-md" : "hover:border-blue-500/60"}
-          ${disabled ? "opacity-50 cursor-not-allowed" : ""}
-          ${className}
-        `}
-      >
-        <div className="flex items-center gap-2.5 min-w-0">
-          <CalendarIcon className={`h-4 w-4 shrink-0 transition-colors ${displayText ? "text-blue-500" : "text-muted-foreground group-hover:text-blue-500"}`} />
-          <span className={`truncate font-medium ${displayText ? "text-foreground font-semibold" : "text-muted-foreground/70"}`}>
-            {displayText || placeholder}
-          </span>
-        </div>
-
-        {displayText && !disabled ? (
-          <button
-            type="button"
-            onClick={handleClear}
-            className="p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-            title="Limpar data"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        ) : (
-          <Clock className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
-        )}
-      </div>
-
-      {/* Popover Calendar em Portal no Body (com trava estrita de tela) */}
-      {open && mounted && typeof document !== "undefined" && createPortal(
+    <PopoverPrimitive.Root open={open} onOpenChange={(next) => !disabled && setOpen(next)}>
+      <PopoverPrimitive.Anchor asChild>
         <div
-          ref={popoverRef}
-          style={{
-            position: "fixed",
-            top: `${popoverPos.top}px`,
-            left: `${popoverPos.left}px`,
-            zIndex: 99999,
-          }}
-          className="w-[310px] sm:w-[320px] rounded-2xl border border-border bg-card p-4 shadow-2xl animate-fadeIn select-none"
+          className={`
+            group relative flex h-11 w-full items-center justify-between rounded-xl border border-input
+            bg-background text-sm transition-all duration-200
+            ${open ? "ring-2 ring-blue-500 border-blue-500 shadow-md" : "hover:border-blue-500/60 focus-within:border-blue-500"}
+            ${disabled ? "opacity-50 cursor-not-allowed" : ""}
+            ${className}
+          `}
+        >
+          {/* Gatilho: botão real (o "limpar" fica ao lado, nunca aninhado) */}
+          <PopoverPrimitive.Trigger asChild>
+            <button
+              type="button"
+              id={id}
+              disabled={disabled}
+              aria-haspopup="dialog"
+              className="flex h-full min-w-0 flex-1 items-center gap-2.5 rounded-xl pl-3.5 pr-2 py-2 text-left cursor-pointer focus:outline-none disabled:cursor-not-allowed"
+            >
+              <CalendarIcon
+                aria-hidden="true"
+                className={`h-4 w-4 shrink-0 transition-colors ${displayText ? "text-blue-500" : "text-muted-foreground group-hover:text-blue-500"}`}
+              />
+              <span className={`truncate font-medium ${displayText ? "text-foreground font-semibold" : "text-muted-foreground/70"}`}>
+                {displayText || placeholder}
+              </span>
+            </button>
+          </PopoverPrimitive.Trigger>
+
+          {displayText && !disabled ? (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="mr-2.5 p-1 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+              title="Limpar data"
+              aria-label="Limpar data"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <Clock aria-hidden="true" className="mr-3.5 h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+          )}
+        </div>
+      </PopoverPrimitive.Anchor>
+
+      {/* Popover Calendar em Portal no Body (acima de Dialogs e Selects) */}
+      <PopoverPrimitive.Portal>
+        <PopoverPrimitive.Content
+          align="start"
+          side="bottom"
+          sideOffset={6}
+          collisionPadding={12}
+          // Esc fecha só o calendário: não deixa o evento chegar a listeners de janela
+          onEscapeKeyDown={(e) => e.stopPropagation()}
+          style={{ zIndex: 100000 }}
+          className="w-[310px] sm:w-[320px] rounded-2xl border border-border bg-card p-4 shadow-2xl animate-fadeIn select-none focus:outline-none"
+          aria-label="Calendário"
         >
           {/* Header Mês / Ano */}
           <div className="flex items-center justify-between pb-3 border-b border-border">
@@ -308,11 +205,12 @@ export function DatePicker({
               onClick={handlePrevMonth}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               title="Mês anterior"
+              aria-label="Mês anterior"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
 
-            <span className="text-sm font-bold text-foreground">
+            <span className="text-sm font-bold text-foreground" aria-live="polite">
               {MONTH_NAMES[viewMonth]} <span className="text-blue-500">{viewYear}</span>
             </span>
 
@@ -321,6 +219,7 @@ export function DatePicker({
               onClick={handleNextMonth}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               title="Próximo mês"
+              aria-label="Próximo mês"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -344,6 +243,8 @@ export function DatePicker({
                   key={index}
                   type="button"
                   onClick={() => handleSelectDay(item.date)}
+                  aria-pressed={item.isSelected}
+                  aria-label={item.date.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })}
                   className={`
                     h-9 w-9 mx-auto flex items-center justify-center rounded-xl text-xs font-semibold
                     transition-all duration-150 relative
@@ -385,10 +286,9 @@ export function DatePicker({
               Hoje
             </button>
           </div>
-        </div>,
-        document.body
-      )}
-    </div>
+        </PopoverPrimitive.Content>
+      </PopoverPrimitive.Portal>
+    </PopoverPrimitive.Root>
   );
 }
 

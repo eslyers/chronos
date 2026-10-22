@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Task } from "@/lib/context/DataContext";
 import { parseDurationToHours, formatHoursToHHMM, formatHoursBadge } from "@/lib/duration";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 interface CompleteTaskDialogProps {
   open: boolean;
@@ -56,26 +57,6 @@ export function CompleteTaskDialog({
     }, 100);
   }, [open, task]);
 
-  // Fechar com ESC
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onOpenChange(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onOpenChange]);
-
-  // Travar scroll do body
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-      return () => {
-        document.body.style.overflow = "";
-      };
-    }
-  }, [open]);
-
   if (!open || !task) return null;
 
   const estimatedHours = task.estimated_hours != null ? task.estimated_hours : null;
@@ -95,19 +76,26 @@ export function CompleteTaskDialog({
   }
 
   return (
-    <div
-      role="presentation"
-      tabIndex={-1}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && loading) return;
+        onOpenChange(next);
+      }}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="complete-task-dialog-title"
-        tabIndex={-1}
-        className="relative w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl overflow-hidden animate-fadeIn"
-        onClick={(e) => e.stopPropagation()}
+      <DialogContent
+        hideCloseButton
+        aria-describedby={undefined}
+        overlayClassName="bg-black/60 backdrop-blur-xs"
+        // Foco vai para o campo de horas (já selecionado), não para o X do cabeçalho
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          inputRef.current?.focus();
+          inputRef.current?.select();
+        }}
+        // Atalhos de teclado da página (Kanban) não devem reagir à digitação aqui
         onKeyDown={(e) => e.stopPropagation()}
+        className="block gap-0 p-0 w-[calc(100%-2rem)] max-w-md bg-card border-border rounded-2xl sm:rounded-2xl shadow-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="bg-gradient-to-r from-emerald-600/15 via-emerald-500/10 to-transparent border-b border-border p-5 relative">
@@ -128,9 +116,9 @@ export function CompleteTaskDialog({
               <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
                 {targetStageName ? `Etapa: ${targetStageName}` : "Conclusão de Tarefa"}
               </span>
-              <h2 id="complete-task-dialog-title" className="text-lg font-bold leading-tight mt-0.5 text-foreground">
+              <DialogTitle className="text-lg font-bold leading-tight tracking-normal mt-0.5 text-foreground">
                 Registrar Horas Reais
-              </h2>
+              </DialogTitle>
             </div>
           </div>
         </div>
@@ -278,7 +266,7 @@ export function CompleteTaskDialog({
             )}
           </button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

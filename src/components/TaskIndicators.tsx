@@ -3,6 +3,23 @@
 import React, { useEffect, useState } from "react";
 import { MessageSquare, Paperclip } from "lucide-react";
 import { useData } from "@/lib/context/DataContext";
+import { getDataLayer } from "@/lib/data/data-provider";
+
+/**
+ * Conta linhas de uma tabela por task_id sem baixar dados: `head: true` faz
+ * o PostgREST devolver só o total (sem o conteúdo/base64 dos anexos).
+ */
+async function countByTask(table: "task_comments" | "task_attachments", taskId: string): Promise<number> {
+  const { createSPAClient } = await import("@/lib/supabase/client");
+  const supabase = createSPAClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = supabase.from(table) as any;
+  const { count, error } = await client
+    .select("id", { count: "exact", head: true })
+    .eq("task_id", taskId);
+  if (error) throw error;
+  return count ?? 0;
+}
 
 export function TaskIndicators({ taskId }: { taskId: string }) {
   const { getTaskComments, getTaskAttachments } = useData();
@@ -13,13 +30,20 @@ export function TaskIndicators({ taskId }: { taskId: string }) {
     let active = true;
     async function loadCounts() {
       try {
-        const [comments, attachments] = await Promise.all([
-          getTaskComments(taskId),
-          getTaskAttachments(taskId),
-        ]);
+        const [comments, attachments] =
+          getDataLayer() === "supabase"
+            ? await Promise.all([
+                countByTask("task_comments", taskId),
+                countByTask("task_attachments", taskId),
+              ])
+            : // Modo demo (localStorage): as listas já estão locais
+              await Promise.all([
+                getTaskComments(taskId).then((list) => list.length),
+                getTaskAttachments(taskId).then((list) => list.length),
+              ]);
         if (active) {
-          setCommentCount(comments.length);
-          setAttachCount(attachments.length);
+          setCommentCount(comments);
+          setAttachCount(attachments);
         }
       } catch (err) {
         console.error("Error loading task counts:", err);

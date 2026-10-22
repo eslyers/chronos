@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, X, Sparkles, Palette } from "lucide-react";
 import { useData } from "@/lib/context/DataContext";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { toDateOnly } from "@/lib/date-only";
 
 interface Template {
   id: string;
@@ -44,16 +46,23 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Pre-preenche com dados do template ao abrir
+  // Pre-preenche com dados do template ao abrir (só na abertura real ou troca de
+  // template: um novo objeto `template` não pode apagar o que foi digitado)
+  const initializedForRef = useRef<string | null>(null);
   useEffect(() => {
-    if (open && template) {
-      setName(template.name);
-      setDescription(template.description ?? "");
-      setColor(COLORS[0].value);
-      setStartDate("");
-      setTargetDate("");
-      setError("");
+    if (!open || !template) {
+      initializedForRef.current = null;
+      return;
     }
+    if (initializedForRef.current === template.id) return;
+    initializedForRef.current = template.id;
+
+    setName(template.name);
+    setDescription(template.description ?? "");
+    setColor(COLORS[0].value);
+    setStartDate("");
+    setTargetDate("");
+    setError("");
   }, [open, template]);
 
   if (!open || !template) return null;
@@ -71,16 +80,18 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
         name: name.trim(),
         description: description.trim() || undefined,
         color,
-        start_date: startDate || undefined,
-        target_date: targetDate || undefined,
+        start_date: toDateOnly(startDate) ?? undefined,
+        target_date: toDateOnly(targetDate) ?? undefined,
         templateId: template!.id,
       });
 
       if (!project) throw new Error("Falha ao criar projeto.");
 
+      // Fecha só depois de criar com sucesso
       onOpenChange(false);
       router.push(`/app/projects/${project.id}`);
     } catch (err) {
+      // O DataContext já exibiu o toast; mantém o formulário aberto com o motivo
       setError(err instanceof Error ? err.message : "Erro ao criar projeto.");
     } finally {
       setLoading(false);
@@ -88,16 +99,20 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && loading) return;
+        onOpenChange(next);
+      }}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="use-template-title"
-        className="relative w-full max-w-lg bg-card border border-border rounded-2xl shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
+      <DialogContent
+        hideCloseButton
+        aria-describedby={undefined}
+        overlayClassName="bg-black/65"
+        // Formulário: clique fora não descarta o que foi digitado
+        onPointerDownOutside={(e) => e.preventDefault()}
+        className="block gap-0 p-0 w-[calc(100%-2rem)] max-w-lg max-h-[90vh] overflow-y-auto bg-card border-border rounded-2xl sm:rounded-2xl shadow-2xl"
       >
         {/* Header com gradiente e ícone do template */}
         <div className="bg-gradient-to-r from-blue-600/10 via-blue-500/5 to-transparent border-b border-border p-6">
@@ -121,9 +136,9 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
                   A partir do template
                 </span>
               </div>
-              <h2 id="use-template-title" className="text-xl font-bold leading-tight">
+              <DialogTitle className="text-xl font-bold leading-tight tracking-normal">
                 {template.name}
-              </h2>
+              </DialogTitle>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {(template.stages as unknown[])?.length || 0} etapas pré-configuradas serão importadas
               </p>
@@ -192,16 +207,18 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
 
           {/* Cor */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold flex items-center gap-1.5">
+            <span className="text-sm font-semibold flex items-center gap-1.5">
               <Palette className="h-3.5 w-3.5 text-muted-foreground" />
               Cor do projeto
-            </label>
+            </span>
             <div className="flex flex-wrap gap-2">
               {COLORS.map((c) => (
                 <button
                   key={c.value}
                   type="button"
                   title={c.name}
+                  aria-label={c.name}
+                  aria-pressed={color === c.value}
                   onClick={() => setColor(c.value)}
                   className={`w-8 h-8 rounded-full transition-all duration-150 ${
                     color === c.value
@@ -250,7 +267,7 @@ export function UseTemplateDialog({ template, open, onOpenChange }: UseTemplateD
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

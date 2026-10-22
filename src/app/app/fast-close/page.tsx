@@ -30,6 +30,7 @@ import {
   KanbanSquare,
   List,
   ChevronDown,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -53,60 +54,61 @@ import {
   formatWorkdayColumnHeader,
   getWorkdayOffsetFromDate,
 } from "@/lib/business-days";
+import { formatDateOnly, parseDateOnly, toDateOnly } from "@/lib/date-only";
+import { PRIORITY_HEX } from "@/lib/priority";
+import { isTaskDone } from "@/lib/task-status";
+import { countRejected, mapSettled } from "@/lib/board-moves";
+import { BOARD_ACCESSIBILITY, pointerOnlyListeners } from "@/components/kanban/dnd-a11y";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 const MONTH_NAMES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
 ];
 
-const PRIORITY_FLAG_COLORS = {
-  low: "#64748b",
-  medium: "#3b82f6",
-  high: "#3b82f6",
-  critical: "#ef4444",
-};
-
 const CLOSING_KEYWORDS = [
   "fechamento", "fast close", "contábil", "contabil", "controladoria",
   "demonstrativo", "fp&a", "fpa", "financeiro", "orçamento", "orcamento", "dre", "balancete"
 ];
 
+// Criações em lote (rotinas, cópia, importação): no máximo N requisições simultâneas
+const BULK_CONCURRENCY = 6;
+
+/** Cria em paralelo (limitado); se alguma falhar, lança um erro com o resumo. */
+async function createAllOrThrow<T>(items: T[], create: (item: T) => Promise<unknown>) {
+  const results = await mapSettled(items, BULK_CONCURRENCY, create);
+  const failed = countRejected(results);
+  if (failed > 0) {
+    throw new Error(`${failed} de ${items.length} rotinas não puderam ser criadas.`);
+  }
+}
+
 function FastCloseTaskCard({
   task,
+  workspaceId,
   onOpenEdit,
 }: {
   task: Task;
+  workspaceId: string | undefined;
   onOpenEdit: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({
     id: task.id,
-    data: { type: "task", task },
+    data: { type: "task", task, label: task.title },
   });
 
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        opacity: isDragging ? 0.4 : 1,
-      }
-    : undefined;
+  const isDone = isTaskDone(task);
 
-  const isDone = task.status === "done" || task.progress === 100;
-
+  // Sem transform no original: quem acompanha o ponteiro é o DragOverlay.
+  // O card de origem só fica esmaecido enquanto é arrastado.
   return (
     <Card
       ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
+      // Mouse/toque arrastam pelo card inteiro; o teclado usa só o botão de arrastar
+      {...pointerOnlyListeners(listeners)}
       className={`group relative bg-card hover:border-blue-500/60 transition-all duration-200 shadow-xs cursor-grab active:cursor-grabbing border-border/80 ${
         isDone ? "bg-muted/30 border-emerald-500/30" : ""
-      }`}
-      onClick={(e) => {
-        if (!isDragging) {
-          e.stopPropagation();
-          onOpenEdit();
-        }
-      }}
+      } ${isDragging ? "opacity-40" : ""}`}
     >
       <CardContent className="p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">
@@ -115,14 +117,34 @@ function FastCloseTaskCard({
               isDone ? "line-through text-muted-foreground" : ""
             }`}
           >
-            {task.title}
+            {/* O botão se estende (after:inset-0) sobre o card: clique ou Enter abrem a rotina */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!isDragging) onOpenEdit();
+              }}
+              className="text-left cursor-grab focus-visible:outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:ring-2 focus-visible:after:ring-blue-500"
+            >
+              {task.title}
+            </button>
           </h4>
-          <div className="flex items-center gap-1 shrink-0">
-            <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+          <div className="relative z-10 flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              ref={setActivatorNodeRef}
+              {...attributes}
+              {...listeners}
+              aria-label="Arrastar tarefa"
+              className="rounded p-0.5 -m-0.5 cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <GripVertical className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+            </button>
             <Flag
               className="h-3 w-3"
+              aria-hidden="true"
               style={{
-                color: PRIORITY_FLAG_COLORS[task.priority as keyof typeof PRIORITY_FLAG_COLORS] || "#3b82f6",
+                color: PRIORITY_HEX[task.priority] ?? PRIORITY_HEX.medium,
               }}
             />
           </div>
@@ -149,7 +171,7 @@ function FastCloseTaskCard({
             <TaskAssignee
               assigneeId={task.assignee_id}
               assigneeName={task.assignee_name}
-              workspaceId={undefined as unknown as string}
+              workspaceId={workspaceId}
               variant="badge"
             />
           ) : (
@@ -167,6 +189,7 @@ function WorkdayColumn({
   columnDate,
   useD0,
   tasks,
+  getWorkspaceId,
   onAddTask,
   onOpenEditTask,
 }: {
@@ -174,15 +197,21 @@ function WorkdayColumn({
   columnDate: Date;
   useD0: boolean;
   tasks: Task[];
+  getWorkspaceId: (projectId: string) => string | undefined;
   onAddTask: () => void;
   onOpenEditTask: (t: Task) => void;
 }) {
+  const headerInfo = formatWorkdayColumnHeader(offset, columnDate, useD0);
+
   const { setNodeRef, isOver } = useDroppable({
     id: `offset-${offset}`,
-    data: { type: "workday", offset, columnDate },
+    data: {
+      type: "workday",
+      offset,
+      columnDate,
+      label: `a coluna ${headerInfo.badge} (${headerInfo.formattedDate})`,
+    },
   });
-
-  const headerInfo = formatWorkdayColumnHeader(offset, columnDate, useD0);
   const isD0 = useD0 && offset === 0;
 
   return (
@@ -249,6 +278,7 @@ function WorkdayColumn({
           <FastCloseTaskCard
             key={task.id}
             task={task}
+            workspaceId={getWorkspaceId(task.project_id)}
             onOpenEdit={() => onOpenEditTask(task)}
           />
         ))}
@@ -304,6 +334,19 @@ export default function FastCloseCockpitPage() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [defaultTaskDueDate, setDefaultTaskDueDate] = useState<string | undefined>(undefined);
   const [completingTask, setCompletingTask] = useState<Task | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+  const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  // Trava síncrona contra duplo clique (o state só atualiza no próximo render)
+  const generatingRef = useRef(false);
+
+  // Ano atual -1 … +2 (antes fixo em 2025–2027); inclui o ano selecionado se estiver fora
+  const yearOptions = useMemo(() => {
+    const current = new Date().getFullYear();
+    const years = [current - 1, current, current + 1, current + 2];
+    if (!years.includes(selectedYear)) years.push(selectedYear);
+    return years.sort((a, b) => a - b);
+  }, [selectedYear]);
 
   // Fechar dropdown de ações ao clicar fora
   useEffect(() => {
@@ -369,26 +412,35 @@ export default function FastCloseCockpitPage() {
     });
   }, [projects]);
 
-  // Tarefas filtradas pelo projeto selecionado
+  // Tarefas filtradas pelo projeto selecionado; "Todos" = só projetos de fechamento
   const scopedTasks = useMemo(() => {
-    if (selectedProjectId === "all") return tasks;
+    if (selectedProjectId === "all") {
+      const closingIds = new Set(closingProjects.map((p) => p.id));
+      return tasks.filter((t) => closingIds.has(t.project_id));
+    }
     return tasks.filter((t) => t.project_id === selectedProjectId);
-  }, [tasks, selectedProjectId]);
+  }, [tasks, selectedProjectId, closingProjects]);
 
   const selectedProjectObj = useMemo(() => {
     return projects.find((p) => p.id === selectedProjectId);
   }, [projects, selectedProjectId]);
 
+  const getWorkspaceId = (projectId: string) => projects.find((p) => p.id === projectId)?.workspace_id;
+
   // Criar Projeto de Fechamento rápido
   const handleCreateFastCloseProject = async () => {
     const projName = `Fechamento Contábil ${selectedMonth}/${selectedYear}`;
-    const newProj = await createProject({
-      name: projName,
-      description: "Projeto de Fechamento Contábil (Fast Close / Controladoria)",
-      color: "#3b82f6",
-    });
-    if (newProj && newProj.id) {
-      setSelectedProjectId(newProj.id);
+    try {
+      const newProj = await createProject({
+        name: projName,
+        description: "Projeto de Fechamento Contábil (Fast Close / Controladoria)",
+        color: "#3b82f6",
+      });
+      if (newProj && newProj.id) {
+        setSelectedProjectId(newProj.id);
+      }
+    } catch {
+      // Toast já exibido pelo DataContext
     }
   };
 
@@ -417,11 +469,9 @@ export default function FastCloseCockpitPage() {
     workdayOffsets.forEach((offset) => map.set(offset, []));
 
     scopedTasks.forEach((t) => {
-      if (!t.due_date && !t.start_date) return;
-      const raw = (t.due_date || t.start_date || "").split("T")[0];
-      const tDate = new Date(raw + "T00:00:00");
-      if (isNaN(tDate.getTime())) return;
-      
+      const tDate = parseDateOnly(t.due_date || t.start_date);
+      if (!tDate) return;
+
       if (tDate.getMonth() + 1 === selectedMonth && tDate.getFullYear() === selectedYear) {
         const offset = getWorkdayOffsetFromDate(tDate, selectedYear, selectedMonth, useD0);
         if (map.has(offset)) {
@@ -447,7 +497,7 @@ export default function FastCloseCockpitPage() {
   }, [tasksByOffset]);
 
   const completedTasksCount = useMemo(() => {
-    return monthTasks.filter((t) => t.status === "done" || t.progress === 100).length;
+    return monthTasks.filter(isTaskDone).length;
   }, [monthTasks]);
 
   const closingProgressPercent = useMemo(() => {
@@ -479,46 +529,52 @@ export default function FastCloseCockpitPage() {
     if (overId.startsWith("offset-")) {
       const targetOffset = parseInt(overId.replace("offset-", ""), 10);
       const newTargetDate = offsetDatesMap.get(targetOffset);
-      if (newTargetDate) {
-        const isoDate = newTargetDate.toISOString().split("T")[0];
-        await updateTask(taskId, { due_date: isoDate });
+      const task = tasks.find((t) => t.id === taskId);
+      if (newTargetDate && task) {
+        const dateOnly = formatDateOnly(newTargetDate);
+        // Soltar na mesma coluna/data não grava nada
+        if (toDateOnly(task.due_date) === dateOnly) return;
+        try {
+          await updateTask(taskId, { due_date: dateOnly });
+        } catch {
+          // Toast já exibido pelo DataContext; o card permanece na coluna original
+        }
       }
     }
   };
 
   // Alternar conclusão rápida de tarefa
   const handleToggleTaskComplete = async (task: Task) => {
-    const isCurrentlyDone = task.status === "done" || task.progress === 100;
-    if (isCurrentlyDone) {
-      await updateTask(task.id, {
-        status: "todo",
-        progress: 0,
-      });
-    } else {
-      const taskProject = projects.find((p) => p.id === task.project_id);
-      if (taskProject?.track_time === false) {
+    try {
+      if (isTaskDone(task)) {
         await updateTask(task.id, {
-          status: "done",
-          progress: 100,
+          status: "todo",
+          progress: 0,
         });
       } else {
-        setCompletingTask(task);
+        const taskProject = projects.find((p) => p.id === task.project_id);
+        if (taskProject?.track_time === false) {
+          await updateTask(task.id, {
+            status: "done",
+            progress: 100,
+          });
+        } else {
+          setCompletingTask(task);
+        }
       }
+    } catch {
+      // Toast já exibido pelo DataContext
     }
   };
 
-  // Excluir tarefa
-  const handleDeleteTask = async (taskId: string) => {
-    if (confirm("Tem certeza que deseja excluir esta rotina?")) {
-      await deleteTask(taskId);
-    }
+  // Excluir tarefa (confirmação via ConfirmDialog)
+  const handleDeleteTask = (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (task) setDeleteTarget(task);
   };
 
-  // Gerar rotinas padrão do mês
-  const handleGenerateDefaultClosingTasks = async () => {
-    const targetProjId = selectedProjectId !== "all" ? selectedProjectId : undefined;
-
-    const defaultRoutines = useD0
+  // Rotinas padrão do mês
+  const defaultRoutines: Array<{ offset: number; title: string; priority: Task["priority"] }> = useD0
       ? [
           { offset: -5, title: "[D-5] Notificação de encerramento de POs", priority: "medium" },
           { offset: -4, title: "[D-4] Corte de faturamento e remessas", priority: "high" },
@@ -545,17 +601,30 @@ export default function FastCloseCockpitPage() {
           { offset: 5, title: "[D+5] Reporting Executivo ao CFO & Conselho", priority: "critical" },
         ];
 
-    for (const r of defaultRoutines) {
-      const targetDate = getCalculatedWorkdayDate(selectedYear, selectedMonth, r.offset, useD0);
-      const isoDate = targetDate.toISOString().split("T")[0];
-      await createTask({
-        title: r.title,
-        due_date: isoDate,
-        priority: r.priority as Task["priority"],
-        status: "todo",
-        progress: 0,
-        project_id: targetProjId,
-      });
+  // Gerar rotinas padrão (exige um projeto: no Supabase toda tarefa pertence a um).
+  // Chamado pelo ConfirmDialog, que mostra "Aguarde..." enquanto cria.
+  const handleGenerateDefaultClosingTasks = async () => {
+    if (selectedProjectId === "all" || generatingRef.current) return;
+    generatingRef.current = true;
+    setGenerating(true);
+    try {
+      await createAllOrThrow(defaultRoutines, (r) =>
+        createTask({
+          title: r.title,
+          due_date: formatDateOnly(getCalculatedWorkdayDate(selectedYear, selectedMonth, r.offset, useD0)),
+          priority: r.priority,
+          status: "todo",
+          progress: 0,
+          project_id: selectedProjectId,
+        })
+      );
+    } catch (err) {
+      // Cada falha já virou toast no DataContext. Fecha o diálogo mesmo assim:
+      // repetir criaria em dobro as rotinas que deram certo.
+      console.error("[FastClose] generate routines:", err);
+    } finally {
+      generatingRef.current = false;
+      setGenerating(false);
     }
   };
 
@@ -571,17 +640,16 @@ export default function FastCloseCockpitPage() {
   }) => {
     const sourceTasksToCopy = scopedTasks.filter((t) => params.selectedTaskIds.includes(t.id));
 
-    for (const t of sourceTasksToCopy) {
-      const raw = (t.due_date || t.start_date || lastDayOfMonth.toISOString()).split("T")[0];
-      const originalDate = new Date(raw + "T00:00:00");
+    // Erros sobem para o CopyClosingDialog, que permanece aberto
+    await createAllOrThrow(sourceTasksToCopy, (t) => {
+      const originalDate = parseDateOnly(t.due_date || t.start_date) ?? lastDayOfMonth;
       const offset = getWorkdayOffsetFromDate(originalDate, params.sourceYear, params.sourceMonth, useD0);
       const newTargetDate = getCalculatedWorkdayDate(params.targetYear, params.targetMonth, offset, useD0);
-      const isoDate = newTargetDate.toISOString().split("T")[0];
 
-      await createTask({
+      return createTask({
         title: t.title,
         description: t.description || undefined,
-        due_date: isoDate,
+        due_date: formatDateOnly(newTargetDate),
         priority: t.priority,
         status: params.resetStatus ? "todo" : t.status,
         progress: params.resetStatus ? 0 : t.progress,
@@ -589,7 +657,7 @@ export default function FastCloseCockpitPage() {
         assignee_name: params.keepAssignees ? t.assignee_name || undefined : undefined,
         project_id: t.project_id || (selectedProjectId !== "all" ? selectedProjectId : undefined),
       });
-    }
+    });
   };
 
   // Importação de planilha
@@ -600,17 +668,18 @@ export default function FastCloseCockpitPage() {
     priority: "low" | "medium" | "high" | "critical";
     project_id?: string;
   }[]) => {
-    for (const t of importedTasks) {
-      await createTask({
+    // Erros sobem para o ImportClosingSpreadsheetDialog, que mostra o resumo
+    await createAllOrThrow(importedTasks, (t) =>
+      createTask({
         title: t.title,
         description: t.description,
-        due_date: t.due_date,
+        due_date: toDateOnly(t.due_date),
         priority: t.priority,
         status: "todo",
         progress: 0,
         project_id: t.project_id || (selectedProjectId !== "all" ? selectedProjectId : undefined),
-      });
-    }
+      })
+    );
   };
 
   if (loading) {
@@ -710,9 +779,11 @@ export default function FastCloseCockpitPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="2025">2025</SelectItem>
-                  <SelectItem value="2026">2026</SelectItem>
-                  <SelectItem value="2027">2027</SelectItem>
+                  {yearOptions.map((year) => (
+                    <SelectItem key={year} value={String(year)}>
+                      {year}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -827,14 +898,27 @@ export default function FastCloseCockpitPage() {
                   <div className="py-1">
                     <button
                       type="button"
+                      disabled={generating || selectedProjectId === "all"}
                       onClick={() => {
                         setActionsMenuOpen(false);
-                        handleGenerateDefaultClosingTasks();
+                        setGenerateConfirmOpen(true);
                       }}
-                      className="w-full px-3.5 py-2 text-left text-xs font-semibold text-foreground hover:bg-purple-500/10 hover:text-purple-500 flex items-center gap-2.5 transition-colors"
+                      title={selectedProjectId === "all" ? "Selecione um projeto de fechamento para gerar as rotinas" : undefined}
+                      className="w-full px-3.5 py-2 text-left text-xs font-semibold text-foreground hover:bg-purple-500/10 hover:text-purple-500 flex items-center gap-2.5 transition-colors disabled:opacity-50 disabled:pointer-events-none"
                     >
-                      <Sparkles className="h-4 w-4 text-purple-500" />
-                      <span>⚡ Gerar Rotinas Padrão</span>
+                      {generating ? (
+                        <Loader2 className="h-4 w-4 text-purple-500 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4 text-purple-500" />
+                      )}
+                      <span className="flex flex-col">
+                        <span>{generating ? "Gerando rotinas..." : "⚡ Gerar Rotinas Padrão"}</span>
+                        {selectedProjectId === "all" && (
+                          <span className="text-[10px] font-normal text-muted-foreground">
+                            Selecione um projeto primeiro
+                          </span>
+                        )}
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -891,6 +975,8 @@ export default function FastCloseCockpitPage() {
           collisionDetection={closestCenter}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
+          onDragCancel={() => setActiveTask(null)}
+          accessibility={BOARD_ACCESSIBILITY}
         >
           <div className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x scrollbar-thin">
             {workdayOffsets.map((offset) => {
@@ -904,8 +990,9 @@ export default function FastCloseCockpitPage() {
                   columnDate={columnDate}
                   useD0={useD0}
                   tasks={columnTasks}
+                  getWorkspaceId={getWorkspaceId}
                   onAddTask={() => {
-                    setDefaultTaskDueDate(columnDate.toISOString().split("T")[0]);
+                    setDefaultTaskDueDate(formatDateOnly(columnDate));
                     setSelectedEditTask(null);
                     setTaskDialogOpen(true);
                   }}
@@ -939,7 +1026,7 @@ export default function FastCloseCockpitPage() {
           onToggleTaskComplete={handleToggleTaskComplete}
           onDeleteTask={handleDeleteTask}
           onAddTaskToOffset={(date) => {
-            setDefaultTaskDueDate(date.toISOString().split("T")[0]);
+            setDefaultTaskDueDate(formatDateOnly(date));
             setSelectedEditTask(null);
             setTaskDialogOpen(true);
           }}
@@ -951,8 +1038,32 @@ export default function FastCloseCockpitPage() {
         open={taskDialogOpen}
         onOpenChange={setTaskDialogOpen}
         task={selectedEditTask}
-        projectId={selectedProjectId !== "all" ? selectedProjectId : undefined}
+        // Em "Todos", a edição usa o projeto da própria tarefa
+        projectId={selectedEditTask?.project_id || (selectedProjectId !== "all" ? selectedProjectId : undefined)}
         defaultDueDate={defaultTaskDueDate}
+      />
+
+      {/* Confirmação de exclusão (substitui o confirm() nativo) */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title={`Excluir "${deleteTarget?.title ?? "rotina"}"?`}
+        description="Esta ação não pode ser desfeita."
+        variant="destructive"
+        confirmText="Excluir"
+        onConfirm={async () => {
+          if (deleteTarget) await deleteTask(deleteTarget.id);
+        }}
+      />
+
+      {/* Confirmação de geração das rotinas padrão */}
+      <ConfirmDialog
+        open={generateConfirmOpen}
+        onOpenChange={setGenerateConfirmOpen}
+        title="Gerar rotinas padrão?"
+        description={`Serão criadas ${defaultRoutines.length} rotinas de fechamento para ${MONTH_NAMES[selectedMonth - 1]}/${selectedYear} em "${selectedProjectObj?.name ?? "projeto selecionado"}".`}
+        confirmText="Gerar rotinas"
+        onConfirm={handleGenerateDefaultClosingTasks}
       />
 
       {/* Modal de Cópia Mês a Mês */}

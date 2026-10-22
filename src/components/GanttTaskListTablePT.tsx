@@ -4,6 +4,7 @@ import { type CSSProperties } from "react";
 import type { Task as GanttTask } from "gantt-task-react";
 import { TaskAssignee } from "@/components/TaskAssignee";
 import { TaskIndicators } from "@/components/TaskIndicators";
+import { formatGanttDate, ganttEndToInclusiveDate, type ChronosGanttTask } from "@/lib/gantt-tasks";
 
 interface TaskListTableProps {
   rowHeight: number;
@@ -20,13 +21,6 @@ interface TaskListTableProps {
   // Callback para edição direta da tarefa (ícone de lápis ou duplo clique)
   onTaskEditClick?: (task: GanttTask) => void;
   nameColumnWidth?: number;
-}
-
-function formatDateBR(date: Date): string {
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const yy = String(date.getFullYear()).slice(-2);
-  return `${dd}/${mm}/${yy}`;
 }
 
 const COL_WIDTH_ASSIGNEE = "120px";
@@ -88,12 +82,7 @@ export function GanttTaskListTablePT({
           t.hideChildren === false ? "▼" : t.hideChildren === true ? "▶" : "";
         const isSelected = selectedTaskId === t.id;
 
-        const customTask = t as GanttTask & {
-          assigneeId?: string | null;
-          assigneeName?: string | null;
-          workspaceId?: string;
-          isDone?: boolean;
-        };
+        const customTask = t as ChronosGanttTask;
 
         const isTaskDone = (customTask.isDone || t.progress === 100) && t.type === "task";
 
@@ -182,12 +171,12 @@ export function GanttTaskListTablePT({
 
             {/* Coluna 3: Data de Início */}
             <div className="_3lLk3" style={dateCellStyle}>
-              {formatDateBR(t.start)}
+              {formatGanttDate(t.start)}
             </div>
 
-            {/* Coluna 4: Data de Término */}
+            {/* Coluna 4: Data de Término (o end do Gantt é exclusivo: mostra o prazo) */}
             <div className="_3lLk3" style={dateCellStyle}>
-              {formatDateBR(t.end)}
+              {formatGanttDate(ganttEndToInclusiveDate(t.end))}
             </div>
           </div>
         );

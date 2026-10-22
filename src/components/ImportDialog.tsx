@@ -5,10 +5,20 @@ import { Upload, FileSpreadsheet, AlertTriangle, CheckCircle2, Loader2, X, Downl
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import type { ImportPreview, ImportRow, ImportRowStatus } from "@/lib/excel-parser";
-import type { Task } from "@/lib/context/DataContext";
+import type { ImportPreview, ImportRow } from "@/lib/excel-parser";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  buildEditedCsv,
+  canUploadOriginalFile,
+  countByStatus,
+  countImportableSelected,
+  defaultSelection,
+  getEffective,
+  getEffectiveStatus,
+  type ImportRowEdits,
+} from "@/lib/import-selection";
 
 interface ImportDialogProps {
   open: boolean;
@@ -34,6 +44,11 @@ const FIELD_LABEL: Record<string, string> = {
   progress: "Progresso",
 };
 
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
+
+type SortKey = "index" | "status" | "title" | "assignee_id" | "due_date" | "level" | null;
+type SortDir = "asc" | "desc";
+
 export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImported }: ImportDialogProps) {
   const [phase, setPhase] = React.useState<Phase>("upload");
   const [file, setFile] = React.useState<File | null>(null);
@@ -55,20 +70,12 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
   };
 
   // === FEATURE 2: edição inline ===
-  type Editable = Partial<{
-    title: string;
-    assignee_id: string;
-    start_date: string; // ISO yyyy-mm-dd
-    due_date: string;
-    level: number;
-  }>;
-  const [editedRows, setEditedRows] = React.useState<Record<number, Editable>>({});
-  const updateRow = (idx: number, patch: Editable) => {
+  const [editedRows, setEditedRows] = React.useState<Record<number, ImportRowEdits>>({});
+  const updateRow = (idx: number, patch: ImportRowEdits) => {
     setEditedRows((prev) => ({ ...prev, [idx]: { ...prev[idx], ...patch } }));
   };
 
   // === FEATURE 3: paginação do preview ===
-  const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
   const [pageSize, setPageSize] = React.useState<(typeof PAGE_SIZE_OPTIONS)[number]>(50);
   const [currentPage, setCurrentPage] = React.useState(0);
   // Reset pra página 0 quando muda pageSize ou chega novo preview
@@ -82,25 +89,10 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
   const pageEnd = Math.min((safePage + 1) * pageSize, totalRows);
 
   // === FEATURE 5: seleção por linha (checkbox) ===
-  // Por padrão, só linhas válidas ficam selecionadas. Usuário pode ligar/desligar.
+  // Inicializada no carregamento da prévia com as linhas importáveis (sem erro);
+  // o que vai para o servidor é exatamente o que está marcado.
   const [selectedRows, setSelectedRows] = React.useState<Set<number>>(new Set());
-  const [userTouchedSelection, setUserTouchedSelection] = React.useState(false);
-  // Quando chega novo preview, pré-seleciona só as válidas (se usuário ainda não mexeu)
-  React.useEffect(() => {
-    if (!preview) {
-      setSelectedRows(new Set());
-      setUserTouchedSelection(false);
-      return;
-    }
-    if (!userTouchedSelection) {
-      const validIdx = new Set(
-        preview.rows.filter((r) => r.status === "valid").map((r) => r.index)
-      );
-      setSelectedRows(validIdx);
-    }
-  }, [preview, userTouchedSelection]);
   const toggleRow = (idx: number) => {
-    setUserTouchedSelection(true);
     setSelectedRows((prev) => {
       const next = new Set(prev);
       if (next.has(idx)) next.delete(idx);
@@ -113,8 +105,6 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
   const [statusFilter, setStatusFilter] = React.useState<"all" | "valid" | "warning" | "error">("all");
 
   // === FEATURE 4: ordenação ao clicar nos cabeçalhos ===
-  type SortKey = "index" | "status" | "title" | "assignee_id" | "due_date" | "level" | null;
-  type SortDir = "asc" | "desc";
   const [sortKey, setSortKey] = React.useState<SortKey>(null);
   const [sortDir, setSortDir] = React.useState<SortDir>("asc");
   const cycleSort = (key: Exclude<SortKey, null>) => {
@@ -156,11 +146,26 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
 
   const pageRows = sortedRows.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
+  // Contadores e total a importar sempre refletem as edições e a seleção atuais
+  const statusCounts = React.useMemo(
+    () => (preview ? countByStatus(preview.rows, editedRows) : { valid: 0, warning: 0, error: 0 }),
+    [preview, editedRows]
+  );
+  const importableCount = React.useMemo(
+    () => (preview ? countImportableSelected(preview.rows, editedRows, selectedRows) : 0),
+    [preview, editedRows, selectedRows]
+  );
+  const hasEdits = Object.keys(editedRows).length > 0;
+  const selectionIsDefault = React.useMemo(() => {
+    if (!preview) return true;
+    const expected = defaultSelection(preview.rows);
+    return expected.size === selectedRows.size && [...expected].every((idx) => selectedRows.has(idx));
+  }, [preview, selectedRows]);
+
   // Toggle-all da página depende de pageRows (declarado acima)
   const isAllOnPageSelected =
     pageRows.length > 0 && pageRows.every((r) => selectedRows.has(r.index));
   const toggleAllOnPage = () => {
-    setUserTouchedSelection(true);
     setSelectedRows((prev) => {
       const next = new Set(prev);
       if (isAllOnPageSelected) {
@@ -174,23 +179,49 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
 
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  // Reset ao fechar
+  // Limpa todo o estado ligado ao arquivo atual (prévia, edições, seleção, filtros)
+  const resetFileState = React.useCallback(() => {
+    setFile(null);
+    setPreview(null);
+    setEditedRows({});
+    setExpandedErrors(new Set());
+    setSelectedRows(new Set());
+    setStatusFilter("all");
+    setSortKey(null);
+    setSortDir("asc");
+    setCurrentPage(0);
+    setError(null);
+    setResult(null);
+    setDragOver(false);
+    // Permite escolher o mesmo arquivo de novo (onChange não dispara com valor igual)
+    if (inputRef.current) inputRef.current.value = "";
+  }, []);
+
+  // Reset ao fechar (após a animação de saída); cancelado se reabrir ou desmontar
+  const resetTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   React.useEffect(() => {
+    if (resetTimerRef.current) {
+      clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = null;
+    }
     if (!open) {
-      setTimeout(() => {
+      resetTimerRef.current = setTimeout(() => {
+        resetTimerRef.current = null;
         setPhase("upload");
-        setFile(null);
-        setPreview(null);
-        setError(null);
-        setResult(null);
+        resetFileState();
       }, 200);
     }
-  }, [open]);
+    return () => {
+      if (resetTimerRef.current) {
+        clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = null;
+      }
+    };
+  }, [open, resetFileState]);
 
   function handleFile(f: File | undefined | null) {
     if (!f) return;
-    setError(null);
-    setResult(null);
+    resetFileState();
     const ext = f.name.toLowerCase().split(".").pop();
     if (!["xlsx", "xls", "ods", "csv"].includes(ext || "")) {
       setError(`Formato .${ext} não suportado. Use .xlsx, .xls, .ods ou .csv`);
@@ -215,7 +246,9 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
 
       if (!res.ok) throw new Error(data.error || "Erro ao processar arquivo");
 
-      setPreview(data.preview);
+      const nextPreview = data.preview as ImportPreview;
+      setPreview(nextPreview);
+      setSelectedRows(defaultSelection(nextPreview.rows));
       setPhase("preview");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
@@ -231,14 +264,14 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
     setPhase("importing");
     try {
       const form = new FormData();
-      const hasEdits = Object.keys(editedRows).length > 0;
-      const hasSelectionFilter = userTouchedSelection && selectedRows.size < totalRows;
-      if (hasEdits || hasSelectionFilter) {
+      // Importa exatamente as linhas marcadas: o arquivo original só serve quando
+      // equivale à seleção (sem edições, seleção padrão); senão vai um CSV filtrado
+      if (canUploadOriginalFile(preview.rows, editedRows, selectedRows)) {
+        form.append("file", file);
+      } else {
         const csv = buildEditedCsv(preview, editedRows, selectedRows);
         const csvFile = new File([csv], "tarefas-editadas.csv", { type: "text/csv" });
         form.append("file", csvFile);
-      } else {
-        form.append("file", file);
       }
       form.append("project_id", projectId);
       form.append("workspace_id", workspaceId);
@@ -265,18 +298,34 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
     }
   }
 
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 animate-in fade-in">
-      <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Não fecha no meio da importação
+        if (!next && phase === "importing") return;
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent
+        hideCloseButton
+        aria-describedby={undefined}
+        overlayClassName="bg-black/60"
+        className="flex flex-col gap-0 p-0 w-[calc(100%-2rem)] max-w-3xl max-h-[90vh] bg-white dark:bg-zinc-900 rounded-xl sm:rounded-xl shadow-2xl overflow-hidden"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <div className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5 text-blue-500" />
-            <h2 className="text-lg font-semibold">Importar planilha de tarefas</h2>
+            <DialogTitle className="text-lg font-semibold tracking-normal">Importar planilha de tarefas</DialogTitle>
           </div>
-          <button onClick={() => onOpenChange(false)} className="text-muted-foreground hover:text-foreground">
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            disabled={phase === "importing"}
+            aria-label="Fechar"
+            className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -316,7 +365,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                   <p className="text-base font-medium mb-1">Arraste sua planilha aqui</p>
                   <p className="text-sm text-muted-foreground mb-4">
                     ou{" "}
-                    <button onClick={() => inputRef.current?.click()} className="text-blue-500 hover:underline font-medium">
+                    <button type="button" onClick={() => inputRef.current?.click()} className="text-blue-500 hover:underline font-medium">
                       escolha um arquivo
                     </button>
                     {" "}(.xlsx, .xls, .ods, .csv)
@@ -327,6 +376,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                     accept=".xlsx,.xls,.ods,.csv"
                     onChange={(e) => handleFile(e.target.files?.[0])}
                     className="hidden"
+                    aria-label="Arquivo da planilha"
                   />
                   <div className="text-xs text-muted-foreground space-y-1">
                     <p>📋 Colunas reconhecidas automaticamente:</p>
@@ -364,15 +414,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                 >
                   <StatBox
                     label="Válidas"
-                    value={
-                      Object.keys(editedRows).length === 0
-                        ? preview.validRows
-                        : preview.rows.reduce(
-                            (acc, row) =>
-                              acc + (getEffectiveStatus(row, editedRows[row.index]).status === "valid" ? 1 : 0),
-                            0
-                          )
-                    }
+                    value={statusCounts.valid}
                     color="green"
                   />
                 </button>
@@ -382,7 +424,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                   className={`text-left transition-all rounded-xl focus:outline-none ${statusFilter === "warning" ? "ring-2 ring-amber-500 shadow-md scale-[1.02]" : "opacity-85 hover:opacity-100 cursor-pointer"}`}
                   title="Filtrar por linhas com avisos"
                 >
-                  <StatBox label="Com avisos" value={preview.warningRows} color="yellow" />
+                  <StatBox label="Com avisos" value={statusCounts.warning} color="yellow" />
                 </button>
                 <button
                   type="button"
@@ -390,7 +432,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                   className={`text-left transition-all rounded-xl focus:outline-none ${statusFilter === "error" ? "ring-2 ring-rose-500 shadow-md scale-[1.02]" : "opacity-85 hover:opacity-100 cursor-pointer"}`}
                   title="Filtrar por linhas com erro (clique para inspecionar)"
                 >
-                  <StatBox label="Com erro" value={preview.errorRows} color="red" />
+                  <StatBox label="Com erro" value={statusCounts.error} color="red" />
                 </button>
               </div>
 
@@ -428,23 +470,25 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setUserTouchedSelection(true);
-                      setSelectedRows(new Set(preview.rows.map((r) => r.index)));
-                    }}
+                    onClick={() => setSelectedRows(new Set(preview.rows.map((r) => r.index)))}
                     className="px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold border border-blue-500/20 transition-colors"
                   >
                     ☑️ Selecionar Todas as {preview.totalRows} Linhas
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      setUserTouchedSelection(true);
-                      setSelectedRows(new Set(preview.rows.filter((r) => r.status === "valid").map((r) => r.index)));
-                    }}
+                    onClick={() =>
+                      setSelectedRows(
+                        new Set(
+                          preview.rows
+                            .filter((r) => getEffectiveStatus(r, editedRows[r.index]).status === "valid")
+                            .map((r) => r.index)
+                        )
+                      )
+                    }
                     className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20 transition-colors"
                   >
-                    ✅ Selecionar Apenas Válidas ({preview.validRows})
+                    ✅ Selecionar Apenas Válidas ({statusCounts.valid})
                   </button>
                 </div>
 
@@ -586,7 +630,7 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
           {phase === "importing" && (
             <div className="text-center py-12 space-y-3">
               <Loader2 className="h-10 w-10 mx-auto animate-spin text-blue-500" />
-              <p className="text-base font-medium">Importando {preview?.validRows || 0} tarefas...</p>
+              <p className="text-base font-medium">Importando {importableCount} tarefas...</p>
               <p className="text-xs text-muted-foreground">Isso pode levar alguns segundos</p>
             </div>
           )}
@@ -610,39 +654,27 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
         <div className="flex items-center justify-end gap-2 px-6 py-4 border-t bg-zinc-50 dark:bg-zinc-900/50">
           {phase === "preview" && (
             <>
-              <Button variant="outline" onClick={() => setPhase("upload")}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // Volta ao upload limpando prévia, edições, seleção e filtros do arquivo anterior
+                  resetFileState();
+                  setPhase("upload");
+                }}
+              >
                 ← Trocar arquivo
               </Button>
               <Button
                 onClick={doImport}
-                disabled={
-                  loading ||
-                  (preview?.rows.reduce(
-                    (acc, row) =>
-                      acc +
-                      (selectedRows.has(row.index) &&
-                      getEffectiveStatus(row, editedRows[row.index]).status === "valid"
-                        ? 1
-                        : 0),
-                    0
-                  ) || 0) === 0
-                }
+                disabled={loading || importableCount === 0}
                 className="bg-blue-500 hover:bg-blue-600"
               >
                 <Download className="h-4 w-4 mr-2" />
                 Importar{" "}
-                {preview?.rows.reduce(
-                  (acc, row) =>
-                    acc +
-                    (selectedRows.has(row.index) &&
-                    getEffectiveStatus(row, editedRows[row.index]).status === "valid"
-                      ? 1
-                      : 0),
-                  0
-                ) || 0}{" "}
+                {importableCount}{" "}
                 selecionadas
-                {Object.keys(editedRows).length > 0 && " (editadas)"}
-                {userTouchedSelection && selectedRows.size < totalRows && " (filtradas)"}
+                {hasEdits && " (editadas)"}
+                {!selectionIsDefault && " (filtradas)"}
               </Button>
             </>
           )}
@@ -657,8 +689,8 @@ export function ImportDialog({ open, onOpenChange, projectId, workspaceId, onImp
             </Button>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -677,93 +709,6 @@ function StatBox({ label, value, color }: { label: string; value: number; color:
   );
 }
 
-// === Helpers pés FEATURE 2 (edição inline) ===
-
-// Mistura edições do usuário com a row original
-type Editable = Partial<{
-  title: string;
-  assignee_id: string;
-  start_date: string;
-  due_date: string;
-  level: number;
-}>;
-
-// Recebe o `parsed` direto (não o ImportRow inteiro) — são os campos Task-like.
-function getEffective(
-  parsed: Partial<Task>,
-  origLevel: number | undefined,
-  edits: Editable | undefined,
-): {
-  title: string;
-  assignee_id: string | null;
-  start_date: string | null;
-  due_date: string | null;
-  level: number | null;
-} {
-  return {
-    title: edits?.title ?? parsed.title ?? "",
-    assignee_id: edits?.assignee_id ?? parsed.assignee_id ?? null,
-    start_date: edits?.start_date ?? parsed.start_date ?? null,
-    due_date: edits?.due_date ?? parsed.due_date ?? null,
-    level: edits?.level ?? origLevel ?? null,
-  };
-}
-
-// Recalcula status da row após edição
-function getEffectiveStatus(orig: ImportRow, edits: Editable | undefined): { status: ImportRowStatus; errors: string[]; warnings: string[] } {
-  const eff = getEffective(orig.parsed, orig.level, edits);
-  const errors = [...orig.errors];
-  const warnings = [...orig.warnings];
-  const titleEmpty = !eff.title || eff.title.trim() === "";
-  if (!titleEmpty) {
-    const i = errors.findIndex((e) => e === "Título vazio");
-    if (i !== -1) errors.splice(i, 1);
-  } else if (!errors.includes("Título vazio")) {
-    errors.push("Título vazio");
-  }
-  let status: ImportRowStatus = "valid";
-  if (errors.length > 0) status = "error";
-  else if (warnings.length > 0) status = "warning";
-  return { status, errors, warnings };
-}
-
-// Gera CSV novo com edições aplicadas (pra mandar pro backend se houver edits)
-function buildEditedCsv(
-  preview: ImportPreview,
-  edits: Record<number, Editable>,
-  selectedRows?: Set<number>,
-): string {
-  // Detecta quais colunas do arquivo original têm header útil (texto)
-  const fileHeaders = preview.columns;
-  const lines: string[] = [fileHeaders.map(csvEscape).join(",")];
-  for (const row of preview.rows) {
-    // Filtro de seleção: se tem selection filter e a row não tá nele, pula
-    if (selectedRows && !selectedRows.has(row.index)) continue;
-    const edit = edits[row.index];
-    const eff = getEffective(row.parsed, row.level, edit);
-    const values = fileHeaders.map((h) => {
-      const fieldName = preview.mapping[h];
-      if (fieldName === "title") return eff.title;
-      if (fieldName === "assignee_id") return eff.assignee_id ?? row.raw[h] ?? "";
-      if (fieldName === "start_date") return eff.start_date ?? row.raw[h] ?? "";
-      if (fieldName === "due_date") return eff.due_date ?? row.raw[h] ?? "";
-      if (fieldName === "level") return eff.level !== null && eff.level !== undefined ? String(eff.level) : row.raw[h] ?? "";
-      const v = row.raw[h];
-      if (v === null || v === undefined) return "";
-      return String(v);
-    });
-    lines.push(values.map(csvEscape).join(","));
-  }
-  return lines.join("\n");
-}
-
-function csvEscape(v: string | number | null): string {
-  const s = v === null || v === undefined ? "" : String(v);
-  if (s.includes(",") || s.includes("\"") || s.includes("\n")) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
-}
 
 function PreviewRow({
   row,
@@ -777,12 +722,12 @@ function PreviewRow({
 }: {
   row: ImportRow;
   hasWBS: boolean;
-  edits: Record<number, Editable>;
+  edits: Record<number, ImportRowEdits>;
   expand: boolean;
   selected: boolean;
   onToggleExpand: (idx: number) => void;
   onToggleSelect: (idx: number) => void;
-  onUpdate: (idx: number, patch: Editable) => void;
+  onUpdate: (idx: number, patch: ImportRowEdits) => void;
 }) {
   const edit = edits[row.index];
   const eff = getEffective(row.parsed, row.level, edit);
@@ -826,6 +771,7 @@ function PreviewRow({
             type="text"
             value={eff.title}
             placeholder="(sem título)"
+            aria-label={`Título da linha ${row.index}`}
             onChange={(e) => onUpdate(row.index, { title: e.target.value })}
             className={`w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 text-sm ${!eff.title.trim() ? "italic text-red-500 placeholder-red-300" : "font-medium"}`}
           />
@@ -835,6 +781,7 @@ function PreviewRow({
             type="text"
             value={eff.assignee_id ?? ""}
             placeholder="—"
+            aria-label={`Responsável da linha ${row.index}`}
             onChange={(e) => onUpdate(row.index, { assignee_id: e.target.value || "" })}
             className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 text-xs text-muted-foreground"
           />
@@ -855,6 +802,7 @@ function PreviewRow({
               max={9}
               value={eff.level ?? ""}
               placeholder="—"
+              aria-label={`Nível da linha ${row.index}`}
               onChange={(e) => onUpdate(row.index, { level: e.target.value ? Number(e.target.value) : 0 })}
               className="w-14 bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-1 py-0.5 text-xs text-muted-foreground [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />

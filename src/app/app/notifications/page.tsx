@@ -17,6 +17,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { createSPAClient } from "@/lib/supabase/client";
+import { parseDateOnly } from "@/lib/date-only";
+import { timeAgo } from "@/lib/time-ago";
+import { priorityLabel } from "@/lib/priority";
 
 type Notification = {
   id: string;
@@ -56,18 +59,6 @@ const CHANNEL_ICONS: Record<string, string> = {
   push: "🔔 Push",
 };
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return "agora";
-  if (minutes < 60) return `${minutes}min atrás`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h atrás`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d atrás`;
-  return new Date(iso).toLocaleDateString("pt-BR");
-}
-
 function formatPayload(n: Notification): { title: string; subtitle: string } {
   const p = n.payload as Record<string, string | number>;
   const baseTitle =
@@ -87,14 +78,15 @@ function formatPayload(n: Notification): { title: string; subtitle: string } {
     else if (h === 24) subtitleParts.push("🟠 Vence amanhã");
     else subtitleParts.push(`🟡 Vence em ${h}h`);
   } else if (n.type === "assigned" && p.priority) {
-    subtitleParts.push(`⚡ ${p.priority}`);
+    subtitleParts.push(`⚡ ${priorityLabel(String(p.priority))}`);
   } else if (n.type === "overdue") {
     subtitleParts.push("🔴 Atrasada");
   }
 
-  if (p.due_date) {
-    const d = new Date(p.due_date as string);
-    subtitleParts.push(`📅 ${d.toLocaleDateString("pt-BR")}`);
+  // due_date é coluna DATE: new Date("YYYY-MM-DD") mostraria o dia anterior no Brasil
+  const due = parseDateOnly(p.due_date ? String(p.due_date) : null);
+  if (due) {
+    subtitleParts.push(`📅 ${due.toLocaleDateString("pt-BR")}`);
   }
 
   return {

@@ -13,6 +13,8 @@ import { CloneProjectDialog } from "@/components/CloneProjectDialog";
 import { ProjectMembersDialog } from "@/components/ProjectMembersDialog";
 import { ImportProjectButton } from "@/components/ImportProjectButton";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
+import { parseDateOnly, toDateOnly, todayDateOnly, daysBetweenDateOnly } from "@/lib/date-only";
+import { isTaskDone } from "@/lib/task-status";
 
 export default function ProjectsPage() {
   const { projects, getTasksByProject, deleteProject, loading, loadAllProjectsDetails } = useData();
@@ -57,15 +59,16 @@ export default function ProjectsPage() {
     });
   }
 
+  // target_date é DATE: parse local para não exibir o dia anterior (UTC-3)
   function formatDate(iso: string | null): string {
-    if (!iso) return "—";
-    return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+    const d = parseDateOnly(iso);
+    if (!d) return "—";
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
   }
 
   function daysUntil(iso: string | null): number | null {
-    if (!iso) return null;
-    const diff = new Date(iso).getTime() - Date.now();
-    return Math.ceil(diff / 86400000);
+    const target = toDateOnly(iso);
+    return target ? daysBetweenDateOnly(todayDateOnly(), target) : null;
   }
 
   const filteredProjects = projects.filter((p) => filter === "all" || p.status === filter);
@@ -178,7 +181,7 @@ export default function ProjectsPage() {
           {filteredProjects.map((project) => {
             const projectTasks = getTasksByProject(project.id);
             const totalTasks = projectTasks.length;
-            const doneTasks = projectTasks.filter((t) => t.status === "done" || t.progress === 100).length;
+            const doneTasks = projectTasks.filter((t) => isTaskDone(t)).length;
             const calculatedProgress =
               totalTasks > 0
                 ? Math.round((doneTasks / totalTasks) * 100)

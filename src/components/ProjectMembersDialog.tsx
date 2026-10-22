@@ -12,6 +12,7 @@ import {
   Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { type Project } from "@/lib/context/DataContext";
 import {
@@ -165,8 +166,13 @@ export function ProjectMembersDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in">
-      <div className="w-full max-w-xl bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        hideCloseButton
+        aria-describedby={undefined}
+        overlayClassName="bg-background/80 backdrop-blur-sm"
+        className="flex flex-col gap-0 p-0 w-[calc(100%-2rem)] max-w-xl max-h-[90vh] bg-card border-border rounded-xl sm:rounded-xl shadow-2xl overflow-hidden"
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border/80 bg-muted/20">
           <div className="flex items-center gap-3">
@@ -174,7 +180,7 @@ export function ProjectMembersDialog({
               <Users className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-foreground">Acesso ao Projeto</h2>
+              <DialogTitle className="text-lg font-bold leading-normal tracking-normal text-foreground">Acesso ao Projeto</DialogTitle>
               <p className="text-xs text-muted-foreground flex items-center gap-2">
                 <span
                   className="w-2 h-2 rounded-full inline-block"
@@ -185,7 +191,9 @@ export function ProjectMembersDialog({
             </div>
           </div>
           <button
+            type="button"
             onClick={() => onOpenChange(false)}
+            aria-label="Fechar"
             className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <X className="h-5 w-5" />
@@ -387,7 +395,7 @@ export function ProjectMembersDialog({
             Fechar
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,10 +1,11 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
-import { Gantt, ViewMode, type Task as GanttTask } from "gantt-task-react";
+import type { Task as GanttTask, ViewMode } from "gantt-task-react";
 import "gantt-task-react/dist/index.css";
 import {
   Calendar,
@@ -25,60 +26,63 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { useGlobalToast } from "@/components/ui/toast-notification";
 import Link from "next/link";
-import { useData, type Project, type Task } from "@/lib/context/DataContext";
+import { useData, type Task } from "@/lib/context/DataContext";
+import { useGlobal } from "@/lib/context/GlobalContext";
 import { DependencyManager } from "@/components/DependencyManager";
 import { TaskHierarchy } from "@/components/TaskHierarchy";
-import { GanttTaskListHeaderPT, type GanttSortField, type GanttSortDirection } from "@/components/GanttTaskListHeader";
-import { GanttTaskListTablePT } from "@/components/GanttTaskListTablePT";
 import { GanttTooltipPT } from "@/components/GanttTooltipPT";
 import { TaskDialog } from "@/components/TaskDialog";
 import { ImportDialog } from "@/components/ImportDialog";
-import { GanttPrintPreview } from "@/components/GanttPrintPreview";
-import { exportGanttToExcel } from "@/lib/gantt-export";
-import { compareTasksByDueDate } from "@/lib/task-sorting";
+import {
+  GanttListContext,
+  TimelineTaskListHeader,
+  TimelineTaskListTable,
+  type GanttListState,
+} from "@/components/timeline/GanttListSlots";
+import {
+  buildGanttTasks,
+  ganttDateChangeToPatch,
+  ganttPalette,
+  parseGanttId,
+  GANTT_DAY_MS,
+  type GanttSortField,
+  type GanttSortDirection,
+} from "@/lib/gantt-tasks";
+import { isTaskDone, isTaskOverdue } from "@/lib/task-status";
+import { todayDateOnly } from "@/lib/date-only";
+import { PRIORITY_DOT_CLASS, PRIORITY_LABEL, PRIORITY_ORDER } from "@/lib/priority";
 
-const VIEW_MODES = [
-  { value: ViewMode.Day, label: "Dia" },
-  { value: ViewMode.Week, label: "Semana" },
-  { value: ViewMode.Month, label: "Mês" },
-  { value: ViewMode.Year, label: "Ano" },
+// gantt-task-react só no cliente e fora do bundle inicial da página
+const Gantt = dynamic(() => import("gantt-task-react").then((m) => m.Gantt), {
+  ssr: false,
+  loading: () => <div className="h-96 animate-pulse bg-muted/30" />,
+});
+
+// O preview usa @/lib/gantt-export (xlsx): só carrega quando é aberto
+const GanttPrintPreview = dynamic(
+  () => import("@/components/GanttPrintPreview").then((m) => m.GanttPrintPreview),
+  { ssr: false }
+);
+
+// Valores do enum ViewMode da lib (import só de tipo para não trazer a lib junto)
+const VIEW_MODES: { value: ViewMode; label: string; columnWidth: number }[] = [
+  { value: "Day" as ViewMode, label: "Dia", columnWidth: 55 },
+  { value: "Week" as ViewMode, label: "Semana", columnWidth: 130 },
+  { value: "Month" as ViewMode, label: "Mês", columnWidth: 210 },
+  { value: "Year" as ViewMode, label: "Ano", columnWidth: 320 },
 ];
 
-function paletteFor(isDark: boolean) {
-  return isDark
-    ? {
-        barBackground: "#3b82f6",
-        barBackgroundSelected: "#2563eb",
-        projectBackground: "#475569",
-        projectBackgroundSelected: "#64748b",
-        projectProgress: "#22c55e",
-        projectProgressSelected: "#4ade80",
-        arrowColor: "#94a3b8",
-        milestoneBackground: "#f87171",
-        milestoneSelected: "#ef4444",
-        todayColor: "rgba(59, 130, 246, 0.4)",
-      }
-    : {
-        barBackground: "#3b82f6",
-        barBackgroundSelected: "#1d4ed8",
-        projectBackground: "#64748b",
-        projectBackgroundSelected: "#334155",
-        projectProgress: "#16a34a",
-        projectProgressSelected: "#22c55e",
-        arrowColor: "#475569",
-        milestoneBackground: "#ef4444",
-        milestoneSelected: "#b91c1c",
-        todayColor: "rgba(37, 99, 235, 0.4)",
-      };
-}
+// Legenda da baixa para a crítica
+const LEGEND_PRIORITIES = [...PRIORITY_ORDER].reverse();
 
-const PRIORITY_PALETTE: Record<string, { light: string; dark: string }> = {
-  low: { light: "#0ea5e9", dark: "#38bdf8" },
-  medium: { light: "#3b82f6", dark: "#60a5fa" },
-  high: { light: "#6366f1", dark: "#818cf8" },
-  critical: { light: "#ef4444", dark: "#f87171" },
-};
+function toggleInSet(prev: Set<string>, id: string): Set<string> {
+  const next = new Set(prev);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  return next;
+}
 
 function TimelineContent() {
   const searchParams = useSearchParams();
@@ -86,14 +90,20 @@ function TimelineContent() {
 
   const {
     projects,
+    tasks,
     getTasksByProject,
     dependencies,
     loading,
     loadProjectDetails,
     loadAllProjectsDetails,
     isProjectLoaded,
+    updateTask,
   } = useData();
-  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.Week);
+  const { workspaceRole } = useGlobal();
+  const { addToast } = useGlobalToast();
+  const readOnly = workspaceRole === "viewer";
+
+  const [viewMode, setViewMode] = useState<ViewMode>(VIEW_MODES[1].value);
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projectParam || "all");
   const [loadingDetails, setLoadingDetails] = useState(false);
 
@@ -133,203 +143,149 @@ function TimelineContent() {
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
+  const [printRoot, setPrintRoot] = useState<HTMLElement | null>(null);
 
-  // Adiciona classe ao body para isolar impressão do Gantt
+  // Preview de impressão: nó próprio no body (o CSS de impressão isola
+  // #gantt-print-root via body.gantt-print-mode), removido ao fechar
   useEffect(() => {
-    if (printPreviewOpen) {
-      document.body.classList.add("gantt-print-mode");
-    } else {
+    if (!printPreviewOpen) return;
+    const root = document.createElement("div");
+    root.id = "gantt-print-root";
+    document.body.appendChild(root);
+    document.body.classList.add("gantt-print-mode");
+    setPrintRoot(root);
+    return () => {
       document.body.classList.remove("gantt-print-mode");
-    }
-    return () => document.body.classList.remove("gantt-print-mode");
+      root.remove();
+      setPrintRoot(null);
+    };
   }, [printPreviewOpen]);
 
-  const [sortField, setSortField] = useState<GanttSortField | null>(null);
-  const [sortDirection, setSortDirection] = useState<GanttSortDirection>("asc");
+  const [sort, setSort] = useState<{ field: GanttSortField | null; direction: GanttSortDirection }>({
+    field: null,
+    direction: "asc",
+  });
   const [nameColumnWidth, setNameColumnWidth] = useState<number>(240);
 
-  const handleSort = (field: GanttSortField) => {
-    if (sortField === field) {
-      if (sortDirection === "asc") {
-        setSortDirection("desc");
-      } else {
-        setSortField(null);
-        setSortDirection("asc");
-      }
-    } else {
-      setSortField(field);
-      setSortDirection("asc");
-    }
-  };
-
-  const { theme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-  const isDark = mounted && theme === "dark";
-
-  const palette = useMemo(() => paletteFor(isDark), [isDark]);
-
-  const dependenciesByTask = useMemo(() => {
-    const visibleProjectIds =
-      selectedProjectId === "all"
-        ? new Set(projects.map((p) => p.id))
-        : new Set([selectedProjectId]);
-    const projectIdByTaskId = new Map<string, string>();
-    for (const t of projects.flatMap((p) => getTasksByProject(p.id))) {
-      projectIdByTaskId.set(t.id, t.project_id);
-    }
-
-    const map = new Map<string, string[]>();
-    for (const d of dependencies) {
-      const targetProjectId = projectIdByTaskId.get(d.task_id);
-      if (!targetProjectId || !visibleProjectIds.has(targetProjectId)) continue;
-      if (!map.has(d.task_id)) map.set(d.task_id, []);
-      map.get(d.task_id)!.push(d.depends_on_task_id);
-    }
-    return map;
-  }, [dependencies, projects, getTasksByProject, selectedProjectId]);
-
-  const ganttTasks: GanttTask[] = useMemo(() => {
-    const filteredProjects =
-      selectedProjectId === "all"
-        ? projects
-        : projects.filter((p) => p.id === selectedProjectId);
-
-    const result: GanttTask[] = [];
-
-    filteredProjects.forEach((project: Project) => {
-      const projectStart = project.start_date
-        ? new Date(project.start_date)
-        : new Date();
-      const projectEnd = project.target_date
-        ? new Date(project.target_date)
-        : new Date(Date.now() + 30 * 86400000);
-
-      const isCollapsed = collapsedProjects.has(project.id);
-
-      result.push({
-        start: projectStart,
-        end: projectEnd,
-        name: `${isCollapsed ? "▶" : "▼"} ${project.name}`,
-        id: `project-${project.id}`,
-        type: "project",
-        progress: project.progress,
-        styles: {
-          backgroundColor: project.color || "#475569",
-          backgroundSelectedColor: project.color || "#334155",
-          progressColor: "#ffffff",
-          progressSelectedColor: "#ffffff",
-        },
-        isDisabled: true,
-      });
-
-      if (!isCollapsed) {
-        const tasks = getTasksByProject(project.id);
-        // Renderiza hierarquia N-níveis com Drill-down (Expandir/Recolher sub-tarefas)
-        const addTasksRecursively = (
-          parentList: Task[],
-          depth: number,
-          pId: string,
-          pStart: Date
-        ) => {
-          const sorted = [...parentList];
-          if (sortField) {
-            sorted.sort((a, b) => {
-              let res = 0;
-              if (sortField === "name") {
-                res = (a.title || "").localeCompare(b.title || "", "pt-BR");
-              } else if (sortField === "assignee") {
-                res = (a.assignee_name || "zzz").localeCompare(b.assignee_name || "zzz", "pt-BR");
-              } else if (sortField === "start") {
-                const tA = a.start_date ? new Date(a.start_date).getTime() : 0;
-                const tB = b.start_date ? new Date(b.start_date).getTime() : 0;
-                res = tA - tB;
-              } else if (sortField === "end") {
-                const tA = a.due_date ? new Date(a.due_date).getTime() : 0;
-                const tB = b.due_date ? new Date(b.due_date).getTime() : 0;
-                res = tA - tB;
-              }
-              return sortDirection === "asc" ? res : -res;
-            });
-          } else {
-            sorted.sort(compareTasksByDueDate);
-          }
-          sorted.forEach((task: Task) => {
-            const children = tasks.filter((t) => t.parent_task_id === task.id);
-            const hasChildren = children.length > 0;
-            const isTaskCollapsed = collapsedTasks.has(task.id);
-
-            const start = task.start_date
-              ? new Date(task.start_date)
-              : pStart;
-            const end = task.due_date
-              ? new Date(task.due_date)
-              : new Date(start.getTime() + 7 * 86400000);
-
-            const isCompleted = task.status === "done" || task.progress === 100;
-            const priority = task.priority as keyof typeof PRIORITY_PALETTE | undefined;
-            const paletteForTask = priority && PRIORITY_PALETTE[priority]
-              ? PRIORITY_PALETTE[priority]
-              : null;
-            let barColor = paletteForTask
-              ? (isDark ? paletteForTask.dark : paletteForTask.light)
-              : (depth > 0 ? palette.projectBackground : palette.barBackground);
-            let barProgressColor = "#ffffff";
-
-            if (isCompleted) {
-              barColor = isDark ? "#059669" : "#10b981";
-              barProgressColor = isDark ? "#10b981" : "#34d399";
-            }
-
-            // Indentação e indicador de Drill-down (▶ se fechado, ▼ se aberto, ↳ se filha final)
-            const indent = depth > 0 ? "  ".repeat(depth) : "";
-            const expandIcon = hasChildren
-              ? isTaskCollapsed
-                ? "▶ "
-                : "▼ "
-              : depth > 0
-              ? "↳ "
-              : "";
-            const nameStr = `${indent}${expandIcon}${task.title}`;
-
-            result.push({
-              start,
-              end,
-              name: nameStr,
-              id: `task-${task.id}`,
-              type: "task",
-              progress: task.progress,
-              project: task.parent_task_id ? `task-${task.parent_task_id}` : `project-${pId}`,
-              dependencies: dependenciesByTask.get(task.id),
-              hideChildren: isTaskCollapsed,
-              styles: {
-                backgroundColor: barColor,
-                backgroundSelectedColor: barColor,
-                progressColor: barProgressColor,
-                progressSelectedColor: barProgressColor,
-              },
-              assigneeId: task.assignee_id,
-              assigneeName: task.assignee_name,
-              workspaceId: project.workspace_id,
-              isDone: isCompleted,
-            } as GanttTask & { assigneeId?: string | null; assigneeName?: string | null; workspaceId?: string; isDone?: boolean });
-
-            // Se a tarefa não estiver recolhida, renderiza as filhas de nível N+1 (drill-down)
-            if (hasChildren && !isTaskCollapsed) {
-              addTasksRecursively(children, depth + 1, pId, pStart);
-            }
-          });
-        };
-
-        const rootTasks = tasks.filter((t) => !t.parent_task_id);
-        addTasksRecursively(rootTasks, 0, project.id, projectStart);
-      }
+  // asc → desc → sem ordenação
+  const handleSort = useCallback((field: GanttSortField) => {
+    setSort((prev) => {
+      if (prev.field !== field) return { field, direction: "asc" };
+      if (prev.direction === "asc") return { field, direction: "desc" };
+      return { field: null, direction: "asc" };
     });
+  }, []);
 
-    return result;
-  }, [projects, selectedProjectId, getTasksByProject, dependenciesByTask, collapsedProjects, collapsedTasks, isDark, palette, sortField, sortDirection]);
+  // resolvedTheme cobre o tema "system" (OS escuro); o Gantt só renderiza no cliente
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
+  const palette = useMemo(() => ganttPalette(isDark), [isDark]);
+
+  const ganttTasks: GanttTask[] = useMemo(
+    () =>
+      buildGanttTasks({
+        projects,
+        getTasksByProject,
+        dependencies,
+        selectedProjectId,
+        collapsedProjects,
+        collapsedTasks,
+        isDark,
+        sortField: sort.field,
+        sortDirection: sort.direction,
+        readOnly,
+      }),
+    [projects, getTasksByProject, dependencies, selectedProjectId, collapsedProjects, collapsedTasks, isDark, sort, readOnly]
+  );
+
+  const ganttTaskById = useMemo(() => new Map(ganttTasks.map((t) => [t.id, t])), [ganttTasks]);
+  const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+  const parentTaskIds = useMemo(
+    () => new Set(tasks.map((t) => t.parent_task_id).filter((id): id is string => !!id)),
+    [tasks]
+  );
+
+  const toggleRow = useCallback((ganttTask: GanttTask) => {
+    const ref = parseGanttId(ganttTask.id);
+    if (!ref) return;
+    if (ref.kind === "project") setCollapsedProjects((prev) => toggleInSet(prev, ref.id));
+    else setCollapsedTasks((prev) => toggleInSet(prev, ref.id));
+  }, []);
+
+  const openTask = useCallback(
+    (ganttId: string) => {
+      const ref = parseGanttId(ganttId);
+      if (ref?.kind !== "task") return;
+      const found = taskById.get(ref.id);
+      if (found) {
+        setEditingTask(found);
+        setTaskDialogOpen(true);
+      }
+    },
+    [taskById]
+  );
+
+  // Projeto e tarefa-pai: expande/recolhe. Tarefa folha: abre a edição
+  const openTaskOrToggle = useCallback(
+    (ganttId: string) => {
+      const ref = parseGanttId(ganttId);
+      if (!ref) return;
+      if (ref.kind === "project" || parentTaskIds.has(ref.id)) {
+        const row = ganttTaskById.get(ganttId);
+        if (row) toggleRow(row);
+        return;
+      }
+      openTask(ganttId);
+    },
+    [parentTaskIds, ganttTaskById, toggleRow, openTask]
+  );
+
+  // A lib dispara onClick no mouseup que encerra um drag: esse clique é ignorado
+  const suppressBarClickUntil = useRef(0);
+
+  // Drag/resize de barra → grava start_date/due_date. Retornar false faz a lib desfazer o movimento
+  const handleDateChange = useCallback(
+    async (changed: GanttTask): Promise<boolean> => {
+      suppressBarClickUntil.current = Date.now() + 500;
+      const ref = parseGanttId(changed.id);
+      const original = ganttTaskById.get(changed.id);
+      if (readOnly || ref?.kind !== "task" || !original) return false;
+
+      const patch = ganttDateChangeToPatch(original, changed);
+      if (!patch) {
+        addToast({
+          variant: "error",
+          title: "Datas inválidas",
+          description: "O prazo não pode ficar antes da data de início.",
+        });
+        return false;
+      }
+      if (Object.keys(patch).length === 0) return false;
+
+      try {
+        await updateTask(ref.id, patch);
+        return true;
+      } catch {
+        // DataContext já exibiu o toast de erro
+        return false;
+      }
+    },
+    [ganttTaskById, readOnly, updateTask, addToast]
+  );
+
+  const listState = useMemo<GanttListState>(
+    () => ({
+      nameColumnWidth,
+      sortField: sort.field,
+      sortDirection: sort.direction,
+      onSort: handleSort,
+      onResizeNameColumn: setNameColumnWidth,
+      onToggleRow: toggleRow,
+      onTaskClick: (t) => openTaskOrToggle(t.id),
+      onTaskEditClick: (t) => openTask(t.id),
+    }),
+    [nameColumnWidth, sort, handleSort, toggleRow, openTaskOrToggle, openTask]
+  );
 
   const stats = useMemo(() => {
     const inScopeProjects =
@@ -337,11 +293,10 @@ function TimelineContent() {
         ? projects
         : projects.filter((p) => p.id === selectedProjectId);
 
+    const today = todayDateOnly();
     const inScopeTasks = inScopeProjects.flatMap((p) => getTasksByProject(p.id));
-    const completed = inScopeTasks.filter((t) => t.status === "done" || t.progress === 100).length;
-    const overdue = inScopeTasks.filter(
-      (t) => t.due_date && new Date(t.due_date) < new Date() && t.status !== "done" && t.progress !== 100
-    ).length;
+    const completed = inScopeTasks.filter((t) => isTaskDone(t)).length;
+    const overdue = inScopeTasks.filter((t) => isTaskOverdue(t, today)).length;
 
     const completionRate = inScopeTasks.length > 0 ? Math.round((completed / inScopeTasks.length) * 100) : 0;
 
@@ -372,6 +327,28 @@ function TimelineContent() {
     selectedProjectId === "all"
       ? "Todos os Projetos"
       : projects.find((p) => p.id === selectedProjectId)?.name || "Projeto Selecionado";
+
+  const handleExportExcel = async () => {
+    try {
+      // xlsx (~400KB) só é baixado quando o usuário exporta
+      const { exportGanttToExcel } = await import("@/lib/gantt-export");
+      exportGanttToExcel(
+        projects,
+        getTasksByProject,
+        selectedProjectId,
+        `cronograma-${selectedProjectName.replace(/\s+/g, "-").toLowerCase()}`
+      );
+    } catch (err) {
+      console.error("[Timeline] export error:", err);
+      addToast({
+        variant: "error",
+        title: "Não foi possível exportar a planilha",
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
+  const columnWidth = VIEW_MODES.find((m) => m.value === viewMode)?.columnWidth ?? 130;
 
   return (
     <>
@@ -407,14 +384,7 @@ function TimelineContent() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() =>
-                exportGanttToExcel(
-                  projects,
-                  getTasksByProject,
-                  selectedProjectId,
-                  `cronograma-${selectedProjectName.replace(/\s+/g, "-").toLowerCase()}`
-                )
-              }
+              onClick={handleExportExcel}
               className="h-10 px-4 text-xs font-bold border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 gap-2"
             >
               <FileSpreadsheet className="h-4 w-4" />
@@ -599,11 +569,9 @@ function TimelineContent() {
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-xs">
-              ● Live Sync Active
-            </Badge>
-          </div>
+          <span className="hidden sm:inline text-[11px] text-muted-foreground">
+            {readOnly ? "Somente leitura" : "Arraste ou redimensione as barras para reagendar"}
+          </span>
         </div>
 
         {/* Gantt Viewport */}
@@ -626,149 +594,44 @@ function TimelineContent() {
           ) : (
             <div className="overflow-x-auto gantt-wrapper border-t border-border/40">
               <div className="min-w-[800px]">
-                <Gantt
-                  tasks={ganttTasks}
-                  viewMode={viewMode}
-                  locale="pt-BR"
-                  columnWidth={
-                    viewMode === ViewMode.Day
-                      ? 55
-                      : viewMode === ViewMode.Week
-                      ? 130
-                      : viewMode === ViewMode.Month
-                      ? 210
-                      : 320
-                  }
-                  listCellWidth={`${nameColumnWidth + 290}px`}
-                  barBackgroundColor={palette.barBackground}
-                  barBackgroundSelectedColor={palette.barBackgroundSelected}
-                  todayColor={palette.todayColor}
-                  projectProgressColor={palette.projectProgress}
-                  projectProgressSelectedColor={palette.projectProgressSelected}
-                  projectBackgroundColor={palette.projectBackground}
-                  projectBackgroundSelectedColor={palette.projectBackgroundSelected}
-                  milestoneBackgroundColor={palette.milestoneBackground}
-                  milestoneBackgroundSelectedColor={palette.milestoneSelected}
-                  arrowColor={palette.arrowColor}
-                  arrowIndent={20}
-                  rowHeight={44}
-                  headerHeight={54}
-                  fontFamily="inherit"
-                  fontSize="12px"
-                  rtl={false}
-                  handleWidth={8}
-                  timeStep={300000}
-                  TaskListHeader={(headerProps) => (
-                    <GanttTaskListHeaderPT
-                      {...headerProps}
-                      nameColumnWidth={nameColumnWidth}
-                      sortField={sortField}
-                      sortDirection={sortDirection}
-                      onSort={handleSort}
-                      onResizeNameColumn={setNameColumnWidth}
-                    />
-                  )}
-                  TaskListTable={(props) => (
-                    <GanttTaskListTablePT
-                      {...props}
-                      nameColumnWidth={nameColumnWidth}
-                      onExpanderClick={(ganttTask) => {
-                        if (ganttTask.type === "project") {
-                          const projectId = String(ganttTask.id).replace(/^project-/, "");
-                          setCollapsedProjects((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(projectId)) next.delete(projectId);
-                            else next.add(projectId);
-                            return next;
-                          });
-                        } else if (ganttTask.type === "task") {
-                          const realId = String(ganttTask.id).replace(/^task-/, "");
-                          setCollapsedTasks((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(realId)) next.delete(realId);
-                            else next.add(realId);
-                            return next;
-                          });
-                        }
-                      }}
-                      onTaskClick={(ganttTask) => {
-                        if (ganttTask.type === "task") {
-                          const realId = String(ganttTask.id).replace(/^task-/, "");
-                          const allTasks = projects.flatMap((p) => getTasksByProject(p.id));
-                          const hasChildren = allTasks.some((t) => t.parent_task_id === realId);
-                          if (hasChildren) {
-                            setCollapsedTasks((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(realId)) next.delete(realId);
-                              else next.add(realId);
-                              return next;
-                            });
-                          } else {
-                            const found = allTasks.find((t) => t.id === realId);
-                            if (found) {
-                              setEditingTask(found);
-                              setTaskDialogOpen(true);
-                            }
-                          }
-                        }
-                      }}
-                      onTaskEditClick={(ganttTask) => {
-                        if (ganttTask.type === "task") {
-                          const realId = String(ganttTask.id).replace(/^task-/, "");
-                          const allTasks = projects.flatMap((p) => getTasksByProject(p.id));
-                          const found = allTasks.find((t) => t.id === realId);
-                          if (found) {
-                            setEditingTask(found);
-                            setTaskDialogOpen(true);
-                          }
-                        }
-                      }}
-                    />
-                  )}
-                  TooltipContent={GanttTooltipPT}
-                  onClick={(ganttTask) => {
-                    if (ganttTask.type === "project") {
-                      const projectId = String(ganttTask.id).replace(/^project-/, "");
-                      setCollapsedProjects((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(projectId)) next.delete(projectId);
-                        else next.add(projectId);
-                        return next;
-                      });
-                      return;
-                    }
-                    if (ganttTask.type === "task") {
-                      const realId = String(ganttTask.id).replace(/^task-/, "");
-                      const allTasks = projects.flatMap((p) => getTasksByProject(p.id));
-                      const hasChildren = allTasks.some((t) => t.parent_task_id === realId);
-                      if (hasChildren) {
-                        setCollapsedTasks((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(realId)) next.delete(realId);
-                          else next.add(realId);
-                          return next;
-                        });
-                      } else {
-                        const found = allTasks.find((t) => t.id === realId);
-                        if (found) {
-                          setEditingTask(found);
-                          setTaskDialogOpen(true);
-                        }
-                      }
-                    }
-                  }}
-                  onDoubleClick={(ganttTask) => {
-                    if (ganttTask.type === "task") {
-                      const realId = String(ganttTask.id).replace(/^task-/, "");
-                      const allTasks = projects.flatMap((p) => getTasksByProject(p.id));
-                      const found = allTasks.find((t) => t.id === realId);
-                      if (found) {
-                        setEditingTask(found);
-                        setTaskDialogOpen(true);
-                      }
-                    }
-                  }}
-                />
+                <GanttListContext.Provider value={listState}>
+                  <Gantt
+                    tasks={ganttTasks}
+                    viewMode={viewMode}
+                    locale="pt-BR"
+                    columnWidth={columnWidth}
+                    listCellWidth={`${nameColumnWidth + 290}px`}
+                    barBackgroundColor={palette.barBackground}
+                    barBackgroundSelectedColor={palette.barBackgroundSelected}
+                    todayColor={palette.todayColor}
+                    projectProgressColor={palette.projectProgress}
+                    projectProgressSelectedColor={palette.projectProgressSelected}
+                    projectBackgroundColor={palette.projectBackground}
+                    projectBackgroundSelectedColor={palette.projectBackgroundSelected}
+                    milestoneBackgroundColor={palette.milestoneBackground}
+                    milestoneBackgroundSelectedColor={palette.milestoneSelected}
+                    arrowColor={palette.arrowColor}
+                    arrowIndent={20}
+                    rowHeight={44}
+                    headerHeight={54}
+                    fontFamily="inherit"
+                    fontSize="12px"
+                    rtl={false}
+                    handleWidth={8}
+                    // Drag em passos de 1 dia: as colunas do banco são DATE
+                    timeStep={GANTT_DAY_MS}
+                    TaskListHeader={TimelineTaskListHeader}
+                    TaskListTable={TimelineTaskListTable}
+                    TooltipContent={GanttTooltipPT}
+                    // Sem onProgressChange: progresso é editado no TaskDialog (a alça de progresso fica oculta)
+                    onDateChange={handleDateChange}
+                    onClick={(ganttTask) => {
+                      if (Date.now() < suppressBarClickUntil.current) return;
+                      openTaskOrToggle(ganttTask.id);
+                    }}
+                    onDoubleClick={(ganttTask) => openTask(ganttTask.id)}
+                  />
+                </GanttListContext.Provider>
               </div>
             </div>
           )}
@@ -785,24 +648,18 @@ function TimelineContent() {
 
           <div className="flex flex-wrap items-center gap-6 text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
-              <div className="w-3.5 h-3.5 rounded-full bg-slate-500" />
+              <div className="w-5 h-2.5 rounded-sm bg-slate-600 dark:bg-slate-400" />
               <span>Projeto (Pai)</span>
             </div>
+            {LEGEND_PRIORITIES.map((priority) => (
+              <div key={priority} className="flex items-center gap-2">
+                <div className={`w-3.5 h-3.5 rounded-full ${PRIORITY_DOT_CLASS[priority]}`} />
+                <span>{PRIORITY_LABEL[priority]}</span>
+              </div>
+            ))}
             <div className="flex items-center gap-2">
-              <div className="w-3.5 h-3.5 rounded-full bg-sky-500" />
-              <span>Prioridade Baixa</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3.5 h-3.5 rounded-full bg-blue-500" />
-              <span>Média</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3.5 h-3.5 rounded-full bg-indigo-500" />
-              <span>Alta</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3.5 h-3.5 rounded-full bg-red-500" />
-              <span>Crítica</span>
+              <div className="w-3.5 h-3.5 rounded-full bg-emerald-500" />
+              <span>Concluída</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-4 h-0.5 bg-blue-500 font-bold" />
@@ -843,14 +700,9 @@ function TimelineContent() {
     </div>
 
       {/* Portal do Preview de Impressão Gantt — isolado da UI */}
-      {printPreviewOpen && mounted && (() => {
-        let printRoot = document.getElementById("gantt-print-root");
-        if (!printRoot) {
-          printRoot = document.createElement("div");
-          printRoot.id = "gantt-print-root";
-          document.body.appendChild(printRoot);
-        }
-        return createPortal(
+      {printPreviewOpen &&
+        printRoot &&
+        createPortal(
           <GanttPrintPreview
             projects={projects}
             getTasksByProject={getTasksByProject}
@@ -859,8 +711,7 @@ function TimelineContent() {
             onClose={() => setPrintPreviewOpen(false)}
           />,
           printRoot
-        );
-      })()}
+        )}
     </>
   );
 }

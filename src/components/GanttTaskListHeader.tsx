@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useRef, type CSSProperties } from "react";
 import { ArrowUpDown, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
+import type { GanttSortField, GanttSortDirection } from "@/lib/gantt-tasks";
 
-export type GanttSortField = "name" | "assignee" | "start" | "end";
-export type GanttSortDirection = "asc" | "desc";
+export type { GanttSortField, GanttSortDirection };
 
 interface TaskListHeaderProps {
   headerHeight: number;

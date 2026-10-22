@@ -20,20 +20,18 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useData } from "@/lib/context/DataContext";
+import { useGlobal } from "@/lib/context/GlobalContext";
 import { TaskAssignee } from "@/components/TaskAssignee";
+import { formatDateOnly, toDateOnly, todayDateOnly } from "@/lib/date-only";
+import { isTaskDone, isTaskOverdue } from "@/lib/task-status";
+import { PRIORITY_LABEL, PRIORITY_ORDER, type Priority } from "@/lib/priority";
 
-const PRIORITY_COLORS: Record<string, string> = {
+// Cartão do dia: borda lateral na cor da prioridade (DESIGN.md, via lib/priority)
+const PRIORITY_COLORS: Record<Priority, string> = {
   critical: "border-l-red-500 bg-red-500/10 text-foreground",
-  high: "border-l-indigo-500 bg-indigo-500/10 text-foreground",
+  high: "border-l-orange-500 bg-orange-500/10 text-foreground",
   medium: "border-l-blue-500 bg-blue-500/10 text-foreground",
-  low: "border-l-slate-400 bg-slate-500/10 text-foreground",
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  critical: "Crítica",
-  high: "Alta",
-  medium: "Média",
-  low: "Baixa",
+  low: "border-l-slate-500 bg-slate-500/10 text-foreground",
 };
 
 const MONTH_NAMES = [
@@ -69,45 +67,11 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loadingDetails, setLoadingDetails] = useState(false);
 
-  // Usuário e permissões para filtro de visibilidade do calendário
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [currentUserRole, setCurrentUserRole] = useState<string>("member");
+  // Usuário e papel no workspace ATIVO vêm do GlobalContext (a consulta só por
+  // user_id falhava para quem está em vários workspaces e caía em "member")
+  const { user, loading: userLoading, isWorkspaceAdmin } = useGlobal();
+  const currentUserId = user?.id ?? null;
   const [viewFilter, setViewFilter] = useState<"all" | "mine">("all");
-
-  useEffect(() => {
-    async function loadUser() {
-      try {
-        const isSupabase = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
-        if (isSupabase) {
-          const { createSPAClient } = await import("@/lib/supabase/client");
-          const supabase = createSPAClient();
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            setCurrentUserId(user.id);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const memberClient = supabase.from("workspace_members") as any;
-            const { data: member } = await memberClient
-              .select("role")
-              .eq("user_id", user.id)
-              .maybeSingle();
-            if (member?.role) {
-              setCurrentUserRole(member.role);
-            }
-          }
-        } else {
-          const { demoGetSession } = await import("@/lib/auth/demo-auth");
-          const session = demoGetSession();
-          if (session?.user) {
-            setCurrentUserId(session.user.id);
-            setCurrentUserRole("owner");
-          }
-        }
-      } catch (err) {
-        console.error("[Calendar] loadUser error:", err);
-      }
-    }
-    loadUser();
-  }, []);
 
   useEffect(() => {
     // Só mostra o loader quando há projeto ainda não carregado
@@ -129,8 +93,11 @@ export default function CalendarPage() {
   // Donos do Projeto / Workspace vêm TODAS as tarefas com indicativo visual de quem é o responsável.
   // Membros normais vêm apenas as SUAS PRÓPRIAS tarefas atribuídas.
   const visibleTasks = useMemo(() => {
+    // Enquanto o usuário carrega não dá para filtrar: não mostra nada (antes
+    // aparecia tudo e sumia em seguida)
+    if (userLoading) return [];
     return tasks.filter((task) => {
-      if (!task.due_date) return false;
+      if (!toDateOnly(task.due_date)) return false;
 
       // Se o usuário alternar para "Apenas Minhas Tarefas"
       if (viewFilter === "mine") {
@@ -138,7 +105,7 @@ export default function CalendarPage() {
       }
 
       // Se for Owner ou Admin do Workspace
-      if (currentUserRole === "owner" || currentUserRole === "admin") {
+      if (isWorkspaceAdmin) {
         return true;
       }
 
@@ -151,13 +118,13 @@ export default function CalendarPage() {
       // Membros comuns vêm apenas as tarefas atribuídas a eles
       return task.assignee_id === currentUserId;
     });
-  }, [tasks, projects, currentUserId, currentUserRole, viewFilter]);
+  }, [tasks, projects, currentUserId, isWorkspaceAdmin, viewFilter, userLoading]);
 
   const tasksByDay = useMemo(() => {
     const map = new Map<string, typeof visibleTasks>();
     for (const task of visibleTasks) {
-      if (!task.due_date) continue;
-      const day = task.due_date.slice(0, 10);
+      const day = toDateOnly(task.due_date);
+      if (!day) continue;
       const list = map.get(day) ?? [];
       list.push(task);
       map.set(day, list);
@@ -166,23 +133,22 @@ export default function CalendarPage() {
   }, [visibleTasks]);
 
   const stats = useMemo(() => {
-    const monthStart = startOfMonth(currentDate);
-    const monthEnd = endOfMonth(currentDate);
+    // Compara texto YYYY-MM-DD: `new Date("2026-11-01")` é 31/10 21h no Brasil
+    // e jogava as tarefas do dia 1º no mês anterior
+    const monthStart = formatDateOnly(startOfMonth(currentDate));
+    const monthEnd = formatDateOnly(endOfMonth(currentDate));
+    const today = todayDateOnly();
     const monthTasks = visibleTasks.filter((t) => {
-      if (!t.due_date) return false;
-      const d = new Date(t.due_date);
-      return d >= monthStart && d <= monthEnd;
+      const due = toDateOnly(t.due_date);
+      return !!due && due >= monthStart && due <= monthEnd;
     });
-    const overdue = monthTasks.filter((t) => {
-      if (!t.due_date || t.status === "done" || t.progress === 100) return false;
-      return new Date(t.due_date).getTime() < Date.now();
-    }).length;
-    const due = monthTasks.filter((t) => t.status !== "done" && t.progress !== 100).length;
-    const done = monthTasks.filter((t) => t.status === "done" || t.progress === 100).length;
+    const overdue = monthTasks.filter((t) => isTaskOverdue(t, today)).length;
+    const done = monthTasks.filter((t) => isTaskDone(t)).length;
+    const due = monthTasks.length - done;
     return { total: monthTasks.length, overdue, due, done };
   }, [visibleTasks, currentDate]);
 
-  if (loading || loadingDetails) {
+  if (loading || loadingDetails || userLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-96 space-y-4">
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500 animate-pulse">
@@ -207,7 +173,7 @@ export default function CalendarPage() {
   }
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-    const key = date.toISOString().slice(0, 10);
+    const key = formatDateOnly(date);
     calendarDays.push({ date, tasks: tasksByDay.get(key) ?? [] });
   }
   while (calendarDays.length % 7 !== 0) {
@@ -218,7 +184,7 @@ export default function CalendarPage() {
   }
 
   const today = new Date();
-  const isManager = currentUserRole === "owner" || currentUserRole === "admin";
+  const isManager = isWorkspaceAdmin;
 
   return (
     <div className="space-y-8 animate-fadeIn pb-12">
@@ -446,7 +412,7 @@ export default function CalendarPage() {
 
                     <div className="space-y-1.5 flex-1">
                       {dayTasks.slice(0, 3).map((task) => {
-                        const isDone = task.status === "done" || task.progress === 100;
+                        const isDone = isTaskDone(task);
                         const project = projects.find((p) => p.id === task.project_id);
                         return (
                           <div
@@ -504,10 +470,10 @@ export default function CalendarPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-6 text-xs text-muted-foreground">
-            {Object.entries(PRIORITY_LABELS).map(([key, label]) => (
+            {PRIORITY_ORDER.map((key) => (
               <div key={key} className="flex items-center gap-2">
-                <div className={`w-3.5 h-3.5 rounded border-l-4 ${PRIORITY_COLORS[key] ?? ""}`} />
-                <span className="font-medium text-foreground">{label}</span>
+                <div className={`w-3.5 h-3.5 rounded border-l-4 ${PRIORITY_COLORS[key]}`} />
+                <span className="font-medium text-foreground">{PRIORITY_LABEL[key]}</span>
               </div>
             ))}
           </div>
