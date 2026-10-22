@@ -101,17 +101,27 @@ export async function POST(request: NextRequest) {
               { onConflict: "project_id,user_id" }
             )
         );
-        // Dono anterior: rebaixa a concessão 'owner' (se existir) para 'admin'
+        // Dono anterior: continua com acesso como 'admin' do projeto se ainda
+        // for membro do workspace (sem linha em project_members ele perderia o
+        // acesso, já que era o created_by que o garantia)
         if (previousOwner && previousOwner !== input.new_owner_id) {
-          unwrap(
-            "project_members (dono anterior)",
-            await admin
-              .from("project_members")
-              .update({ role: "admin" })
-              .eq("project_id", project.id)
-              .eq("user_id", previousOwner)
-              .eq("role", "owner")
-          );
+          const previousMember = await loadWorkspaceMember(admin, workspace.id, previousOwner);
+          if (previousMember) {
+            unwrap(
+              "project_members (dono anterior)",
+              await admin
+                .from("project_members")
+                .upsert(
+                  { project_id: project.id, user_id: previousOwner, role: "admin" },
+                  { onConflict: "project_id,user_id" }
+                )
+            );
+          } else {
+            unwrap(
+              "project_members (dono anterior)",
+              await admin.from("project_members").delete().eq("project_id", project.id).eq("user_id", previousOwner)
+            );
+          }
         }
         break;
       }

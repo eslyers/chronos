@@ -497,6 +497,13 @@ describe("POST /api/access/project", () => {
     ]);
   });
 
+  it("dono anterior sem concessão continua com acesso como 'admin'", async () => {
+    db.project_members = db.project_members.filter((g) => !(g.project_id === P1 && g.user_id === MEMBER));
+    expect((await act({ action: "transfer", new_owner_id: MEMBER2 })).status).toBe(200);
+    expect(grantsOf(P1)).toContainEqual([MEMBER, "admin"]);
+    expect(grantsOf(P1)).toContainEqual([MEMBER2, "owner"]);
+  });
+
   it("transfere projeto sem dono anterior", async () => {
     project(P2)!.created_by = null;
     expect((await act({ project_id: P2, action: "transfer", new_owner_id: MEMBER2 })).status).toBe(200);
