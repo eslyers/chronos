@@ -23,6 +23,7 @@ import {
   ChevronRight,
   CalendarClock,
   Gauge,
+  ShieldCheck,
 } from "lucide-react";
 import { useGlobal } from "@/lib/context/GlobalContext";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -34,7 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [isDesktop, setIsDesktop] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isWorkspaceAdmin, signOut } = useGlobal();
+  const { user, isWorkspaceAdmin, isMasterAdmin, signOut } = useGlobal();
 
   // Carregar preferência salva no localStorage
   useEffect(() => {
@@ -110,7 +111,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "Carga de Trabalho", href: "/app/workload", icon: Gauge },
     { name: "Calendário", href: "/app/calendar", icon: CalendarDays },
     { name: "Templates", href: "/app/templates", icon: Library },
-    ...(isWorkspaceAdmin ? [{ name: "Usuários", href: "/app/users", icon: Users }] : []),
+    ...(isWorkspaceAdmin || isMasterAdmin
+      ? [
+          { name: "Usuários", href: "/app/users", icon: Users },
+          { name: "Administração", href: "/app/admin", icon: ShieldCheck },
+        ]
+      : []),
     { name: "Notificações", href: "/app/notifications", icon: Bell },
     { name: "Atividades", href: "/app/activity", icon: History },
     { name: "Configurações", href: "/app/settings", icon: Settings },
