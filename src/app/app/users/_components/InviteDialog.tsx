@@ -22,12 +22,17 @@ import { cn } from "@/lib/utils";
 interface InviteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onInvite: (params: { email: string; role: WorkspaceRole; sendEmail: boolean }) => Promise<{
-    success: boolean;
-    token?: string;
-    error?: string;
-  }>;
+  onInvite: (params: { email: string; role: WorkspaceRole; sendEmail: boolean }) => Promise<InviteResult>;
 }
+
+type InviteResult = {
+  success: boolean;
+  token?: string;
+  error?: string;
+  /** Resultado real do envio (undefined quando nenhum email foi pedido). */
+  emailSent?: boolean;
+  emailError?: string;
+};
 
 const ROLES: { value: WorkspaceRole; label: string; description: string; icon: React.ComponentType<{ className?: string }> }[] = [
   {
@@ -55,7 +60,7 @@ export function InviteDialog({ open, onOpenChange, onInvite }: InviteDialogProps
   const [role, setRole] = React.useState<WorkspaceRole>("member");
   const [sendEmail, setSendEmail] = React.useState(true);
   const [loading, setLoading] = React.useState(false);
-  const [result, setResult] = React.useState<{ success: boolean; error?: string } | null>(null);
+  const [result, setResult] = React.useState<InviteResult | null>(null);
   const [createdToken, setCreatedToken] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
 
@@ -241,12 +246,37 @@ export function InviteDialog({ open, onOpenChange, onInvite }: InviteDialogProps
           </label>
 
           {/* Result feedback */}
+          {result?.success && result.emailSent === false && (
+            // O convite existe, mas o email não saiu: mostra o motivo do Brevo
+            <div
+              role="alert"
+              className="flex items-start gap-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 p-3.5 animate-in fade-in slide-in-from-bottom-2 duration-300"
+            >
+              <AlertCircle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1 text-xs sm:text-sm">
+                <p className="font-semibold text-amber-700 dark:text-amber-300">
+                  Convite criado, mas o email NÃO foi enviado.
+                </p>
+                <p className="text-amber-700/90 dark:text-amber-200/90">
+                  Motivo: {result.emailError || "erro desconhecido no envio"}. Copie o link abaixo e envie manualmente.
+                </p>
+              </div>
+            </div>
+          )}
+
           {result?.success && (
             <div className="space-y-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 p-3.5 animate-in fade-in slide-in-from-bottom-2 duration-300">
               <div className="flex items-start gap-2.5">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
                 <p className="text-xs sm:text-sm text-emerald-300 font-medium">
-                  Convite gerado com sucesso! {sendEmail ? "Email enviado via Brevo." : "Compartilhe o link manualmente."}
+                  Convite gerado com sucesso!{" "}
+                  {result.emailSent === true
+                    ? "Email enviado via Brevo."
+                    : result.emailSent === false
+                      ? "Use o link abaixo."
+                      : sendEmail
+                        ? "Email enviado via Brevo."
+                        : "Compartilhe o link manualmente."}
                 </p>
               </div>
               {createdToken && (

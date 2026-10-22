@@ -134,6 +134,11 @@ export async function POST(request: NextRequest) {
 
       emailSent = result.success;
       emailError = result.error;
+      if (!result.success) {
+        // O convite foi criado mesmo assim (o link pode ser compartilhado à mão);
+        // o motivo aparece nos logs da Vercel e é devolvido à tela
+        console.error("[api/users/invite] Falha ao enviar email via Brevo:", result.error);
+      }
     }
 
     return NextResponse.json({

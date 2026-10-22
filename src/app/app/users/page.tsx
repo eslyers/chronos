@@ -128,6 +128,10 @@ export default function UsersPage() {
 
     try {
       let createdToken = token;
+      // A API cria o convite mesmo quando o envio do email falha: o resultado
+      // do envio vem em data.email e precisa chegar à tela
+      let emailSent: boolean | undefined;
+      let emailError: string | undefined;
       if (supabaseMode) {
         const res = await fetch("/api/users/invite", {
           method: "POST",
@@ -137,6 +141,10 @@ export default function UsersPage() {
         const data = await res.json();
         if (!res.ok) return { success: false, error: data.error || "Erro ao convidar" };
         if (data.invite?.token) createdToken = data.invite.token;
+        if (sendEmail) {
+          emailSent = data.email?.sent === true;
+          emailError = data.email?.error;
+        }
       } else {
         demoInvites.create({
           token,
@@ -154,7 +162,7 @@ export default function UsersPage() {
       }
 
       await reload();
-      return { success: true, token: createdToken };
+      return { success: true, token: createdToken, emailSent, emailError };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : "Erro" };
     }
