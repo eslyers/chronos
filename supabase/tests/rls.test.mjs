@@ -44,7 +44,24 @@ await db.exec(`
   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 `);
 
+// Produção divergiu do repositório: o schema foi aplicado por fora das
+// migrations, com outros nomes de policies. Reproduz esse estado antes da
+// migration de segurança, que precisa chegar ao mesmo resultado mesmo assim.
+const PRODUCTION_DRIFT = `
+  ALTER POLICY "Members can create projects" ON public.projects RENAME TO "Members create projects";
+  ALTER POLICY "Members can view members" ON public.workspace_members RENAME TO "Members view members";
+  ALTER POLICY "Public templates are visible to all" ON public.templates RENAME TO "Public templates visible";
+  ALTER POLICY "Users can create workspace templates" ON public.templates RENAME TO "Users create templates";
+  ALTER POLICY "Users can update own templates" ON public.templates RENAME TO "Users update own templates";
+  ALTER POLICY "Users manage their own preferences" ON public.notification_subscribers RENAME TO "Users manage own prefs";
+  ALTER POLICY "Members can view transitions" ON public.stage_transitions RENAME TO "Members view transitions";
+  ALTER POLICY "Members can create transitions" ON public.stage_transitions RENAME TO "Members create transitions";
+  -- policy permissiva extra, com nome que nenhuma migration conhece
+  CREATE POLICY "Legacy open read" ON public.tasks FOR SELECT USING (true);
+`;
+
 for (const f of files) {
+  if (f.startsWith("20261021000000")) await db.exec(PRODUCTION_DRIFT);
   let sql = fs.readFileSync(path.join(migDir, f), "utf8");
   // gen_random_uuid() is built in; pg_net is stubbed above
   sql = sql.replace(/CREATE EXTENSION IF NOT EXISTS (pg_net|"pgcrypto");/g, "");
@@ -56,6 +73,60 @@ for (const f of files) {
   }
 }
 console.log(`applied ${files.length} migrations`);
+
+// O conjunto final de policies é exatamente o esperado, sem sobras da divergência
+{
+  const rows = (await db.query(
+    `SELECT tablename || ' | ' || policyname AS p FROM pg_policies
+     WHERE schemaname = 'public' AND tablename IN ('invite_tokens','notification_subscribers','project_members','projects',
+       'stage_transitions','stages','task_attachments','task_comments','task_dependencies','tasks','templates','workspace_members')
+     ORDER BY 1`
+  )).rows.map((r) => r.p);
+  const expected = [
+    "invite_tokens | Users can view own invites",
+    "invite_tokens | Workspace admins manage invites",
+    "notification_subscribers | Users manage their own preferences",
+    "project_members | Admins manage project_members",
+    "project_members | Members view project_members",
+    "projects | Members can create projects",
+    "projects | Members delete projects",
+    "projects | Members update projects",
+    "projects | Members view projects",
+    "stage_transitions | Members create transitions",
+    "stage_transitions | Members view transitions",
+    "stages | Members delete stages",
+    "stages | Members insert stages",
+    "stages | Members update stages",
+    "stages | Members view stages",
+    "task_attachments | Project members add own attachments",
+    "task_attachments | Project members view attachments",
+    "task_attachments | Uploaders or admins delete attachments",
+    "task_comments | Authors or admins delete comments",
+    "task_comments | Project members add own comments",
+    "task_comments | Project members view comments",
+    "task_dependencies | Members delete deps",
+    "task_dependencies | Members insert deps",
+    "task_dependencies | Members update deps",
+    "task_dependencies | Members view deps",
+    "tasks | Members delete tasks",
+    "tasks | Members insert tasks",
+    "tasks | Members update tasks",
+    "tasks | Members view tasks",
+    "templates | Public templates are visible to all",
+    "templates | Users can create workspace templates",
+    "templates | Users can update own templates",
+    "workspace_members | Admins manage workspace members",
+    "workspace_members | Members can view members",
+    "workspace_members | Workspace owner bootstraps membership",
+  ];
+  const extra = rows.filter((p) => !expected.includes(p));
+  const missing = expected.filter((p) => !rows.includes(p));
+  if (extra.length || missing.length) {
+    console.log(`POLICY SET MISMATCH\n  extra: ${extra.join("; ")}\n  missing: ${missing.join("; ")}`);
+    process.exit(1);
+  }
+  console.log(`policy set ok (${rows.length} policies, drift reconciled)`);
+}
 
 // ── helpers ──────────────────────────────────────────────────
 const users = {

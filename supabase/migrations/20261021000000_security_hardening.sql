@@ -16,6 +16,88 @@
 -- ============================================================================
 
 -- ────────────────────────────────────────────────────────────────────────────
+-- 0. RECONCILIAÇÃO DE POLICIES
+-- Em produção o schema foi aplicado por fora das migrations, com nomes de
+-- policies diferentes dos do repositório ("Members create projects",
+-- "Users create templates"…). Derrubar por nome deixaria policies permissivas
+-- ativas. Por isso esta migration remove TODAS as policies das tabelas que
+-- controla e recria o conjunto completo — o estado final independe dos nomes
+-- antigos. (Não toca em profiles, workspaces e notifications.)
+-- ────────────────────────────────────────────────────────────────────────────
+DO $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN
+    SELECT tablename, policyname FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename IN (
+        'invite_tokens', 'notification_subscribers', 'project_members', 'projects',
+        'stage_transitions', 'stages', 'task_attachments', 'task_comments',
+        'task_dependencies', 'tasks', 'templates', 'workspace_members'
+      )
+  LOOP
+    EXECUTE format('DROP POLICY %I ON public.%I', r.policyname, r.tablename);
+  END LOOP;
+END $$;
+
+-- Base que as seções abaixo não recriam (equivalente às migrations anteriores)
+CREATE POLICY "Workspace admins manage invites" ON public.invite_tokens
+  FOR ALL
+  USING (public.is_workspace_admin(workspace_id, auth.uid()))
+  WITH CHECK (public.is_workspace_admin(workspace_id, auth.uid()));
+
+CREATE POLICY "Members can view members" ON public.workspace_members
+  FOR SELECT USING (user_id = auth.uid() OR public.is_workspace_member(workspace_id, auth.uid()));
+
+CREATE POLICY "Admins manage workspace members" ON public.workspace_members
+  FOR ALL TO authenticated
+  USING (public.is_workspace_admin(workspace_id, auth.uid()))
+  WITH CHECK (public.is_workspace_admin(workspace_id, auth.uid()));
+
+CREATE POLICY "Members can create projects" ON public.projects
+  FOR INSERT WITH CHECK (public.is_workspace_member(workspace_id, auth.uid()));
+
+CREATE POLICY "Members delete projects" ON public.projects
+  FOR DELETE USING (created_by = auth.uid() OR public.is_workspace_admin(workspace_id, auth.uid()));
+
+CREATE POLICY "Members view stages" ON public.stages
+  FOR SELECT USING (public.has_project_access(project_id, auth.uid()));
+CREATE POLICY "Members manage stages" ON public.stages
+  FOR ALL
+  USING (public.has_project_access(project_id, auth.uid()))
+  WITH CHECK (public.has_project_access(project_id, auth.uid()));
+
+CREATE POLICY "Members view tasks" ON public.tasks
+  FOR SELECT USING (public.has_project_access(project_id, auth.uid()));
+CREATE POLICY "Members manage tasks" ON public.tasks
+  FOR ALL
+  USING (public.has_project_access(project_id, auth.uid()))
+  WITH CHECK (public.has_project_access(project_id, auth.uid()));
+
+CREATE POLICY "Members view deps" ON public.task_dependencies
+  FOR SELECT USING (EXISTS (
+    SELECT 1 FROM public.tasks t
+    WHERE t.id = task_dependencies.task_id AND public.has_project_access(t.project_id, auth.uid())
+  ));
+CREATE POLICY "Members manage deps" ON public.task_dependencies
+  FOR ALL
+  USING (EXISTS (
+    SELECT 1 FROM public.tasks t
+    WHERE t.id = task_dependencies.task_id AND public.has_project_access(t.project_id, auth.uid())
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.tasks t
+    WHERE t.id = task_dependencies.task_id AND public.has_project_access(t.project_id, auth.uid())
+  ));
+
+CREATE POLICY "Members view project_members" ON public.project_members
+  FOR SELECT USING (public.has_project_access(project_id, auth.uid()));
+
+CREATE POLICY "Public templates are visible to all" ON public.templates
+  FOR SELECT USING (is_public = TRUE OR public.is_workspace_member(workspace_id, auth.uid()));
+
+-- ────────────────────────────────────────────────────────────────────────────
 -- 1. INVITE TOKENS
 -- O lookup por token é feito server-side com service_role
 -- (/api/invites/lookup), então o SELECT público não é necessário.
