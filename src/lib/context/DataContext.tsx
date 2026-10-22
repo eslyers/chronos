@@ -32,6 +32,8 @@ import type {
 import { USER_ID, defaultStagesForProject, generateId, seedMockData } from "@/lib/data/demo-seed";
 import { STORAGE_KEY, loadFromStorage, saveToStorage } from "@/lib/data/local-cache";
 import { useTaskDiscussion } from "@/lib/context/useTaskDiscussion";
+import { useRealtimeSync } from "@/lib/context/useRealtimeSync";
+import { applyRealtimeChange } from "@/lib/data/realtime-apply";
 
 // ─────────────────────────────────────────────────────────────
 // CHRONOS — DataContext
@@ -272,6 +274,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const stored = loadFromStorage();
     if (stored) setState({ ...stored, loading: false });
   }, [reportError]);
+
+  // ── Tempo real ──────────────────────────────────────────────
+  // Só no modo Supabase e depois do carregamento inicial. Mudanças feitas por
+  // outros usuários (e o eco das próprias) são mescladas sem recarregar tudo.
+  useRealtimeSync({
+    enabled: getDataLayer() === "supabase" && !state.loading,
+    onChange: (change) => setState((prev) => applyRealtimeChange(prev, change, loadedRef.current)),
+    onReconnect: refresh,
+  });
 
   // ── Projects ────────────────────────────────────────────────
   const createProject = useCallback(async (
