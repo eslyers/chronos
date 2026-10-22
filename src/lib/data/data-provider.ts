@@ -21,7 +21,7 @@ import {
   deleteTask as supabaseDeleteTask,
   getCurrentWorkspaceId,
 } from "@/lib/data/supabase-data";
-import type { Stage } from "@/lib/context/DataContext";
+import type { Stage } from "@/lib/data/models";
 
 // ─────────────────────────────────────────────────────────────
 // CHRONOS — Data Provider
