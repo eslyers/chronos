@@ -1,63 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import {
-  Loader2,
-  Sparkles,
-  FolderKanban,
-  FileText,
-  AlignLeft,
-  Calendar,
-  Palette,
-  Check,
-  Layers,
-  Wrench,
-  Library,
-  CircleDot,
-  CheckCircle2,
-  X,
-  Clock,
-} from "lucide-react";
-import { useData, type Project } from "@/lib/context/DataContext";
-import { DatePicker } from "@/components/ui/date-picker";
+import { Loader2, Sparkles, FolderKanban, CheckCircle2, X } from "lucide-react";
+import type { Project } from "@/lib/context/DataContext";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { toDateOnly, todayDateOnly } from "@/lib/date-only";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  StageEditor,
-  defaultStagesAsDrafts,
-  emptyStagesDraft,
-  stageDraftsToPayload,
-  type StageDraft,
-} from "@/components/StageEditor";
-
-const COLORS = [
-  { name: "Azul Corporativo", value: "#3b82f6" },
-  { name: "Azul Marinho",     value: "#1e40af" },
-  { name: "Índigo",           value: "#6366f1" },
-  { name: "Verde Esmeralda",  value: "#10b981" },
-  { name: "Verde Floresta",   value: "#059669" },
-  { name: "Roxo",             value: "#a855f7" },
-  { name: "Rosa Premium",     value: "#ec4899" },
-  { name: "Vermelho Alerta",  value: "#ef4444" },
-  { name: "Cinza Concreto",   value: "#64748b" },
-];
-
-type StagesMode = "default" | "custom" | "template" | "empty";
-
-interface TemplateOption {
-  id: string;
-  name: string;
-  icon: string | null;
-  stages: Array<{
-    name: string;
-    color: string;
-    sort_order: number;
-    wip_limit?: number | null;
-    is_done?: boolean;
-  }>;
-}
+import { useProjectForm } from "@/components/project-dialog/useProjectForm";
+import { ProjectBasicInfoSection } from "@/components/project-dialog/ProjectBasicInfoSection";
+import { ProjectScheduleSection } from "@/components/project-dialog/ProjectScheduleSection";
+import { ProjectStagesSection } from "@/components/project-dialog/ProjectStagesSection";
 
 interface ProjectDialogProps {
   open: boolean;
@@ -66,167 +15,8 @@ interface ProjectDialogProps {
 }
 
 export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProps) {
-  const { createProject, updateProject } = useData();
-  const router = useRouter();
-  const isEdit = !!project;
-
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [color, setColor] = useState("#3b82f6");
-  const [status, setStatus] = useState<"active" | "completed" | "archived">("active");
-  const [startDate, setStartDate] = useState("");
-  const [targetDate, setTargetDate] = useState("");
-  const [trackTime, setTrackTime] = useState(true);
-
-  const [stagesMode, setStagesMode] = useState<StagesMode>("default");
-  const [templates, setTemplates] = useState<TemplateOption[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
-  const [stageDrafts, setStageDrafts] = useState<StageDraft[]>(() => defaultStagesAsDrafts());
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  // Carrega templates quando o dialog abre
-  useEffect(() => {
-    if (!open || isEdit) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { createSPAClient } = await import("@/lib/supabase/client");
-        const supabase = createSPAClient();
-        const { data } = await supabase
-          .from("templates")
-          .select("id, name, icon, stages")
-          .eq("is_public", true)
-          .order("name");
-        if (!cancelled && data) {
-          setTemplates(data as TemplateOption[]);
-        }
-      } catch (err) {
-        console.error("[ProjectDialog] failed to load templates", err);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [open, isEdit]);
-
-  // Rastreadores para inicializar o form apenas na abertura real (impede reset ao digitar
-  // quando o pai recria o objeto `project`, ex.: após um refresh do DataContext)
-  const prevOpenRef = useRef(false);
-  const prevProjectIdRef = useRef<string | null>(null);
-
-  // Reset form quando abre (ou ao trocar de projeto)
-  useEffect(() => {
-    if (!open) {
-      prevOpenRef.current = false;
-      prevProjectIdRef.current = null;
-      return;
-    }
-
-    const currentProjectId = project?.id ?? "new";
-    const isNewlyOpened = !prevOpenRef.current;
-    const isDifferentProject = currentProjectId !== prevProjectIdRef.current;
-    if (!isNewlyOpened && !isDifferentProject) return;
-
-    prevOpenRef.current = true;
-    prevProjectIdRef.current = currentProjectId;
-
-    if (project) {
-      setName(project.name);
-      setDescription(project.description ?? "");
-      setColor(project.color);
-      setStatus(project.status);
-      setStartDate(toDateOnly(project.start_date) ?? "");
-      setTargetDate(toDateOnly(project.target_date) ?? "");
-      setTrackTime(project.track_time !== false);
-    } else {
-      setName("");
-      setDescription("");
-      setColor("#3b82f6");
-      setStatus("active");
-      setStartDate(todayDateOnly());
-      setTargetDate("");
-      setTrackTime(true);
-      setStagesMode("default");
-      setSelectedTemplateId("");
-      setStageDrafts(defaultStagesAsDrafts());
-    }
-    setError("");
-  }, [open, project]);
-
-  // Atualiza drafts conforme modo
-  useEffect(() => {
-    if (isEdit) return;
-    if (stagesMode === "default") {
-      setStageDrafts(defaultStagesAsDrafts());
-    } else if (stagesMode === "empty") {
-      setStageDrafts(emptyStagesDraft());
-    } else if (stagesMode === "custom") {
-      if (stageDrafts.length === 0) setStageDrafts(defaultStagesAsDrafts());
-    } else if (stagesMode === "template" && selectedTemplateId) {
-      const tpl = templates.find((t) => t.id === selectedTemplateId);
-      if (tpl) {
-        setStageDrafts(
-          tpl.stages.map((s) => ({
-            localId: `tpl-${tpl.id}-${s.sort_order}-${Math.random().toString(36).slice(2, 8)}`,
-            name: s.name,
-            color: s.color,
-            wip_limit: s.wip_limit ?? null,
-            is_done: s.is_done ?? false,
-          }))
-        );
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stagesMode, selectedTemplateId, templates]);
-
-  async function handleSubmit() {
-    if (!name.trim()) {
-      setError("Nome do projeto é obrigatório");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
-      const data = {
-        name: name.trim(),
-        description: description.trim() || null,
-        color,
-        status,
-        // Colunas DATE: só "YYYY-MM-DD" (toISOString deslocaria o dia)
-        start_date: toDateOnly(startDate),
-        target_date: toDateOnly(targetDate),
-        track_time: trackTime,
-      };
-
-      if (isEdit && project) {
-        await updateProject(project.id, data);
-      } else {
-        const input: Parameters<typeof createProject>[0] = {
-          ...data,
-          ...(stagesMode === "custom" && {
-            customStages: stageDraftsToPayload(stageDrafts),
-          }),
-          ...(stagesMode === "template" && selectedTemplateId && {
-            templateId: selectedTemplateId,
-          }),
-          ...(stagesMode === "empty" && {
-            useDefaultStages: false,
-          }),
-        };
-        await createProject(input);
-      }
-      // Fecha só depois de salvar com sucesso
-      onOpenChange(false);
-      router.refresh();
-    } catch (err) {
-      // O DataContext já exibiu o toast; mantém o formulário aberto com o motivo
-      setError(err instanceof Error ? err.message : "Erro ao salvar");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const form = useProjectForm({ open, project, onOpenChange });
+  const { isEdit, loading, error } = form;
 
   if (!open) return null;
 
@@ -283,357 +73,42 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            handleSubmit();
+            form.handleSubmit();
           }}
           className="p-6 space-y-5 overflow-y-auto flex-1"
         >
-          {/* Nome do Projeto */}
-          <div className="space-y-1.5">
-            <label htmlFor="project-name" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <FileText className="h-3.5 w-3.5 text-blue-500" />
-              Nome do Projeto <span className="text-destructive">*</span>
-            </label>
-            <input
-              id="project-name"
-              type="text"
-              placeholder="Ex: Transformação Digital Q4"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="flex h-11 w-full rounded-xl border border-input bg-background px-3.5 py-2 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-all font-medium"
-            />
-          </div>
+          <ProjectBasicInfoSection
+            name={form.name}
+            onNameChange={form.setName}
+            description={form.description}
+            onDescriptionChange={form.setDescription}
+            color={form.color}
+            onColorChange={form.setColor}
+          />
 
-          {/* Descrição */}
-          <div className="space-y-1.5">
-            <label htmlFor="project-desc" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <AlignLeft className="h-3.5 w-3.5 text-blue-500" />
-              Descrição do Escopo
-            </label>
-            <textarea
-              id="project-desc"
-              placeholder="Objetivos estratégicos, partes interessadas e abrangência do projeto..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="flex min-h-[80px] w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 transition-all resize-none leading-relaxed"
-            />
-          </div>
-
-          {/* Cor do Projeto */}
-          <div className="space-y-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <Palette className="h-3.5 w-3.5 text-blue-500" />
-              Identificador Visual (Cor)
-            </span>
-            <div className="flex flex-wrap gap-2.5">
-              {COLORS.map((c) => {
-                const isSelected = color === c.value;
-                return (
-                  <button
-                    key={c.value}
-                    type="button"
-                    title={c.name}
-                    aria-label={c.name}
-                    aria-pressed={isSelected}
-                    onClick={() => setColor(c.value)}
-                    className={`
-                      relative w-8 h-8 rounded-xl transition-all duration-200 flex items-center justify-center
-                      ${isSelected ? "scale-110 shadow-lg ring-2 ring-offset-2 ring-blue-500" : "hover:scale-105 opacity-80 hover:opacity-100"}
-                    `}
-                    style={{ backgroundColor: c.value }}
-                  >
-                    {isSelected && <Check className="h-4 w-4 text-white drop-shadow-md" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Datas Grid */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label htmlFor="project-start" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5 text-blue-500" />
-                Data de Início
-              </label>
-              <DatePicker
-                id="project-start"
-                value={startDate}
-                onChange={(val) => setStartDate(val)}
-                placeholder="Selecione início"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="project-target" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5 text-blue-500" />
-                Previsão de Término
-              </label>
-              <DatePicker
-                id="project-target"
-                value={targetDate}
-                onChange={(val) => setTargetDate(val)}
-                placeholder="Selecione previsão"
-              />
-            </div>
-          </div>
-
-          {/* Status (só em edição) */}
-          {isEdit && (
-            <div className="space-y-1.5">
-              <label htmlFor="project-status" className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <CircleDot className="h-3.5 w-3.5 text-blue-500" />
-                Status do Projeto
-              </label>
-              <Select
-                value={status}
-                onValueChange={(val) => setStatus(val as typeof status)}
-              >
-                <SelectTrigger id="project-status" className="h-10 rounded-xl bg-background border-border/80">
-                  <SelectValue placeholder="Selecione o status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">
-                    <div className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shrink-0" />
-                      <span>Em Andamento (Ativo)</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="completed">
-                    <div className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-blue-500 shrink-0" />
-                      <span>Concluído</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="archived">
-                    <div className="flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-zinc-500 shrink-0" />
-                      <span>Arquivado</span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {/* Controle de Tempo e Horas */}
-          <div className="p-3.5 rounded-xl border border-border bg-card/60 space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
-                  <Clock className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <label htmlFor="project-track-time" className="text-xs font-bold text-foreground cursor-pointer block">
-                    Controle de Tempo e Horas
-                  </label>
-                  <p className="text-[11px] text-muted-foreground leading-snug">
-                    Habilitar estimativas de horas, horas gastas reais e carga de trabalho
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                id="project-track-time"
-                role="switch"
-                aria-checked={trackTime}
-                onClick={() => setTrackTime(!trackTime)}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                  trackTime ? "bg-blue-600" : "bg-muted-foreground/30"
-                }`}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                    trackTime ? "translate-x-5" : "translate-x-0"
-                  }`}
-                />
-              </button>
-            </div>
-            {!trackTime && (
-              <p className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-1.5 rounded-lg border border-amber-500/20 font-medium">
-                ℹ️ Com o controle desativado, os campos de horas estimadas e reais ficarão ocultos nas tarefas.
-              </p>
-            )}
-          </div>
+          <ProjectScheduleSection
+            isEdit={isEdit}
+            startDate={form.startDate}
+            onStartDateChange={form.setStartDate}
+            targetDate={form.targetDate}
+            onTargetDateChange={form.setTargetDate}
+            status={form.status}
+            onStatusChange={form.setStatus}
+            trackTime={form.trackTime}
+            onTrackTimeChange={form.setTrackTime}
+          />
 
           {/* Escolha de Etapas (só ao criar novo) */}
           {!isEdit && (
-            <div className="space-y-3 pt-3 border-t border-border">
-              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-blue-500" />
-                Estrutura de Etapas do Kanban
-              </span>
-
-              {/* Grid de Modos com cards visuais */}
-              <div className="grid grid-cols-2 gap-2.5">
-                {/* 1. Padrão */}
-                <button
-                  type="button"
-                  onClick={() => setStagesMode("default")}
-                  aria-pressed={stagesMode === "default"}
-                  className={`
-                    p-3 rounded-xl border text-left transition-all duration-150 flex flex-col justify-between space-y-1.5
-                    ${
-                      stagesMode === "default"
-                        ? "border-blue-500/60 bg-blue-500/10 ring-1 ring-blue-500/50"
-                        : "border-border bg-background hover:bg-muted/50"
-                    }
-                  `}
-                >
-                  <div className="flex items-center justify-between">
-                    <Layers className="h-4 w-4 text-blue-500" />
-                    {stagesMode === "default" && <Check className="h-3.5 w-3.5 text-blue-500 font-bold" />}
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold">Etapas Padrão</p>
-                    <p className="text-[11px] text-muted-foreground">5 fases clássicas do fluxo</p>
-                  </div>
-                </button>
-
-                {/* 2. Customizar */}
-                <button
-                  type="button"
-                  onClick={() => setStagesMode("custom")}
-                  aria-pressed={stagesMode === "custom"}
-                  className={`
-                    p-3 rounded-xl border text-left transition-all duration-150 flex flex-col justify-between space-y-1.5
-                    ${
-                      stagesMode === "custom"
-                        ? "border-blue-500/60 bg-blue-500/10 ring-1 ring-blue-500/50"
-                        : "border-border bg-background hover:bg-muted/50"
-                    }
-                  `}
-                >
-                  <div className="flex items-center justify-between">
-                    <Wrench className="h-4 w-4 text-amber-500" />
-                    {stagesMode === "custom" && <Check className="h-3.5 w-3.5 text-blue-500 font-bold" />}
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold">Personalizado</p>
-                    <p className="text-[11px] text-muted-foreground">Criar etapas sob medida</p>
-                  </div>
-                </button>
-
-                {/* 3. Template */}
-                <button
-                  type="button"
-                  onClick={() => setStagesMode("template")}
-                  aria-pressed={stagesMode === "template"}
-                  className={`
-                    p-3 rounded-xl border text-left transition-all duration-150 flex flex-col justify-between space-y-1.5
-                    ${
-                      stagesMode === "template"
-                        ? "border-blue-500/60 bg-blue-500/10 ring-1 ring-blue-500/50"
-                        : "border-border bg-background hover:bg-muted/50"
-                    }
-                  `}
-                >
-                  <div className="flex items-center justify-between">
-                    <Library className="h-4 w-4 text-purple-500" />
-                    {stagesMode === "template" && <Check className="h-3.5 w-3.5 text-blue-500 font-bold" />}
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold">Usar Template</p>
-                    <p className="text-[11px] text-muted-foreground">Modelos corporativos</p>
-                  </div>
-                </button>
-
-                {/* 4. Sem etapas */}
-                <button
-                  type="button"
-                  onClick={() => setStagesMode("empty")}
-                  aria-pressed={stagesMode === "empty"}
-                  className={`
-                    p-3 rounded-xl border text-left transition-all duration-150 flex flex-col justify-between space-y-1.5
-                    ${
-                      stagesMode === "empty"
-                        ? "border-blue-500/60 bg-blue-500/10 ring-1 ring-blue-500/50"
-                        : "border-border bg-background hover:bg-muted/50"
-                    }
-                  `}
-                >
-                  <div className="flex items-center justify-between">
-                    <CircleDot className="h-4 w-4 text-slate-400" />
-                    {stagesMode === "empty" && <Check className="h-3.5 w-3.5 text-blue-500 font-bold" />}
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold">Sem Etapas</p>
-                    <p className="text-[11px] text-muted-foreground">Adicionar manualmente depois</p>
-                  </div>
-                </button>
-              </div>
-
-              {/* Detalhes do modo selecionado */}
-              {stagesMode === "default" && (
-                <div className="p-3 rounded-xl border border-border bg-muted/30 text-xs text-muted-foreground space-y-1">
-                  <p className="font-semibold text-foreground">Etapas que serão criadas automaticamente:</p>
-                  <p className="font-mono text-[11px] text-blue-600 dark:text-blue-400">
-                    Backlog ➔ A Fazer ➔ Em Progresso ➔ Em Revisão ➔ Concluído
-                  </p>
-                </div>
-              )}
-
-              {stagesMode === "template" && (
-                <div className="space-y-2">
-                  <Select
-                    value={selectedTemplateId || "none"}
-                    onValueChange={(val) => setSelectedTemplateId(val === "none" ? "" : val)}
-                  >
-                    <SelectTrigger id="template_id" aria-label="Template corporativo" className="h-10 rounded-xl bg-background border-border/80">
-                      <SelectValue placeholder="Selecione um template corporativo..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">
-                        <span className="text-muted-foreground">— Selecione um template corporativo —</span>
-                      </SelectItem>
-                      {templates.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          <div className="flex items-center gap-2">
-                            <span>{t.icon || "📁"}</span>
-                            <span>{t.name} ({(t.stages as unknown[])?.length || 0} etapas)</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  {selectedTemplateId && stageDrafts.length > 0 && (
-                    <div className="bg-muted/30 rounded-xl border border-border p-3 text-xs space-y-2">
-                      <p className="font-bold text-foreground">Etapas importadas deste template:</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {stageDrafts.map((s, idx) => (
-                          <span
-                            key={s.localId}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-background border border-border text-[11px] font-medium"
-                          >
-                            <span
-                              className="h-2 w-2 rounded-full"
-                              style={{ backgroundColor: s.color }}
-                            />
-                            {s.name}
-                            {idx < stageDrafts.length - 1 && (
-                              <span className="text-muted-foreground">➔</span>
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {stagesMode === "custom" && (
-                <div className="bg-muted/30 border border-border rounded-xl p-3.5">
-                  <StageEditor stages={stageDrafts} onChange={setStageDrafts} />
-                </div>
-              )}
-
-              {stagesMode === "empty" && (
-                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-300 font-medium">
-                  ⚠️ O projeto será criado vazio. Você poderá adicionar fases individualmente na visão de Kanban.
-                </div>
-              )}
-            </div>
+            <ProjectStagesSection
+              stagesMode={form.stagesMode}
+              onStagesModeChange={form.setStagesMode}
+              templates={form.templates}
+              selectedTemplateId={form.selectedTemplateId}
+              onSelectedTemplateIdChange={form.setSelectedTemplateId}
+              stageDrafts={form.stageDrafts}
+              onStageDraftsChange={form.setStageDrafts}
+            />
           )}
 
           {/* Erro */}
@@ -655,7 +130,7 @@ export function ProjectDialog({ open, onOpenChange, project }: ProjectDialogProp
             </button>
             <button
               type="submit"
-              disabled={loading || !name.trim()}
+              disabled={loading || !form.name.trim()}
               className="h-11 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-md shadow-blue-500/20"
             >
               {loading ? (
