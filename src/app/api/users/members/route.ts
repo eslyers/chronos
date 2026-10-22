@@ -7,10 +7,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerAdminClient } from "@/lib/supabase/serverAdminClient";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isMasterAdminEmail } from "@/lib/auth/master-admin";
 
 export const runtime = "nodejs";
-
-const MASTER_ADMIN_EMAIL = "eslyers@gmail.com";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyClient = any;
@@ -35,7 +34,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const isMaster = user.email?.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
+    const isMaster = isMasterAdminEmail(user.email);
 
     // ── 2. Admin client para consulta robusta ──
     let adminClient: AnyClient;
@@ -118,7 +117,7 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        const isUserMaster = email?.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
+        const isUserMaster = isMasterAdminEmail(email);
 
         return {
           id: row.user_id,
