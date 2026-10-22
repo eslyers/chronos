@@ -20,45 +20,46 @@ export function useFastCloseConfig(projectId: string) {
   // Carregar preferência salva do D0/offsets do localStorage para o projeto selecionado
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const saved =
-      localStorage.getItem(fastCloseConfigKey(projectId)) || localStorage.getItem(FASTCLOSE_GLOBAL_CONFIG_KEY);
-    if (saved) {
-      try {
-        const parsed = parseFastCloseConfig(saved);
-        if (parsed.useD0 !== undefined) setUseD0(parsed.useD0);
-        if (parsed.customOffsets !== undefined) setCustomOffsets(parsed.customOffsets);
-        if (parsed.offsetRange !== undefined) setOffsetRange(parsed.offsetRange);
-      } catch (err) {
-        console.warn("Error parsing fastclose config:", err);
-      }
+    try {
+      const saved =
+        localStorage.getItem(fastCloseConfigKey(projectId)) || localStorage.getItem(FASTCLOSE_GLOBAL_CONFIG_KEY);
+      if (!saved) return;
+      const parsed = parseFastCloseConfig(saved);
+      if (parsed.useD0 !== undefined) setUseD0(parsed.useD0);
+      if (parsed.customOffsets !== undefined) setCustomOffsets(parsed.customOffsets);
+      if (parsed.offsetRange !== undefined) setOffsetRange(parsed.offsetRange);
+    } catch (err) {
+      // localStorage indisponível ou JSON inválido: mantém os padrões
+      console.warn("Error loading fastclose config:", err);
     }
   }, [projectId]);
 
-  // Função atômica para salvar a configuração inteira no localStorage
-  const saveProjectConfig = (newUseD0: boolean, newCustomOffsets?: number[], newOffsetRange?: string) => {
+  // Salva a configuração inteira (explícita: `undefined` em customOffsets
+  // significa "sem offsets personalizados", não "manter os atuais")
+  const saveProjectConfig = (config: { useD0: boolean; customOffsets: number[] | undefined; offsetRange: string }) => {
     if (typeof window === "undefined") return;
-    const payload = serializeFastCloseConfig({
-      useD0: newUseD0,
-      customOffsets: newCustomOffsets ?? customOffsets,
-      offsetRange: newOffsetRange ?? offsetRange,
-    });
-
-    localStorage.setItem(fastCloseConfigKey(projectId), payload);
-    localStorage.setItem(FASTCLOSE_GLOBAL_CONFIG_KEY, payload);
+    try {
+      const payload = serializeFastCloseConfig(config);
+      localStorage.setItem(fastCloseConfigKey(projectId), payload);
+      localStorage.setItem(FASTCLOSE_GLOBAL_CONFIG_KEY, payload);
+    } catch (err) {
+      console.warn("Error saving fastclose config:", err);
+    }
   };
 
-  // Troca do alcance de Ds: descarta os offsets personalizados da tela
+  // Troca do alcance de Ds: descarta os offsets personalizados (na tela e no
+  // armazenamento — antes eles voltavam ao recarregar a página)
   const changeOffsetRange = (range: string) => {
     setOffsetRange(range);
     setCustomOffsets(undefined);
-    saveProjectConfig(useD0, undefined, range);
+    saveProjectConfig({ useD0, customOffsets: undefined, offsetRange: range });
   };
 
   // Salvamento atômico vindo do WorkdayConfigDialog
   const applyRulerConfig = (newUseD0: boolean, newOffsets: number[]) => {
     setUseD0(newUseD0);
     setCustomOffsets(newOffsets);
-    saveProjectConfig(newUseD0, newOffsets, offsetRange);
+    saveProjectConfig({ useD0: newUseD0, customOffsets: newOffsets, offsetRange });
   };
 
   return { useD0, customOffsets, offsetRange, changeOffsetRange, applyRulerConfig };
