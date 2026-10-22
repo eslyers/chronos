@@ -27,6 +27,8 @@ await db.exec(`
     $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS
     $$ SELECT coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb $$;
+  -- Publicação que o Supabase cria por padrão (usada pelo Realtime)
+  CREATE PUBLICATION supabase_realtime;
   CREATE SCHEMA net;
   CREATE FUNCTION net.http_post(url text, headers jsonb DEFAULT '{}', body jsonb DEFAULT '{}',
     params jsonb DEFAULT '{}', timeout_milliseconds int DEFAULT 1000)
@@ -242,6 +244,20 @@ console.log("\n# clone_project RPC");
     `SELECT public.clone_project($1, 'Roubo') AS id`, [p2]);
   await expectDenied("anon cannot call clone_project", "anon",
     `SELECT public.clone_project($1, 'x') AS id`, [p2]);
+}
+
+console.log("\n# Realtime");
+{
+  const inPublication = (await sys(
+    `SELECT tablename FROM pg_publication_tables WHERE pubname = 'supabase_realtime' ORDER BY tablename`
+  )).rows.map((r) => r.tablename);
+  const expected = ["projects", "stages", "task_dependencies", "tasks"];
+  if (JSON.stringify(inPublication) === JSON.stringify(expected)) { pass++; console.log("  ok   data tables are published to Realtime"); }
+  else { fail++; console.log(`  FAIL published tables: ${inPublication.join(", ")}`); }
+  // Tabelas sensíveis não podem ser publicadas (o Realtime as exporia)
+  const leaked = inPublication.filter((t) => ["invite_tokens", "profiles", "task_attachments", "workspace_members"].includes(t));
+  if (leaked.length === 0) { pass++; console.log("  ok   sensitive tables are not published"); }
+  else { fail++; console.log(`  FAIL sensitive tables published: ${leaked.join(", ")}`); }
 }
 
 console.log("\n# Workspace deletion");

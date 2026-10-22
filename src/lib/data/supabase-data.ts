@@ -40,7 +40,7 @@ export function dbToProject(d: DbProject): Project {
   };
 }
 
-function dbToStage(d: DbStage): Stage {
+export function dbToStage(d: DbStage): Stage {
   return {
     id: d.id,
     project_id: d.project_id,
@@ -52,7 +52,7 @@ function dbToStage(d: DbStage): Stage {
   };
 }
 
-function dbToTask(d: DbTask): Task {
+export function dbToTask(d: DbTask): Task {
   return {
     id: d.id,
     project_id: d.project_id,
@@ -76,7 +76,7 @@ function dbToTask(d: DbTask): Task {
   };
 }
 
-function dbToDependency(d: DbTaskDependency): TaskDependency {
+export function dbToDependency(d: DbTaskDependency): TaskDependency {
   return {
     id: d.id,
     task_id: d.task_id,

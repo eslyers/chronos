@@ -96,7 +96,7 @@ Convenções:
 - [x] Templates, clonagem de projetos (RPC transacional), importação/exportação de planilhas
 - [x] Convites, papéis por workspace e isolamento por projeto (RLS)
 - [x] Alertas de prazo por e-mail/Telegram (Edge Functions)
-- [ ] Atualização em tempo real (Supabase Realtime)
+- [x] Atualização em tempo real (Supabase Realtime): mudanças de outros usuários aparecem sem recarregar
 - [ ] Cache de servidor com mutações otimistas (ex.: TanStack Query)
 - [ ] Anexos no Supabase Storage (hoje em base64 na tabela)
 
