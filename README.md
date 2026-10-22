@@ -19,12 +19,12 @@
 ## 🚀 Stack
 
 - **Frontend:** Next.js 15 (App Router) + React 19 + TypeScript
-- **UI:** Tailwind CSS + shadcn/ui + lucide-react
-- **Backend:** Supabase (Postgres + Auth + Realtime + Edge Functions)
-- **Cron Jobs:** Supabase Edge Functions (Deno)
-- **Drag-and-Drop:** @dnd-kit (Kanban) + gantt-task-react (Gantt)
-- **Calendário:** @fullcalendar/react
-- **Charts:** recharts
+- **UI:** Tailwind CSS + Radix UI (shadcn/ui) + lucide-react
+- **Backend:** Supabase (Postgres + Auth + RLS + Edge Functions em Deno)
+- **Drag-and-drop:** @dnd-kit (Kanban, Fast Close) + gantt-task-react (Gantt)
+- **Gráficos:** recharts (carregado sob demanda)
+- **Planilhas:** SheetJS (xlsx) para importação e exportação
+- **E-mail / alertas:** Brevo + Telegram
 - **Deploy:** Vercel
 
 ## 📁 Estrutura
@@ -32,128 +32,75 @@
 ```
 src/
 ├── app/
-│   ├── (home)/page.tsx               # Landing page pública
-│   ├── auth/                          # Login, register, reset, callback
-│   ├── app/                           # Dashboard protegido
-│   │   ├── page.tsx                   # Dashboard
-│   │   ├── projects/                  # Gestão de projetos (S2)
-│   │   ├── timeline/                  # Gantt view (S3)
-│   │   ├── kanban/                    # Kanban view (S4)
-│   │   ├── templates/                 # Templates prontos
-│   │   ├── notifications/             # Centro de notificações
-│   │   └── settings/                  # Perfil + Telegram config
-│   └── api/
-│       └── telegram/test/route.ts     # Test endpoint p/ Telegram
-├── components/
-│   ├── AppLayout.tsx                  # Shell com sidebar + header
-│   └── ui/                            # shadcn/ui components
+│   ├── page.tsx                 # Landing page pública
+│   ├── auth/                    # Login, cadastro, convite, reset, callback OAuth
+│   ├── app/                     # Área logada: dashboard, projetos, kanban, timeline,
+│   │                            # calendário, fast-close, workload, atividade, usuários…
+│   └── api/                     # Rotas server-side (convites, importação, cron, admin)
+├── components/                  # Telas e diálogos (ui/ = primitivas Radix/shadcn)
 ├── lib/
-│   ├── supabase/                      # Supabase client (browser, server, middleware)
-│   ├── context/                       # GlobalContext (user state)
-│   ├── types.ts                       # Database types (gerado)
-│   └── utils.ts                       # Helpers
-├── middleware.ts                      # Auth middleware
-└── styles/globals.css
+│   ├── context/                 # GlobalContext (usuário/papel) e DataContext (dados)
+│   ├── data/                    # Camada Supabase, modelos, cache local, seed demo
+│   ├── supabase/                # Clients browser/server/admin + middleware
+│   ├── date-only.ts             # Datas sem hora (colunas DATE) — use sempre estes helpers
+│   ├── task-status.ts           # Concluída / atrasada / vence hoje
+│   └── priority.ts              # Rótulos e cores de prioridade (DESIGN.md)
+└── middleware.ts                # Protege /app/*
 
 supabase/
-├── migrations/
-│   └── 20260714120000_chronos_schema.sql   # Schema completo (10 tabelas)
-├── functions/
-│   └── due-soon-alert/                    # Edge Function p/ notificações
-└── config.toml
+├── migrations/                  # Schema, RLS e funções (aplicar em ordem)
+├── functions/                   # Edge Functions (alertas de prazo e notificações)
+└── tests/rls.test.mjs           # Testes de RLS em Postgres em memória (PGlite)
 ```
 
-## 🗄️ Schema do Banco
+## 🛠️ Setup local
 
-10 tabelas com Row Level Security (RLS):
-
-| Tabela | Função |
-|--------|--------|
-| `workspaces` | Multi-tenancy (cada usuário tem o seu) |
-| `workspace_members` | RBAC dentro do workspace |
-| `projects` | Cronogramas (cards macro) |
-| `stages` | Etapas do projeto (A fazer → Em progresso → Concluído) |
-| `tasks` | Tarefas individuais |
-| `task_dependencies` | Grafo DAG entre tasks (FS/SS/FF/SF) |
-| `stage_transitions` | Audit log de mudanças de etapa |
-| `notification_subscribers` | Preferências de notificação |
-| `notifications` | Histórico de alertas enviados |
-| `templates` | Templates pré-configurados |
-
-## 🛠️ Setup Local
-
-### Pré-requisitos
-
-- Node.js 20+
-- pnpm ou npm
-- Conta Supabase (free tier)
-
-### 1. Clonar e instalar
+Pré-requisitos: Node.js 20+ e, para dados reais, um projeto Supabase.
 
 ```bash
 git clone https://github.com/eslyers/chronos.git
 cd chronos
-pnpm install
+npm install --legacy-peer-deps
+cp .env.example .env.local   # preencha as variáveis
+npm run dev                  # http://localhost:3000
 ```
 
-### 2. Configurar Supabase
+Sem `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` o app sobe em **modo demo** (dados de exemplo no localStorage).
 
-1. Crie um projeto em [supabase.com](https://supabase.com)
-2. Copie `.env.example` para `.env.local`:
+Para o banco: `npx supabase link --project-ref <ref>` e `npx supabase db push` (aplica `supabase/migrations` em ordem).
 
-```bash
-cp .env.example .env.local
-```
+## ✅ Qualidade
 
-3. Preencha as variáveis (URL + Anon Key + Service Role Key)
+| Comando | O que faz |
+|---|---|
+| `npm run lint` | ESLint (Next) |
+| `npm run type-check` | TypeScript sem emitir |
+| `npm test` | Jest (lib, camada de dados, DataContext, componentes) |
+| `npm run test:rls` | Aplica todas as migrations no PGlite e testa políticas RLS e RPCs |
+| `npm run build` | Build de produção |
 
-### 3. Aplicar migrations
-
-```bash
-# Local (requer supabase CLI)
-supabase db push
-
-# OU: copie o conteúdo de supabase/migrations/20260714120000_chronos_schema.sql
-#     e cole no SQL Editor do Supabase Dashboard
-```
-
-### 4. Rodar dev server
-
-```bash
-pnpm dev
-# ou
-npm run dev
-```
-
-Acesse http://localhost:3000
+Convenções:
+- Datas de tarefas/projetos são `DATE` (`YYYY-MM-DD`): nunca use `new Date("YYYY-MM-DD")` nem `toISOString()` para "hoje" — use `lib/date-only.ts` e `lib/task-status.ts`.
+- Mutações do `DataContext` exibem toast de erro e **relançam** a exceção: feche formulários só após sucesso.
+- Toda tabela nova precisa de RLS e de cenários em `supabase/tests/rls.test.mjs`.
 
 ## 📦 Deploy
 
-### Vercel (recomendado)
-
-1. Push para GitHub ✅ (já feito)
-2. Importe o projeto no [vercel.com](https://vercel.com)
-3. Adicione as env vars
-4. Deploy automático em cada push
-
-### Supabase Edge Functions (Sprint 5)
-
-```bash
-supabase functions deploy due-soon-alert
-# Configurar cron job no Supabase Dashboard
-# Recommended: 0 11 * * * (08:00 BRT)
-```
+- **App:** Vercel (`vercel.json`), com as variáveis do `.env.example`.
+- **Banco e Edge Functions:** veja [SUPABASE-DEPLOY.md](SUPABASE-DEPLOY.md) — inclui a ordem de deploy do hardening de segurança e os segredos exigidos pelas funções.
 
 ## 🗺️ Roadmap
 
-- [x] **S1 (HOJE):** Schema DB + Auth + App Shell ✅
-- [ ] **S2:** CRUD Projects + Stages + Tasks
-- [ ] **S3:** Gantt view (gantt-task-react)
-- [ ] **S4:** Kanban view + Calendar
-- [ ] **S5:** Notificações Telegram (Edge Functions)
-- [ ] **S6:** Dashboard + Templates + Polimento
+- [x] Projetos, etapas e tarefas com WBS (subtarefas) e dependências
+- [x] Gantt com arrastar/redimensionar, Kanban com WIP, calendário e Fast Close (fechamento contábil D0)
+- [x] Templates, clonagem de projetos (RPC transacional), importação/exportação de planilhas
+- [x] Convites, papéis por workspace e isolamento por projeto (RLS)
+- [x] Alertas de prazo por e-mail/Telegram (Edge Functions)
+- [ ] Atualização em tempo real (Supabase Realtime)
+- [ ] Cache de servidor com mutações otimistas (ex.: TanStack Query)
+- [ ] Anexos no Supabase Storage (hoje em base64 na tabela)
 
-Veja [PROPOSTA.md](PROPOSTA.md) para detalhes completos.
+Detalhes de produto em [PROPOSTA.md](PROPOSTA.md) e na [base de conhecimento](docs/knowledge-base/README.md).
 
 ## 🤝 Contribuindo
 
