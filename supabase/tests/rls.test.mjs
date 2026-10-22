@@ -464,6 +464,23 @@ console.log("\n# Realtime");
   else { fail++; console.log(`  FAIL sensitive tables published: ${leaked.join(", ")}`); }
 }
 
+console.log("\n# Edge Functions secret");
+{
+  await expectDenied("authenticated cannot read the edge functions secret", "bob",
+    `SELECT public.edge_functions_auth_header() AS h`);
+  await expectDenied("anon cannot read the edge functions secret", "anon",
+    `SELECT public.edge_functions_auth_header() AS h`);
+  const header = (await sys(`SELECT public.edge_functions_auth_header() AS h`)).rows[0].h;
+  if (header === "Bearer ") { pass++; console.log("  ok   header falls back to empty without Vault"); }
+  else { fail++; console.log(`  FAIL unexpected header without Vault`); }
+  const usesHelper = (await sys(
+    `SELECT count(*)::int AS n FROM pg_proc WHERE proname IN ('notify_stage_change','notify_task_assigned','notify_task_created')
+       AND prosrc LIKE '%edge_functions_auth_header()%' AND prosrc NOT LIKE '%app.service_role_key%'`
+  )).rows[0].n;
+  if (usesHelper === 3) { pass++; console.log("  ok   notification triggers read the secret from the helper"); }
+  else { fail++; console.log(`  FAIL only ${usesHelper}/3 triggers use the helper`); }
+}
+
 console.log("\n# Workspace deletion");
 await expectRows("owner can delete workspace (cascade)", "alice",
   `DELETE FROM public.workspaces WHERE id = $1 RETURNING 1`, 1, [wsA]);

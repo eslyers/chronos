@@ -2,9 +2,11 @@
 // CHRONOS — Autenticação das Edge Functions
 // As funções rodam com service_role e verify_jwt = false, então cada uma
 // precisa validar quem chama. Aceita "Authorization: Bearer <segredo>" com:
-//   • SUPABASE_SERVICE_ROLE_KEY — triggers pg_net e pg_cron
-//     (app.service_role_key / app.settings.service_role_key no Postgres)
-//   • CRON_SECRET — rota Next.js /api/cron/due-soon
+//   • EDGE_FUNCTIONS_SECRET — triggers pg_net e o job pg_cron, que leem o
+//     mesmo valor do Supabase Vault (secret "edge_functions_secret") pela
+//     função public.edge_functions_auth_header()
+//   • CRON_SECRET — rota Next.js /api/cron/due-soon (mesmo valor da Vercel)
+//   • SUPABASE_SERVICE_ROLE_KEY — chamadas administrativas
 // ─────────────────────────────────────────────────────────────
 
 function safeEqual(a: string, b: string): boolean {
@@ -18,8 +20,9 @@ export function isAuthorizedCaller(req: Request): boolean {
   const provided = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
   if (!provided) return false;
   const accepted = [
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+    Deno.env.get("EDGE_FUNCTIONS_SECRET"),
     Deno.env.get("CRON_SECRET"),
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
   ].filter((s): s is string => !!s);
   return accepted.some((secret) => safeEqual(provided, secret));
 }
