@@ -675,6 +675,42 @@ export async function deleteTaskDependency(id: string): Promise<void> {
   }
 }
 
+/**
+ * Clona um projeto no servidor (RPC clone_project, transacional).
+ * Retorna o id do novo projeto, ou null se a função ainda não existe no
+ * banco (migration 20261022000000 não aplicada) — o chamador usa o fluxo antigo.
+ */
+export async function cloneProjectRpc(
+  sourceProjectId: string,
+  name: string,
+  options: {
+    workspace_id?: string;
+    description?: string | null;
+    color?: string;
+    start_date?: string | null;
+    target_date?: string | null;
+    track_time?: boolean;
+    clone_tasks?: boolean;
+    clone_dependencies?: boolean;
+    reset_status?: boolean;
+    keep_assignees?: boolean;
+    date_offset_days?: number;
+  }
+): Promise<string | null> {
+  const supabase = client();
+  const { data, error } = await (supabase as any).rpc("clone_project", {
+    p_source_project_id: sourceProjectId,
+    p_name: name,
+    p_options: options,
+  });
+  if (error) {
+    // PGRST202: função não encontrada no schema cache; 42883: undefined_function
+    if (error.code === "PGRST202" || error.code === "42883") return null;
+    fail("cloneProjectRpc", error);
+  }
+  return data as string;
+}
+
 /** Detecta se adicionar a dep (taskId → dependsOnTaskId) criaria ciclo no DAG */
 export function wouldCreateCycle(
   taskId: string,

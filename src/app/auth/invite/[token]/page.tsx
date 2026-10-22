@@ -27,6 +27,7 @@ interface InviteInfo {
   expires_at: string;
   invited_by_name: string | null;
   invited_by_email: string;
+  user_exists?: boolean;
 }
 
 const ROLE_LABEL: Record<InviteInfo["role"], string> = {
@@ -58,6 +59,9 @@ function InvitePageInner({ token }: { token: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // ── Sessão atual (para contas existentes aceitarem após login) ──
+  const [sessionUser, setSessionUser] = useState<{ id: string; email: string } | null>(null);
+
   // ── Carregar info do convite ─────────────────────────────────
   useEffect(() => {
     if (!isSupabaseConfigured()) {
@@ -80,6 +84,10 @@ function InvitePageInner({ token }: { token: string }) {
           setLoadError(json.error || "Convite não encontrado");
         } else {
           setInvite(json.invite);
+          const { data } = await createSPAClient().auth.getUser();
+          if (!cancelled && data.user?.email) {
+            setSessionUser({ id: data.user.id, email: data.user.email });
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -129,6 +137,10 @@ function InvitePageInner({ token }: { token: string }) {
       });
       const acceptJson = await acceptRes.json();
 
+      if (acceptJson.code === "user_exists") {
+        setInvite({ ...invite, user_exists: true });
+        return;
+      }
       if (!acceptRes.ok) {
         throw new Error(acceptJson.error || "Falha ao aceitar convite");
       }
@@ -157,6 +169,30 @@ function InvitePageInner({ token }: { token: string }) {
       router.refresh();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao configurar senha e entrar");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // ── Aceitar convite com a conta já logada ───────────────────
+  async function handleAcceptExisting() {
+    if (!invite || !sessionUser) return;
+    setFormError(null);
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/invites/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, user_id: sessionUser.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Falha ao aceitar convite");
+
+      window.localStorage.setItem("chronos:active_workspace_id", invite.workspace_id);
+      router.push("/app");
+      router.refresh();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Erro ao aceitar convite");
     } finally {
       setSubmitting(false);
     }
@@ -225,6 +261,11 @@ function InvitePageInner({ token }: { token: string }) {
     );
   }
 
+  // Volta para esta página após o login para concluir o aceite
+  const loginHref =
+    `/auth/login?email=${encodeURIComponent(invite.email)}` +
+    `&redirect=${encodeURIComponent(`/auth/invite/${token}`)}`;
+
   // ── Render: Formulário para Criar Senha e Logar ───────────────
   return (
     <div className="space-y-6">
@@ -274,6 +315,40 @@ function InvitePageInner({ token }: { token: string }) {
         </Alert>
       )}
 
+      {invite.user_exists ? (
+        /* Conta existente: entrar e aceitar (a senha nunca é redefinida por aqui) */
+        <div className="space-y-4">
+          {sessionUser && sessionUser.email.toLowerCase() === invite.email.toLowerCase() ? (
+            <>
+              <p className="text-sm text-muted-foreground text-center">
+                Você está conectado como <strong className="text-foreground">{sessionUser.email}</strong>.
+              </p>
+              <Button
+                type="button"
+                onClick={handleAcceptExisting}
+                disabled={submitting}
+                className="w-full bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-medium py-2.5 shadow-sm transition-all"
+              >
+                {submitting ? "Aceitando convite…" : "Aceitar Convite e Entrar no Workspace"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground text-center">
+                Já existe uma conta para <strong className="text-foreground">{invite.email}</strong>.
+                Entre com sua senha para aceitar o convite.
+              </p>
+              <Button asChild className="w-full bg-gradient-to-r from-orange-500 to-amber-600 text-white">
+                <Link href={loginHref}>
+                  Entrar para Aceitar
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Link>
+              </Button>
+            </>
+          )}
+        </div>
+      ) : (
+      <>
       {/* Formulário de criação de senha */}
       <form onSubmit={handleAccept} className="space-y-4">
         <div>
@@ -394,12 +469,14 @@ function InvitePageInner({ token }: { token: string }) {
       <p className="text-center text-xs text-muted-foreground pt-2">
         Já possui conta ativa e lembra sua senha?{" "}
         <Link
-          href={`/auth/login?email=${encodeURIComponent(invite.email)}`}
+          href={loginHref}
           className="text-orange-600 dark:text-orange-400 hover:underline font-semibold"
         >
           Fazer login diretamente
         </Link>
       </p>
+      </>
+      )}
     </div>
   );
 }

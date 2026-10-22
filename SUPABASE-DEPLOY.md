@@ -106,3 +106,31 @@ curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getMe"
 | Brevo Sender Email | ❌ | Email verificado no Brevo (ex: `eslyers@gmail.com`) |
 
 **Tudo isso são 5 minutos no total se você tiver as contas criadas.**
+
+## 🔒 Hardening de segurança (migration 20261021000000)
+
+Ordem recomendada:
+
+1. **Conferir o segredo usado pelos triggers.** As Edge Functions agora exigem
+   `Authorization: Bearer <service_role_key | CRON_SECRET>`. Os triggers e o cron
+   enviam a chave lida destas settings, que precisam estar preenchidas:
+   ```sql
+   SELECT current_setting('app.service_role_key', true)          AS triggers,
+          current_setting('app.settings.service_role_key', true) AS cron;
+   ```
+   Se vierem vazias, os triggers mandam `Bearer ` vazio e as notificações param.
+2. **Secrets:** `npx supabase secrets set CRON_SECRET="<mesmo valor da Vercel>"`
+   (usado por `/api/cron/due-soon`). Se as rotas `/api/admin/*` forem usadas,
+   criar `ADMIN_SECRET` na Vercel (elas não aceitam mais o `CRON_SECRET`).
+3. **Migration:** `npx supabase db push`, depois conferir as policies:
+   ```sql
+   SELECT tablename, policyname, cmd FROM pg_policies
+   WHERE schemaname = 'public' ORDER BY tablename, policyname;
+   ```
+4. **Edge Functions:** redeploy de `due-soon-alert`, `stage-change-notify` e
+   `task-assigned-notify`; remover a função de debug:
+   `npx supabase functions delete due-soon-debug`.
+
+⚠️ Mudança de comportamento: membros comuns passam a ver apenas os projetos que
+criaram, dos quais são membros (`project_members`) ou em que têm tarefa
+atribuída. Owners e admins continuam vendo todos os projetos do workspace.
