@@ -246,6 +246,130 @@ console.log("\n# clone_project RPC");
     `SELECT public.clone_project($1, 'x') AS id`, [p2]);
 }
 
+console.log("\n# Viewer read-only");
+{
+  // Fixtures extras (como sys, sem passar pela RLS):
+  //   frank: member do workspace, 'viewer' em project_members de P1
+  //   gus:   member do workspace, 'member' em project_members de P1
+  //   hank:  member do workspace, criador de P3 (rebaixado a viewer no fim)
+  //   carol: viewer do workspace, 'member' em project_members de P1
+  Object.assign(users, {
+    frank: "f1000000-0000-0000-0000-000000000007",
+    gus: "a2000000-0000-0000-0000-000000000008",
+    hank: "a3000000-0000-0000-0000-000000000009",
+  });
+  for (const n of ["frank", "gus", "hank"]) {
+    await sys(`INSERT INTO auth.users (id, email) VALUES ($1, $2)`, [users[n], email(n)]);
+  }
+  await sys(`INSERT INTO public.workspace_members (workspace_id, user_id, role) VALUES
+    ($1, $2, 'member'), ($1, $3, 'member'), ($1, $4, 'member')`, [wsA, users.frank, users.gus, users.hank]);
+  await sys(`INSERT INTO public.project_members (project_id, user_id, role) VALUES
+    ($1, $2, 'viewer'), ($1, $3, 'member'), ($1, $4, 'member')`, [p1, users.frank, users.gus, users.carol]);
+  const t1b = (await sys(`INSERT INTO public.tasks (project_id, stage_id, title) VALUES ($1, $2, 'T1b') RETURNING id`, [p1, s1])).rows[0].id;
+  await sys(`INSERT INTO public.task_dependencies (task_id, depends_on_task_id) VALUES ($1, $2)`, [t1b, t1]);
+  const p3 = (await sys(`INSERT INTO public.projects (workspace_id, name, created_by) VALUES ($1, 'P3 hank', $2) RETURNING id`, [wsA, users.hank])).rows[0].id;
+  const s3 = (await sys(`INSERT INTO public.stages (project_id, name) VALUES ($1, 'To do') RETURNING id`, [p3])).rows[0].id;
+
+  // Tentativas de escrita em P1 que um leitor não pode fazer
+  const writeAttempts = (who, label) => [
+    [`${label} cannot insert a task`,
+      `INSERT INTO public.tasks (project_id, stage_id, title) VALUES ($1, $2, 'x') RETURNING 1`, [p1, s1]],
+    [`${label} cannot update a task`,
+      `UPDATE public.tasks SET title = 'x' WHERE id = $1 RETURNING 1`, [t1]],
+    [`${label} cannot delete a task`,
+      `DELETE FROM public.tasks WHERE id = $1 RETURNING 1`, [t1b]],
+    [`${label} cannot insert a stage`,
+      `INSERT INTO public.stages (project_id, name) VALUES ($1, 'x') RETURNING 1`, [p1]],
+    [`${label} cannot update a stage`,
+      `UPDATE public.stages SET name = 'x' WHERE id = $1 RETURNING 1`, [s1]],
+    [`${label} cannot delete a stage`,
+      `DELETE FROM public.stages WHERE id = $1 RETURNING 1`, [s1]],
+    [`${label} cannot insert a dependency`,
+      `INSERT INTO public.task_dependencies (task_id, depends_on_task_id) VALUES ($1, $2) RETURNING 1`, [t1, t1b]],
+    [`${label} cannot update a dependency`,
+      `UPDATE public.task_dependencies SET dependency_type = 'SS' WHERE task_id = $1 RETURNING 1`, [t1b]],
+    [`${label} cannot delete a dependency`,
+      `DELETE FROM public.task_dependencies WHERE task_id = $1 RETURNING 1`, [t1b]],
+    [`${label} cannot log a stage transition`,
+      `INSERT INTO public.stage_transitions (task_id, to_stage_id, moved_by) VALUES ($1, $2, $3) RETURNING 1`, [t1, s1, users[who]]],
+    [`${label} cannot update the project`,
+      `UPDATE public.projects SET name = 'x' WHERE id = $1 RETURNING 1`, [p1]],
+  ];
+
+  // Leitor do projeto (member do workspace, 'viewer' em project_members)
+  await expectRows("project viewer reads the project's tasks", "frank",
+    `SELECT id FROM public.tasks WHERE id IN ($1, $2)`, 2, [t1, t1b]);
+  await expectRows("project viewer reads the project's dependencies", "frank",
+    `SELECT id FROM public.task_dependencies WHERE task_id = $1`, 1, [t1b]);
+  for (const [label, sql, params] of writeAttempts("frank", "project viewer")) {
+    await expectDenied(label, "frank", sql, params);
+  }
+  await expectRows("project viewer can still comment (by design)", "frank",
+    `INSERT INTO public.task_comments (task_id, user_id, user_name, content) VALUES ($1, $2, 'frank', 'ok') RETURNING id`, 1, [t1, users.frank]);
+
+  // Viewer do workspace, mesmo com 'member' em project_members (ex.: via
+  // auto-membership ao receber uma tarefa)
+  await expectRows("workspace viewer with project role 'member' reads tasks", "carol",
+    `SELECT id FROM public.tasks WHERE id IN ($1, $2)`, 2, [t1, t1b]);
+  for (const [label, sql, params] of writeAttempts("carol", "workspace viewer (project member)")) {
+    await expectDenied(label, "carol", sql, params);
+  }
+  await expectDenied("workspace viewer cannot create a project", "carol",
+    `INSERT INTO public.projects (workspace_id, name) VALUES ($1, 'x') RETURNING id`, [wsA]);
+  await expectDenied("workspace viewer cannot clone into the workspace", "carol",
+    `SELECT public.clone_project($1, 'Cópia') AS id`, [p1]);
+
+  // Membro do projeto ('member' em project_members) escreve
+  await expectRows("project member inserts a task", "gus",
+    `INSERT INTO public.tasks (project_id, stage_id, title) VALUES ($1, $2, 'G1') RETURNING id`, 1, [p1, s1]);
+  await expectRows("project member updates a task", "gus",
+    `UPDATE public.tasks SET title = 'T1 edited' WHERE id = $1 RETURNING 1`, 1, [t1]);
+  await expectDenied("project member cannot move a task to a project he can't edit", "gus",
+    `UPDATE public.tasks SET project_id = $1 WHERE id = $2 RETURNING 1`, [p2, t1]);
+  const gs = await expectRows("project member inserts a stage", "gus",
+    `INSERT INTO public.stages (project_id, name) VALUES ($1, 'Doing') RETURNING id`, 1, [p1]);
+  await expectRows("project member updates a stage", "gus",
+    `UPDATE public.stages SET name = 'Doing!' WHERE id = $1 RETURNING 1`, 1, [gs?.rows[0]?.id]);
+  await expectRows("project member deletes a stage", "gus",
+    `DELETE FROM public.stages WHERE id = $1 RETURNING 1`, 1, [gs?.rows[0]?.id]);
+  await expectRows("project member updates a dependency", "gus",
+    `UPDATE public.task_dependencies SET dependency_type = 'SS' WHERE task_id = $1 RETURNING 1`, 1, [t1b]);
+  await expectRows("project member deletes a dependency", "gus",
+    `DELETE FROM public.task_dependencies WHERE task_id = $1 RETURNING 1`, 1, [t1b]);
+  await expectRows("project member inserts a dependency", "gus",
+    `INSERT INTO public.task_dependencies (task_id, depends_on_task_id) VALUES ($1, $2) RETURNING 1`, 1, [t1b, t1]);
+  await expectRows("project member logs a stage transition", "gus",
+    `INSERT INTO public.stage_transitions (task_id, to_stage_id, moved_by) VALUES ($1, $2, $3) RETURNING 1`, 1, [t1, s1, users.gus]);
+  await expectRows("project member updates the project", "gus",
+    `UPDATE public.projects SET description = 'gus' WHERE id = $1 RETURNING 1`, 1, [p1]);
+  await expectRows("project member deletes a task", "gus",
+    `DELETE FROM public.tasks WHERE project_id = $1 AND title = 'G1' RETURNING 1`, 1, [p1]);
+
+  // Admin do workspace e criador do projeto escrevem
+  await expectRows("workspace admin updates a task", "erin",
+    `UPDATE public.tasks SET priority = 'high' WHERE id = $1 RETURNING 1`, 1, [t1]);
+  await expectRows("workspace admin inserts a stage", "erin",
+    `INSERT INTO public.stages (project_id, name) VALUES ($1, 'Admin') RETURNING id`, 1, [p1]);
+  await expectRows("workspace admin updates the project", "erin",
+    `UPDATE public.projects SET description = 'erin' WHERE id = $1 RETURNING 1`, 1, [p1]);
+  await expectRows("project creator inserts a task", "hank",
+    `INSERT INTO public.tasks (project_id, stage_id, title) VALUES ($1, $2, 'H1') RETURNING id`, 1, [p3, s3]);
+  await expectRows("project creator updates the project", "hank",
+    `UPDATE public.projects SET name = 'P3!' WHERE id = $1 RETURNING 1`, 1, [p3]);
+  const wsDave = (await sys(`SELECT id FROM public.workspaces WHERE owner_id = $1`, [users.dave])).rows[0].id;
+  await expectDenied("project creator cannot move the project to a foreign workspace", "hank",
+    `UPDATE public.projects SET workspace_id = $2 WHERE id = $1 RETURNING 1`, [p3, wsDave]);
+
+  // Criador rebaixado a viewer do workspace perde a escrita, mantém a leitura
+  await sys(`UPDATE public.workspace_members SET role = 'viewer' WHERE workspace_id = $1 AND user_id = $2`, [wsA, users.hank]);
+  await expectRows("demoted creator still reads his project", "hank",
+    `SELECT id FROM public.tasks WHERE project_id = $1`, 1, [p3]);
+  await expectDenied("demoted creator cannot insert tasks", "hank",
+    `INSERT INTO public.tasks (project_id, stage_id, title) VALUES ($1, $2, 'H2') RETURNING id`, [p3, s3]);
+  await expectDenied("demoted creator cannot update the project", "hank",
+    `UPDATE public.projects SET name = 'x' WHERE id = $1 RETURNING 1`, [p3]);
+}
+
 console.log("\n# Realtime");
 {
   const inPublication = (await sys(
