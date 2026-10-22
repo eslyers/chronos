@@ -1,4 +1,5 @@
 import type { Task } from "@/lib/context/DataContext";
+import { todayDateOnly } from "@/lib/date-only";
 
 export type WorkloadStatus = "overload" | "optimal" | "under";
 
@@ -150,8 +151,8 @@ export function calculateWorkload(
   const capacity = options?.weeklyCapacityHours ?? DEFAULT_WEEKLY_CAPACITY_HOURS;
   const filteredTasks = filterTasksByPeriod(tasks, period);
 
-  const now = new Date();
-  const todayStr = now.toISOString().split("T")[0];
+  // Hoje no fuso local: toISOString() viraria o dia às 21h no Brasil
+  const todayStr = todayDateOnly();
 
   const memberMap = new Map<string, MemberWorkload>();
   let unassignedTasksCount = 0;
