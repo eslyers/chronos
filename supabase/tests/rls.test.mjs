@@ -368,6 +368,15 @@ console.log("\n# Viewer read-only");
     `INSERT INTO public.tasks (project_id, stage_id, title) VALUES ($1, $2, 'H2') RETURNING id`, [p3, s3]);
   await expectDenied("demoted creator cannot update the project", "hank",
     `UPDATE public.projects SET name = 'x' WHERE id = $1 RETURNING 1`, [p3]);
+  await expectDenied("demoted creator cannot manage project members", "hank",
+    `INSERT INTO public.project_members (project_id, user_id, role) VALUES ($1, $2, 'admin') RETURNING 1`, [p3, users.frank]);
+
+  // Transições só em nome próprio
+  await expectDenied("member cannot log a transition on behalf of someone else", "gus",
+    `INSERT INTO public.stage_transitions (task_id, to_stage_id, moved_by) VALUES ($1, $2, $3) RETURNING 1`, [t1, s1, users.alice]);
+  // Admin do workspace continua gerenciando membros de projeto
+  await expectRows("workspace admin manages project members", "erin",
+    `INSERT INTO public.project_members (project_id, user_id, role) VALUES ($1, $2, 'viewer') RETURNING 1`, 1, [p3, users.frank]);
 }
 
 console.log("\n# Realtime");

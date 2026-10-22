@@ -211,11 +211,16 @@ CREATE POLICY "Members update projects" ON public.projects
 DROP POLICY IF EXISTS "Members create transitions" ON public.stage_transitions;
 CREATE POLICY "Members create transitions" ON public.stage_transitions
   FOR INSERT
-  WITH CHECK (EXISTS (
-    SELECT 1 FROM public.tasks t
-    WHERE t.id = stage_transitions.task_id
-      AND public.can_edit_project(t.project_id, auth.uid())
-  ));
+  WITH CHECK (
+    -- Ninguém registra transição em nome de outra pessoa (o trigger
+    -- handle_stage_change é SECURITY DEFINER e não passa por esta policy)
+    moved_by = auth.uid()
+    AND EXISTS (
+      SELECT 1 FROM public.tasks t
+      WHERE t.id = stage_transitions.task_id
+        AND public.can_edit_project(t.project_id, auth.uid())
+    )
+  );
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- 5. TASK_COMMENTS / TASK_ATTACHMENTS
@@ -223,6 +228,41 @@ CREATE POLICY "Members create transitions" ON public.stage_transitions
 -- com has_project_access, então quem tem Leitura ainda pode comentar e anexar
 -- arquivos (decisão de produto). Excluir: só o autor ou admin do workspace.
 -- ────────────────────────────────────────────────────────────────────────────
+
+-- ────────────────────────────────────────────────────────────────────────────
+-- 6. PROJECT_MEMBERS
+-- Quem tem papel Leitura no workspace não gerencia membros de projeto, mesmo
+-- sendo dono/admin daquele projeto (antes: só created_by/role do projeto).
+-- ────────────────────────────────────────────────────────────────────────────
+DROP POLICY IF EXISTS "Admins manage project_members" ON public.project_members;
+CREATE POLICY "Admins manage project_members" ON public.project_members
+FOR ALL
+USING (
+  EXISTS (
+    SELECT 1 FROM public.projects p
+    WHERE p.id = project_members.project_id
+      AND (
+        public.is_workspace_admin(p.workspace_id, auth.uid())
+        OR (
+          (p.created_by = auth.uid() OR public.project_member_role(p.id, auth.uid()) IN ('owner', 'admin'))
+          AND public.workspace_role(p.workspace_id, auth.uid()) IN ('owner', 'admin', 'member')
+        )
+      )
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.projects p
+    WHERE p.id = project_members.project_id
+      AND (
+        public.is_workspace_admin(p.workspace_id, auth.uid())
+        OR (
+          (p.created_by = auth.uid() OR public.project_member_role(p.id, auth.uid()) IN ('owner', 'admin'))
+          AND public.workspace_role(p.workspace_id, auth.uid()) IN ('owner', 'admin', 'member')
+        )
+      )
+  )
+);
 
 -- ============================================================================
 -- Verificação pós-deploy (rodar no SQL Editor) — não deve sobrar nenhuma
