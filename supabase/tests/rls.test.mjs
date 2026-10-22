@@ -205,6 +205,45 @@ const aliceRole = (await sys(`SELECT role FROM public.workspace_members WHERE wo
 if (aliceRole === "owner") { pass++; console.log("  ok   accepting an invite never downgrades an owner"); }
 else { fail++; console.log(`  FAIL owner downgraded to ${aliceRole}`); }
 
+console.log("\n# clone_project RPC");
+{
+  // WBS de 3 níveis em P2 (projeto do bob) + dependência + convite pendente
+  const root = (await sys(`INSERT INTO public.tasks (project_id, stage_id, title, due_date, assignee_name, assignee_status)
+    VALUES ($1, $2, 'R', '2026-10-10', 'Fulano', 'pending') RETURNING id`, [p2, s2])).rows[0].id;
+  const child = (await sys(`INSERT INTO public.tasks (project_id, stage_id, title, parent_task_id)
+    VALUES ($1, $2, 'C', $3) RETURNING id`, [p2, s2, root])).rows[0].id;
+  const grand = (await sys(`INSERT INTO public.tasks (project_id, stage_id, title, parent_task_id)
+    VALUES ($1, $2, 'G', $3) RETURNING id`, [p2, s2, child])).rows[0].id;
+  await sys(`INSERT INTO public.task_dependencies (task_id, depends_on_task_id) VALUES ($1, $2)`, [grand, root]);
+  const sourceCount = (await sys(`SELECT count(*)::int AS n FROM public.tasks WHERE project_id = $1`, [p2])).rows[0].n;
+
+  const r = await expectRows("project member clones a project", "bob",
+    `SELECT public.clone_project($1, 'Clone', '{"date_offset_days": 5, "keep_assignees": true}') AS id`, 1, [p2]);
+  const cloneId = r?.rows[0]?.id;
+  const tasks = (await sys(`SELECT id, title, parent_task_id, due_date::text AS due, assignee_name, created_by
+    FROM public.tasks WHERE project_id = $1`, [cloneId])).rows;
+  const by = Object.fromEntries(tasks.map((t) => [t.title, t]));
+  const deps = (await sys(`SELECT count(*)::int AS n FROM public.task_dependencies d
+    JOIN public.tasks t ON t.id = d.task_id WHERE t.project_id = $1`, [cloneId])).rows[0].n;
+  const checks = [
+    ["clone copies every task", tasks.length === sourceCount],
+    ["clone keeps 3-level hierarchy",
+      !!by.R && !!by.C && !!by.G && by.C.parent_task_id === by.R.id && by.G.parent_task_id === by.C.id],
+    ["clone shifts dates", by.R?.due === "2026-10-15"],
+    ["clone remaps dependencies", deps === 1],
+    ["clone keeps pending-invite assignee", by.R?.assignee_name === "Fulano"],
+    ["clone is owned by the caller", by.R?.created_by === users.bob],
+  ];
+  for (const [label, ok] of checks) {
+    if (ok) { pass++; console.log(`  ok   ${label}`); } else { fail++; console.log(`  FAIL ${label}`); }
+  }
+  await expectRows("caller sees the cloned project", "bob", `SELECT id FROM public.projects WHERE id = $1`, 1, [cloneId]);
+  await expectDenied("outsider cannot clone a foreign project", "dave",
+    `SELECT public.clone_project($1, 'Roubo') AS id`, [p2]);
+  await expectDenied("anon cannot call clone_project", "anon",
+    `SELECT public.clone_project($1, 'x') AS id`, [p2]);
+}
+
 console.log("\n# Workspace deletion");
 await expectRows("owner can delete workspace (cascade)", "alice",
   `DELETE FROM public.workspaces WHERE id = $1 RETURNING 1`, 1, [wsA]);

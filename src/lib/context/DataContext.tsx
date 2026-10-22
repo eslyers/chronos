@@ -1065,6 +1065,53 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const cloneProject = useCallback(
     async (sourceProjectId: string, options: CloneProjectOptions): Promise<Project> => {
+      // 0. Caminho preferencial: RPC clone_project (uma transação no servidor)
+      if (getDataLayer() === "supabase") {
+        const source = stateRef.current.projects.find((p) => p.id === sourceProjectId);
+        const sourceStart = toDateOnly(source?.start_date);
+        const optionStart = toDateOnly(options.startDate);
+        let newId: string | null = null;
+        try {
+          newId = await dataProvider.cloneProjectRpc(sourceProjectId, options.name, {
+            workspace_id: workspaceId !== "ws-local" ? workspaceId : undefined,
+            ...(options.description !== undefined ? { description: options.description } : {}),
+            ...(options.color ? { color: options.color } : {}),
+            ...(optionStart ? { start_date: optionStart } : {}),
+            ...(toDateOnly(options.targetDate) ? { target_date: toDateOnly(options.targetDate) } : {}),
+            ...(options.trackTime !== undefined ? { track_time: options.trackTime } : {}),
+            clone_tasks: options.cloneTasks !== false,
+            clone_dependencies: options.cloneDependencies !== false,
+            reset_status: options.resetStatus === true,
+            keep_assignees: options.keepAssignees === true,
+            date_offset_days:
+              options.shiftDates && optionStart && sourceStart
+                ? daysBetweenDateOnly(sourceStart, optionStart)
+                : 0,
+          });
+        } catch (err) {
+          reportError("Não foi possível clonar o projeto", err);
+        }
+        if (newId) {
+          let created: Project | null = null;
+          try {
+            created = await dataProvider.getProjectById(newId);
+          } catch (err) {
+            reportError("Projeto clonado, mas não foi possível carregá-lo", err);
+          }
+          if (!created) {
+            return reportError("Projeto clonado, mas não foi possível carregá-lo", new Error("Projeto não encontrado"));
+          }
+          const project = created;
+          setState((prev) => ({
+            ...prev,
+            projects: [project, ...prev.projects.filter((p) => p.id !== project.id)],
+          }));
+          await loadDetails([project.id]);
+          return project;
+        }
+        // RPC ainda não existe no banco: segue o fluxo antigo (client-side)
+      }
+
       // 1. Obter dados completos do projeto de origem (stages, tasks, dependencies)
       let sourceTasks: Task[] = [];
       let sourceStages: Stage[] = [];
@@ -1273,6 +1320,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       addDependency,
       reportError,
       markLoaded,
+      loadDetails,
+      workspaceId,
     ]
   );
 
