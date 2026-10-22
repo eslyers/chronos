@@ -35,6 +35,14 @@ export function useAssigneeInvite({ assigneeName, workspaceId, onInvited, onErro
         // Só no estado local: chk_assignee_consistency aceita apenas 'pending' para
         // responsável externo (assignee_id NULL + assignee_name), então não persiste 'invited'
         onInvited();
+        // A API cria o convite mesmo quando o envio falha; avisa o motivo
+        const data = await res.json().catch(() => ({}));
+        if (data.email && data.email.sent === false) {
+          onError(
+            `Convite criado, mas o email não foi enviado: ${data.email.error || "erro desconhecido"}. ` +
+              "Reenvie pela tela de Usuários ou compartilhe o link."
+          );
+        }
       } else {
         const data = await res.json().catch(() => ({}));
         onError(data.error || "Erro ao enviar convite");

@@ -28,6 +28,28 @@ export interface EmailResult {
   error?: string;
 }
 
+/**
+ * Lê a resposta do Brevo tolerando corpo não-JSON (ex.: página de erro de
+ * proxy) e monta uma mensagem com status HTTP e código do Brevo, para que o
+ * motivo da falha (chave inválida, IP não autorizado, cota diária, remetente
+ * não validado…) chegue legível à tela e aos logs.
+ */
+export async function readBrevoResponse(
+  response: Response
+): Promise<{ ok: true; messageId?: string } | { ok: false; error: string }> {
+  const raw = await response.text().catch(() => "");
+  let data: { messageId?: string; message?: string; code?: string } = {};
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    // corpo não é JSON
+  }
+  if (response.ok) return { ok: true, messageId: data.messageId };
+  const detail = data.message || raw.slice(0, 200) || response.statusText || "sem detalhes";
+  const code = data.code ? `, ${data.code}` : "";
+  return { ok: false, error: `Brevo recusou o envio (HTTP ${response.status}${code}): ${detail}` };
+}
+
 export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
   const { apiKey, senderEmail, senderName } = getBrevoConfig();
   if (!apiKey) {
@@ -58,13 +80,9 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
       body: JSON.stringify(body),
     });
 
-    const data = await response.json() as { messageId?: string; message?: string; code?: string };
-
-    if (!response.ok) {
-      return { success: false, error: data.message ?? `HTTP ${response.status}` };
-    }
-
-    return { success: true, id: data.messageId };
+    const parsed = await readBrevoResponse(response);
+    if (!parsed.ok) return { success: false, error: parsed.error };
+    return { success: true, id: parsed.messageId };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Erro desconhecido" };
   }
@@ -100,9 +118,7 @@ export async function sendEmailWithTags(
       body: JSON.stringify(body),
     });
 
-  const data = await response.json() as { messageId?: string; message?: string };
-  if (!response.ok) {
-    return { success: false, error: data.message ?? `HTTP ${response.status}` };
-  }
-  return { success: true, id: data.messageId };
+  const parsed = await readBrevoResponse(response);
+  if (!parsed.ok) return { success: false, error: parsed.error };
+  return { success: true, id: parsed.messageId };
 }
