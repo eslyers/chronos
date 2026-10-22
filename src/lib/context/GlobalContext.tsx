@@ -5,6 +5,7 @@ import { createSPAClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/mode";
 import { getSession as supabaseGetSession, signOut as supabaseSignOut } from "@/lib/auth/supabase-auth";
 import { demoGetSession, demoSignOut } from "@/lib/auth/demo-auth";
+import { isMasterAdminEmail } from "@/lib/auth/master-admin";
 
 export type AppUser = {
   email: string;
@@ -15,7 +16,8 @@ export type AppUser = {
 
 export type WorkspaceRole = "owner" | "admin" | "member" | "viewer";
 
-export const MASTER_ADMIN_EMAIL = "eslyers@gmail.com";
+// Fonte única do Master ADM (configurável por env)
+export { MASTER_ADMIN_EMAIL } from "@/lib/auth/master-admin";
 
 interface GlobalContextType {
   loading: boolean;
@@ -35,7 +37,7 @@ export function GlobalProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole | null>(null);
 
-  const isMasterAdmin = user?.email?.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
+  const isMasterAdmin = isMasterAdminEmail(user?.email);
   const isWorkspaceAdmin = isMasterAdmin || workspaceRole === "owner" || workspaceRole === "admin";
 
   const fetchRole = React.useCallback(async (uid: string) => {

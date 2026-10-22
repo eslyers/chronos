@@ -6,6 +6,7 @@
 
 import { isSupabaseConfigured } from "@/lib/supabase/mode";
 import { createSPAClient } from "@/lib/supabase/client";
+import { isMasterAdminEmail } from "@/lib/auth/master-admin";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyClient = any;
@@ -155,7 +156,6 @@ export const demoInvites: {
 
 // ── Production (Supabase) ────────────────────────────────────
 
-const MASTER_ADMIN_EMAIL = "eslyers@gmail.com";
 
 export const supabaseMembers: {
   list: (workspaceId: string) => Promise<Member[]>;
@@ -212,7 +212,7 @@ export const supabaseMembers: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const prof: any = profMap.get(row.user_id);
       const email = prof?.email || "(sem email)";
-      const isMaster = email.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase();
+      const isMaster = isMasterAdminEmail(email);
 
       return {
         id: row.user_id,
@@ -258,7 +258,7 @@ export const supabaseMembers: {
 
     // Proteção: não permitir alterar papel do Master Admin
     const { data: prof } = await supabase.from("profiles").select("email").eq("id", userId).maybeSingle();
-    if (prof?.email?.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase()) {
+    if (isMasterAdminEmail(prof?.email)) {
       return { ok: false, error: "O Master Admin não pode ter seu papel alterado." };
     }
 
@@ -274,7 +274,7 @@ export const supabaseMembers: {
 
     // Proteção: não permitir remover o Master Admin
     const { data: prof } = await supabase.from("profiles").select("email").eq("id", userId).maybeSingle();
-    if (prof?.email?.toLowerCase() === MASTER_ADMIN_EMAIL.toLowerCase()) {
+    if (isMasterAdminEmail(prof?.email)) {
       return { ok: false, error: "O Master Admin não pode ser removido do workspace." };
     }
 
