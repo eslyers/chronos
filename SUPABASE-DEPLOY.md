@@ -111,17 +111,23 @@ curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getMe"
 
 Ordem recomendada:
 
-1. **Conferir o segredo usado pelos triggers.** As Edge Functions agora exigem
-   `Authorization: Bearer <service_role_key | CRON_SECRET>`. Os triggers e o cron
-   enviam a chave lida destas settings, que precisam estar preenchidas:
+1. **Segredo das Edge Functions (migration 20261025000000).** As funções exigem
+   `Authorization: Bearer <segredo>`. Triggers e cron leem o segredo do
+   **Supabase Vault** pela função `public.edge_functions_auth_header()`
+   (`ALTER DATABASE … SET` não é mais permitido no Supabase hospedado).
+   O mesmo valor precisa estar em dois lugares — gere um valor aleatório e:
    ```sql
-   SELECT current_setting('app.service_role_key', true)          AS triggers,
-          current_setting('app.settings.service_role_key', true) AS cron;
+   -- SQL Editor (uma vez)
+   SELECT vault.create_secret('<segredo>', 'edge_functions_secret');
    ```
-   Se vierem vazias, os triggers mandam `Bearer ` vazio e as notificações param.
-2. **Secrets:** `npx supabase secrets set CRON_SECRET="<mesmo valor da Vercel>"`
-   (usado por `/api/cron/due-soon`). Se as rotas `/api/admin/*` forem usadas,
-   criar `ADMIN_SECRET` na Vercel (elas não aceitam mais o `CRON_SECRET`).
+   ```bash
+   npx supabase secrets set EDGE_FUNCTIONS_SECRET="<segredo>"
+   ```
+   Para trocar o valor: `SELECT vault.update_secret(id, '<novo>') FROM vault.secrets
+   WHERE name = 'edge_functions_secret';` e repita o `secrets set`.
+2. **Secrets opcionais:** `npx supabase secrets set CRON_SECRET="<mesmo valor da Vercel>"`
+   só se a rota `/api/cron/due-soon` for usada. Se as rotas `/api/admin/*` forem
+   usadas, criar `ADMIN_SECRET` na Vercel (elas não aceitam o `CRON_SECRET`).
 3. **Migration:** `npx supabase db push`, depois conferir as policies:
    ```sql
    SELECT tablename, policyname, cmd FROM pg_policies
