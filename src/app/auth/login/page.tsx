@@ -3,6 +3,7 @@
 import { isSupabaseConfigured } from "@/lib/supabase/mode";
 import { signInWithPassword, signInWithGoogle } from "@/lib/auth/supabase-auth";
 import { demoSignIn } from "@/lib/auth/demo-auth";
+import { safeRedirectPath } from "@/lib/utils";
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -19,7 +20,7 @@ function LoginPageInner() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/app";
+  const redirectTo = safeRedirectPath(searchParams.get("redirect"));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

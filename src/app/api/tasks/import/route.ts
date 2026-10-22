@@ -7,8 +7,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { parseImportFile, buildPreview } from "@/lib/excel-parser";
+import { isSupabaseConfigured } from "@/lib/supabase/mode";
 
 export const runtime = "nodejs";
+
+const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,6 +39,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (file.size > MAX_IMPORT_BYTES) {
+      return NextResponse.json(
+        { error: `Arquivo muito grande (máximo ${MAX_IMPORT_BYTES / 1024 / 1024} MB)` },
+        { status: 413 }
+      );
+    }
+
+    // ── Auth antes do parse: o parser processa um arquivo não confiável ──
+    // Em modo demo (sem Supabase) só o dry-run é possível.
+    const supabaseConfigured = isSupabaseConfigured();
+    if (!supabaseConfigured && !dryRun) {
+      return NextResponse.json({ error: "Importação requer Supabase configurado" }, { status: 400 });
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb: any = supabaseConfigured ? await createServerSupabaseClient() : null;
+
+    if (sb) {
+      const { data: { user }, error: authError } = await sb.auth.getUser();
+      if (authError || !user) {
+        return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+      }
+
+      // Confirmar que o user é membro do workspace
+      const { data: member } = await sb
+        .from("workspace_members")
+        .select("role")
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!member) {
+        return NextResponse.json(
+          { error: "Você não é membro deste workspace" },
+          { status: 403 }
+        );
+      }
+    }
+
     // ── Parse ──
     const buffer = Buffer.from(await file.arrayBuffer());
     const parsed = await parseImportFile(buffer, file.name);
@@ -51,33 +92,8 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Inserção real ──
-    const supabase = await createServerSupabaseClient();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any;
-
     // Verificar se tem hierarquia WBS detectada (coluna Nível)
     const hasWBS = preview.hasWBS;
-
-    // Verificar autenticação
-    const { data: { user }, error: authError } = await sb.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
-    }
-
-    // Confirmar que o user é membro do workspace
-    const { data: member } = await sb
-      .from("workspace_members")
-      .select("role")
-      .eq("workspace_id", workspaceId)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (!member) {
-      return NextResponse.json(
-        { error: "Você não é membro deste workspace" },
-        { status: 403 }
-      );
-    }
 
     // Pegar stage inicial (primeiro stage do projeto, em ordem)
     let initialStageId = stageIdOverride;
