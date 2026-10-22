@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createSPAClient } from "@/lib/supabase/client";
+import { safeRedirectPath } from "@/lib/utils";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
@@ -22,7 +23,7 @@ function AuthCallbackInner() {
         return;
       }
       // Respeita ?redirect=<path> passado pelo Google OAuth
-      const redirectTo = searchParams.get("redirect") || "/app";
+      const redirectTo = safeRedirectPath(searchParams.get("redirect"));
       router.push(redirectTo);
       router.refresh();
     }

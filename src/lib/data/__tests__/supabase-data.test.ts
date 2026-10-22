@@ -8,6 +8,8 @@ type Call = { table: string; op: string; filters: Array<[string, unknown[]]>; ra
 const db: Record<string, Row[]> = {};
 const calls: Call[] = [];
 let failWith: { message: string; code?: string } | null = null;
+let rpcResult: { data: unknown; error: { message: string; code?: string } | null } = { data: null, error: null };
+const rpcCalls: Array<[string, unknown]> = [];
 
 function query(table: string) {
   const call: Call = { table, op: "select", filters: [] };
@@ -35,7 +37,10 @@ function query(table: string) {
 }
 
 jest.mock("@/lib/supabase/client", () => ({
-  createSPAClient: () => ({ from: (table: string) => query(table) }),
+  createSPAClient: () => ({
+    from: (table: string) => query(table),
+    rpc: (fn: string, args: unknown) => (rpcCalls.push([fn, args]), Promise.resolve(rpcResult)),
+  }),
 }));
 
 import {
@@ -43,6 +48,7 @@ import {
   fetchAllDependencies,
   updateTask,
   deleteStage,
+  cloneProjectRpc,
   DataLayerError,
 } from "../supabase-data";
 
@@ -67,6 +73,29 @@ beforeEach(() => {
   for (const k of Object.keys(db)) delete db[k];
   calls.length = 0;
   failWith = null;
+  rpcResult = { data: null, error: null };
+  rpcCalls.length = 0;
+});
+
+describe("cloneProjectRpc", () => {
+  it("returns the new project id from the RPC", async () => {
+    rpcResult = { data: "new-id", error: null };
+    await expect(cloneProjectRpc("src", "Clone", { date_offset_days: 3 })).resolves.toBe("new-id");
+    expect(rpcCalls[0]).toEqual([
+      "clone_project",
+      { p_source_project_id: "src", p_name: "Clone", p_options: { date_offset_days: 3 } },
+    ]);
+  });
+
+  it("returns null when the function is not deployed yet (client-side fallback)", async () => {
+    rpcResult = { data: null, error: { message: "Could not find the function", code: "PGRST202" } };
+    await expect(cloneProjectRpc("src", "Clone", {})).resolves.toBeNull();
+  });
+
+  it("throws on any other error", async () => {
+    rpcResult = { data: null, error: { message: "Projeto de origem não encontrado", code: "P0002" } };
+    await expect(cloneProjectRpc("src", "Clone", {})).rejects.toBeInstanceOf(DataLayerError);
+  });
 });
 
 describe("supabase-data reads", () => {
