@@ -506,7 +506,8 @@ export type Database = {
           file_name: string
           file_size: number
           file_type: string
-          file_url: string
+          file_url: string | null
+          storage_path: string | null
           uploaded_at: string
         }
         Insert: {
@@ -516,7 +517,8 @@ export type Database = {
           file_name: string
           file_size?: number
           file_type?: string
-          file_url: string
+          file_url?: string | null
+          storage_path?: string | null
           uploaded_at?: string
         }
         Update: {
@@ -526,7 +528,8 @@ export type Database = {
           file_name?: string
           file_size?: number
           file_type?: string
-          file_url?: string
+          file_url?: string | null
+          storage_path?: string | null
           uploaded_at?: string
         }
         Relationships: []
