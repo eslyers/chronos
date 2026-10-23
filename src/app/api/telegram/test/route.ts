@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { z } from "zod";
 
@@ -25,6 +26,8 @@ export async function POST(req: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
+    const limited = await enforceRateLimit(req, RATE_LIMITS.telegramTest, user.id);
+    if (limited) return limited;
 
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (!botToken) {

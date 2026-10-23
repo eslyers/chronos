@@ -11,6 +11,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from "next/server";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createServerAdminClient } from "@/lib/supabase/serverAdminClient";
 import { z } from "zod";
 
@@ -28,6 +29,8 @@ const schema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const limited = await enforceRateLimit(request, RATE_LIMITS.inviteAcceptSignup);
+    if (limited) return limited;
     const body = await request.json();
     const parseResult = schema.safeParse(body);
     if (!parseResult.success) {

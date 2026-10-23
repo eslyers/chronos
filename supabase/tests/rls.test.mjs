@@ -464,6 +464,45 @@ console.log("\n# Realtime");
   else { fail++; console.log(`  FAIL sensitive tables published: ${leaked.join(", ")}`); }
 }
 
+console.log("\n# Dependency cycles");
+{
+  const mk = async (title) =>
+    (await sys(`INSERT INTO public.tasks (project_id, stage_id, title) VALUES ($1, $2, $3) RETURNING id`, [p2, s2, title])).rows[0].id;
+  const [ta, tb, tc] = [await mk("CY-A"), await mk("CY-B"), await mk("CY-C")];
+  // A depende de B, B depende de C
+  await sys(`INSERT INTO public.task_dependencies (task_id, depends_on_task_id) VALUES ($1, $2), ($2, $3)`, [ta, tb, tc]);
+
+  await expectDenied("self-dependency is rejected", "bob",
+    `INSERT INTO public.task_dependencies (task_id, depends_on_task_id) VALUES ($1, $1) RETURNING 1`, [ta]);
+  await expectDenied("direct cycle is rejected (B depends on A)", "bob",
+    `INSERT INTO public.task_dependencies (task_id, depends_on_task_id) VALUES ($1, $2) RETURNING 1`, [tb, ta]);
+  await expectDenied("indirect cycle is rejected (C depends on A)", "bob",
+    `INSERT INTO public.task_dependencies (task_id, depends_on_task_id) VALUES ($1, $2) RETURNING 1`, [tc, ta]);
+  await expectRows("non-cyclic dependency is accepted (A depends on C)", "bob",
+    `INSERT INTO public.task_dependencies (task_id, depends_on_task_id) VALUES ($1, $2) RETURNING 1`, 1, [ta, tc]);
+  // B→C passa a B→A: como A depende de B, fecharia um ciclo
+  const existing = (await sys(`SELECT count(*)::int AS n FROM public.task_dependencies WHERE task_id = $1 AND depends_on_task_id = $2`, [tb, tc])).rows[0].n;
+  if (existing === 1) { pass++; console.log("  ok   fixture: B depends on C exists"); }
+  else { fail++; console.log("  FAIL fixture B→C missing"); }
+  await expectDenied("update that would close a cycle is rejected", "bob",
+    `UPDATE public.task_dependencies SET depends_on_task_id = $3 WHERE task_id = $1 AND depends_on_task_id = $2 RETURNING 1`, [tb, tc, ta]);
+  await expectDenied("cycle is rejected even for the service role", "service",
+    `INSERT INTO public.task_dependencies (task_id, depends_on_task_id) VALUES ($1, $2) RETURNING 1`, [tc, tb]);
+}
+
+console.log("\n# Rate limit");
+{
+  const hits = [];
+  for (let i = 0; i < 3; i++) {
+    hits.push((await as("service", `SELECT public.rate_limit_hit('test:key', 2, 60) AS ok`)).rows[0].ok);
+  }
+  if (JSON.stringify(hits) === "[true,true,false]") { pass++; console.log("  ok   third call in the window is over the limit"); }
+  else { fail++; console.log(`  FAIL rate limit hits: ${JSON.stringify(hits)}`); }
+  await expectDenied("authenticated cannot call rate_limit_hit", "bob", `SELECT public.rate_limit_hit('x', 1, 60) AS ok`);
+  await expectDenied("anon cannot call rate_limit_hit", "anon", `SELECT public.rate_limit_hit('x', 1, 60) AS ok`);
+  await expectDenied("authenticated cannot read rate_limits", "bob", `SELECT * FROM public.rate_limits`);
+}
+
 console.log("\n# Edge Functions secret");
 {
   await expectDenied("authenticated cannot read the edge functions secret", "bob",
