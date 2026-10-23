@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from "next/server";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createServerAdminClient } from "@/lib/supabase/serverAdminClient";
 
 export const runtime = "nodejs";
@@ -16,6 +17,8 @@ type AnyClient = any;
 
 export async function GET(request: NextRequest) {
   try {
+    const limited = await enforceRateLimit(request, RATE_LIMITS.inviteLookup);
+    if (limited) return limited;
     const token = request.nextUrl.searchParams.get("token");
     if (!token) {
       return NextResponse.json({ error: "Token ausente" }, { status: 400 });

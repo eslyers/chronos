@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { NextRequest, NextResponse } from "next/server";
+import { enforceRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { createServerAdminClient } from "@/lib/supabase/serverAdminClient";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/brevo";
@@ -41,6 +42,8 @@ export async function POST(request: NextRequest) {
     if (authError || !user) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
+    const limited = await enforceRateLimit(request, RATE_LIMITS.inviteResend, user.id);
+    if (limited) return limited;
 
     let adminClient: AnyClient;
     try {
