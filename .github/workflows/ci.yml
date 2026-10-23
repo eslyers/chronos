@@ -36,6 +36,9 @@ jobs:
       - name: Run Tests
         run: npm run test
 
+      - name: Run RLS Tests (migrations on PGlite)
+        run: npm run test:rls
+
       - name: Run Build Verify
         run: npm run build
         env:
