@@ -25,6 +25,7 @@ import type {
   Project,
   Stage,
   Task,
+  NewTaskAttachment,
   TaskAttachment,
   TaskComment,
   TaskDependency,
@@ -51,6 +52,7 @@ export type {
   TaskDependency,
   TaskComment,
   TaskAttachment,
+  NewTaskAttachment,
   CloneProjectOptions,
 };
 
@@ -81,7 +83,7 @@ type DataContextType = DataState & {
   addTaskComment: (taskId: string, content: string, userName?: string) => Promise<TaskComment>;
   deleteTaskComment: (commentId: string) => Promise<void>;
   getTaskAttachments: (taskId: string) => Promise<TaskAttachment[]>;
-  addTaskAttachment: (taskId: string, file: { name: string; size: number; type: string; url: string }) => Promise<TaskAttachment>;
+  addTaskAttachment: (taskId: string, file: NewTaskAttachment) => Promise<TaskAttachment>;
   deleteTaskAttachment: (attachmentId: string) => Promise<void>;
   // Helpers
   getProject: (id: string) => Project | undefined;

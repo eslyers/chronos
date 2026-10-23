@@ -75,8 +75,22 @@ export type TaskAttachment = {
   file_name: string;
   file_size: number;
   file_type: string;
-  file_url: string;
+  /**
+   * Link para abrir/baixar: assinado (temporário) para arquivos no Storage,
+   * data URL em anexos antigos e no modo demo. null se não foi possível gerar.
+   */
+  file_url: string | null;
+  /** Caminho no bucket task-attachments (<task_id>/<uuid>-<nome>). */
+  storage_path?: string | null;
   uploaded_at: string;
+};
+
+/** Arquivo escolhido pelo usuário para anexar. */
+export type NewTaskAttachment = {
+  name: string;
+  size: number;
+  type: string;
+  file: Blob;
 };
 
 export type DataState = {

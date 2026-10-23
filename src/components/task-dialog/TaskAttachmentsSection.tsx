@@ -13,16 +13,14 @@ import {
   Download,
   Upload,
 } from "lucide-react";
-import type { TaskAttachment } from "@/lib/context/DataContext";
+import type { NewTaskAttachment, TaskAttachment } from "@/lib/context/DataContext";
+import { attachmentTooLargeMessage, isSafeAttachmentHref } from "@/lib/data/attachments-storage";
 
 interface TaskAttachmentsSectionProps {
   taskId: string;
   attachments: TaskAttachment[];
   onRefresh: () => Promise<void>;
-  addTaskAttachment: (
-    taskId: string,
-    file: { name: string; size: number; type: string; url: string }
-  ) => Promise<TaskAttachment>;
+  addTaskAttachment: (taskId: string, file: NewTaskAttachment) => Promise<TaskAttachment>;
   deleteTaskAttachment: (attachmentId: string) => Promise<void>;
 }
 
@@ -35,7 +33,7 @@ export function TaskAttachmentsSection({
 }: TaskAttachmentsSectionProps) {
   const [attachName, setAttachName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedFileDataUrl, setSelectedFileDataUrl] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const [addingAttach, setAddingAttach] = useState(false);
   const [deletingAttachId, setDeletingAttachId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -62,15 +60,18 @@ export function TaskAttachmentsSection({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Avisa antes do upload (o bucket também recusa acima do limite)
+      const tooLarge = attachmentTooLargeMessage(file.size);
+      setFileError(tooLarge);
+      if (tooLarge) {
+        setSelectedFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
       setSelectedFile(file);
       if (!attachName.trim()) {
         setAttachName(file.name);
       }
-      const reader = new FileReader();
-      reader.onload = () => {
-        setSelectedFileDataUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
     }
   };
 
@@ -78,21 +79,15 @@ export function TaskAttachmentsSection({
     if (!selectedFile || !taskId) return;
     setAddingAttach(true);
     try {
-      const fileName = attachName.trim() || selectedFile.name;
-      const fileSize = selectedFile.size;
-      const fileType = selectedFile.type || "application/octet-stream";
-      const fileUrl = selectedFileDataUrl || URL.createObjectURL(selectedFile);
-
       await addTaskAttachment(taskId, {
-        name: fileName,
-        url: fileUrl,
-        size: fileSize,
-        type: fileType,
+        name: attachName.trim() || selectedFile.name,
+        size: selectedFile.size,
+        type: selectedFile.type || "application/octet-stream",
+        file: selectedFile,
       });
 
       setAttachName("");
       setSelectedFile(null);
-      setSelectedFileDataUrl(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       await onRefresh();
     } catch (err) {
@@ -151,16 +146,26 @@ export function TaskAttachmentsSection({
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
-                  <a
-                    href={a.file_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    download={a.file_name}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
-                    title="Baixar ou abrir arquivo"
-                  >
-                    <Download className="h-4 w-4" />
-                  </a>
+                  {isSafeAttachmentHref(a.file_url) ? (
+                    <a
+                      href={a.file_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      download={a.file_name}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+                      title="Baixar ou abrir arquivo"
+                      aria-label={`Baixar ${a.file_name}`}
+                    >
+                      <Download className="h-4 w-4" />
+                    </a>
+                  ) : (
+                    <span
+                      className="p-1.5 text-muted-foreground/50"
+                      title="Link indisponível no momento; reabra a tarefa"
+                    >
+                      <Download className="h-4 w-4" />
+                    </span>
+                  )}
                   <button
                     type="button"
                     disabled={deletingAttachId === a.id}
@@ -202,10 +207,16 @@ export function TaskAttachmentsSection({
                   {selectedFile.name} ({formatFileSize(selectedFile.size)})
                 </span>
               ) : (
-                "Selecionar arquivo do computador (PDF, Excel, Imagem, etc.)"
+                "Selecionar arquivo do computador (PDF, Excel, Imagem, etc. — até 10 MB)"
               )}
             </label>
           </div>
+
+          {fileError && (
+            <p role="alert" className="text-xs font-medium text-rose-600 dark:text-rose-400">
+              {fileError}
+            </p>
+          )}
 
           {selectedFile && (
             <div className="flex items-center gap-2">

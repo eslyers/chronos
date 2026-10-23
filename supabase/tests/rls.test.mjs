@@ -503,6 +503,19 @@ console.log("\n# Rate limit");
   await expectDenied("authenticated cannot read rate_limits", "bob", `SELECT * FROM public.rate_limits`);
 }
 
+console.log("\n# Attachments in Storage");
+{
+  const mk = async (title) =>
+    (await sys(`INSERT INTO public.tasks (project_id, stage_id, title) VALUES ($1, $2, $3) RETURNING id`, [p2, s2, title])).rows[0].id;
+  const [mine, other] = [await mk("ATT-1"), await mk("ATT-2")];
+  const ins = (task, path) =>
+    `INSERT INTO public.task_attachments (task_id, user_id, file_name, storage_path) VALUES ('${task}', '${users.bob}', 'a.pdf', ${path === null ? "NULL" : `'${path}'`}) RETURNING 1`;
+
+  await expectRows("attachment stored in its task folder is accepted", "bob", ins(mine, `${mine}/u-a.pdf`), 1);
+  await expectDenied("attachment pointing at another task's folder is rejected", "bob", ins(mine, `${other}/u-a.pdf`));
+  await expectDenied("attachment without file (no url, no path) is rejected", "bob", ins(mine, null));
+}
+
 console.log("\n# Edge Functions secret");
 {
   await expectDenied("authenticated cannot read the edge functions secret", "bob",
